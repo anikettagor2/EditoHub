@@ -67,9 +67,11 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Button size="lg" className="min-w-[180px]" onClick={openContact}>
-              Get Started
-            </Button>
+            <Link href="/login">
+              <Button size="lg" className="min-w-[180px]">
+                Get Started
+              </Button>
+            </Link>
             <Link href="#work">
               <Button size="lg" variant="outline" className="min-w-[180px] group">
                 <Play className="w-4 h-4 mr-2 fill-primary group-hover:fill-primary/80" />

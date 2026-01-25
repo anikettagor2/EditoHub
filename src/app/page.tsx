@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Hero } from "@/components/hero";
 import { Services } from "@/components/services";
@@ -30,9 +31,11 @@ export default function Home() {
              <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-12 text-center">
                Join the elite creators using EditoHub to dominate their niche. Your content deserves the best.
              </p>
-             <Button size="lg" className="text-lg px-10 py-6 h-auto shadow-[0_0_40px_rgba(99,102,241,0.4)] hover:shadow-[0_0_60px_rgba(99,102,241,0.6)]">
-               Start Your Project Now
-             </Button>
+             <Link href="/login">
+               <Button size="lg" className="text-lg px-10 py-6 h-auto shadow-[0_0_40px_rgba(99,102,241,0.4)] hover:shadow-[0_0_60px_rgba(99,102,241,0.6)]">
+                 Start Your Project Now
+               </Button>
+             </Link>
           </div>
         </section>
 

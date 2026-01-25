@@ -1,23 +1,41 @@
 @import "tailwindcss";
 
 :root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #6366f1;
+  --radius: 0.5rem;
+}
+
+.dark {
   --background: #050505;
   --foreground: #fafafa;
   --card: #09090b;
-  /* Zinc 950 */
   --card-foreground: #fafafa;
   --popover: #09090b;
   --popover-foreground: #fafafa;
   --primary: #6366f1;
-  /* Indigo 500 - nice premium glow */
   --primary-foreground: #ffffff;
   --secondary: #18181b;
-  /* Zinc 900 */
   --secondary-foreground: #fafafa;
   --muted: #27272a;
-  /* Zinc 800 */
   --muted-foreground: #a1a1aa;
-  /* Zinc 400 */
   --accent: #27272a;
   --accent-foreground: #fafafa;
   --destructive: #7f1d1d;
@@ -25,7 +43,6 @@
   --border: #27272a;
   --input: #27272a;
   --ring: #6366f1;
-  --radius: 0.5rem;
 }
 
 @theme inline {

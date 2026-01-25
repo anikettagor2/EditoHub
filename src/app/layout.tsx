@@ -22,6 +22,8 @@ export const metadata: Metadata = {
 import { SmoothScroll } from "@/components/smooth-scroll";
 import { ContactProvider } from "@/providers/contact-provider";
 import { ContactModal } from "@/components/contact-modal";
+import { Providers } from "./providers";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,
@@ -29,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
           inter.variable,
@@ -37,11 +39,14 @@ export default function RootLayout({
           "antialiased bg-background text-foreground min-h-screen selection:bg-primary/20 selection:text-primary font-sans"
         )}
       >
-        <ContactProvider>
-           <SmoothScroll />
-           <ContactModal />
-           {children}
-        </ContactProvider>
+        <Providers>
+          <ContactProvider>
+             <SmoothScroll />
+             <ContactModal />
+             <Toaster position="top-center" richColors />
+             {children}
+          </ContactProvider>
+        </Providers>
       </body>
     </html>
   );

@@ -1,0 +1,47 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "members",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "revisions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "projectId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "version",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "comments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "revisionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

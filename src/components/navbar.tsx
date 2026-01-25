@@ -8,13 +8,13 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { useContact } from "@/providers/contact-provider";
+import { useAuth } from "@/lib/context/auth-context";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
-  const { openContact } = useContact();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -72,9 +72,29 @@ export function Navbar() {
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full" />
             </Link>
           ))}
-          <Button size="sm" variant="primary" onClick={openContact}>
-            Get Started
-          </Button>
+          {user ? (
+            <>
+              <Link href="/dashboard/settings">
+                <Button size="sm" variant="ghost">
+                  Settings
+                </Button>
+              </Link>
+              <Link href="/dashboard">
+                <Button size="sm" variant="ghost">
+                  Dashboard
+                </Button>
+              </Link>
+              <Button size="sm" variant="default" onClick={() => logout()}>
+                Logout
+              </Button>
+            </>
+          ) : (
+            <Link href="/login">
+              <Button size="sm" variant="default">
+                Get Started
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Mobile Toggle */}
@@ -108,9 +128,25 @@ export function Navbar() {
                   {link.name}
                 </Link>
               ))}
-              <Button size="lg" className="w-full max-w-xs mt-4" onClick={() => { setIsOpen(false); openContact(); }}>
-                Get Started
-              </Button>
+              {user ? (
+                 <>
+                  <Link href="/dashboard/settings" onClick={() => setIsOpen(false)} className="text-2xl font-medium hover:text-primary transition-colors">
+                    Settings
+                  </Link>
+                  <Link href="/dashboard" onClick={() => setIsOpen(false)} className="text-2xl font-medium hover:text-primary transition-colors">
+                    Dashboard
+                  </Link>
+                  <Button size="lg" className="w-full max-w-xs mt-4" onClick={() => { setIsOpen(false); logout(); }}>
+                    Logout
+                  </Button>
+                 </>
+              ) : (
+                <Link href="/login" onClick={() => setIsOpen(false)}>
+                    <Button size="lg" className="w-full max-w-xs mt-4">
+                        Get Started
+                    </Button>
+                </Link>
+              )}
             </div>
           </motion.div>
         )}

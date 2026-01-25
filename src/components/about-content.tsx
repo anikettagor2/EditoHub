@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Button } from "./ui/button";
 import { Target, Lightbulb, Quote } from "lucide-react";
+import Image from "next/image";
 
 export function AboutContent() {
   return (
@@ -86,9 +87,14 @@ export function AboutContent() {
 
              {/* Image Placeholder */}
              <div className="w-full lg:w-1/3 aspect-[4/5] bg-neutral-900 rounded-2xl relative overflow-hidden shrink-0 group">
-                 <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-neutral-800 to-black text-neutral-700 font-bold text-6xl select-none group-hover:scale-105 transition-transform duration-500">
-                    DY
-                 </div>
+                 <Image 
+                    src="/founder.jpg" 
+                    alt="Divyanshu Yadav" 
+                    fill 
+                    className="object-cover object-top group-hover:scale-105 transition-transform duration-700"
+                 />
+                 {/* Cinematic Overlay */}
+                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
                  {/* Simulate 'Cinematic' Overlay */}
                  <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent opacity-50 mix-blend-overlay" />
              </div>
