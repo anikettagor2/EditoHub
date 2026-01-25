@@ -101,7 +101,7 @@ export default function NewProjectPage() {
 
             // Open Razorpay
             const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_S5UPDlLBFMwNBd",
+                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: "EditoHub Studio",

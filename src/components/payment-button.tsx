@@ -60,7 +60,7 @@ export function PaymentButton({ projectId, amount, description, prefill, onSucce
 
             // 3. Open Razorpay
             const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_S5UPDlLBFMwNBd", // Using fallback as per request
+                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: "EditoHub Studio",
