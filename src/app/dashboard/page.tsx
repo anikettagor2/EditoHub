@@ -5,6 +5,8 @@ import { Loader2 } from "lucide-react";
 import { ClientDashboard } from "./components/client-dashboard";
 import { EditorDashboard } from "./components/editor-dashboard";
 import { AdminDashboard } from "./components/admin-dashboard";
+import { SalesDashboard } from "./components/sales-dashboard";
+import { ProjectManagerDashboard } from "./components/project-manager-dashboard";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -18,7 +20,7 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-      return null; // Middlewarer redirects usually, but fail-safe
+      return null;
   }
 
   return (
@@ -26,8 +28,10 @@ export default function DashboardPage() {
         {user.role === 'client' && <ClientDashboard />}
         {user.role === 'editor' && <EditorDashboard />}
         {user.role === 'admin' && <AdminDashboard />}
-        {/* Fallback or guest view if needed */}
-        {!['client', 'editor', 'admin'].includes(user.role) && (
+        {user.role === 'sales_executive' && <SalesDashboard />}
+        {user.role === 'project_manager' && <ProjectManagerDashboard />}
+        
+        {!['client', 'editor', 'admin', 'sales_executive', 'project_manager'].includes(user.role) && (
             <div className="text-center py-20 text-muted-foreground">
                 Unknown role: {user.role}. Please contact support.
             </div>

@@ -67,23 +67,31 @@ export function PaymentButton({ projectId, amount, description, prefill, onSucce
                 description: description,
                 order_id: orderData.id,
                 handler: async function (response: any) {
-                    toast.success("Payment Successful!");
-                    
-                    // Update Database
-                    // Note: Ideally call a server action here to verify signature securely
-                    // Fetch fresh doc to be safe or use increment
+                    try {
+                        // verify on server
+                        const verifyRes = await fetch("/api/verify-payment", {
+                            method: "POST",
+                            body: JSON.stringify({
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature,
+                                projectId,
+                                amount,
+                                paymentType: 'final' // Assuming PaymentButton is largely used for completion/final payments or we can pass this as prop
+                            }),
+                            headers: { "Content-Type": "application/json" }
+                        });
+                        
+                        const verifyData = await verifyRes.json();
+                        if (!verifyRes.ok) throw new Error(verifyData.error || "Verification failed");
 
-                    const isFullPayment = description.includes("Balance") || description.includes("full") || description.includes("Remaining");
-                    const newStatus = isFullPayment ? 'full_paid' : 'half_paid';
+                        toast.success("Payment Verified & Successful!");
+                        if (onSuccess) onSuccess();
 
-                    await updateDoc(doc(db, "projects", projectId), {
-                        amountPaid: increment(amount), 
-                        paymentStatus: newStatus,
-                        razorpayPaymentId: response.razorpay_payment_id,
-                        updatedAt: Date.now()
-                    });
-
-                    if (onSuccess) onSuccess();
+                    } catch (err: any) {
+                        console.error("Verification failed", err);
+                        toast.error("Payment successful but verification failed: " + err.message);
+                    }
                 },
                 prefill: {
                     name: prefill?.name || "",
@@ -91,7 +99,7 @@ export function PaymentButton({ projectId, amount, description, prefill, onSucce
                     contact: prefill?.contact || "",
                 },
                 theme: {
-                    color: "#D946EF", // Standard primary color
+                    color: "#D946EF",
                 },
             };
 

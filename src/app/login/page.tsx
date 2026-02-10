@@ -5,39 +5,25 @@ import { useState } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Loader2, Film, Check, User, PenTool, Shield } from "lucide-react";
+import { Loader2, Film, Check, User, PenTool, Shield, Briefcase, Users } from "lucide-react";
 import Link from "next/link";
 import { SnowBackground } from "@/components/snow-background";
 import { UserRole } from "@/types/schema";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const { signInWithGoogle, loginAsAdmin, loading } = useAuth();
+  const { signInWithGoogle, loginWithEmail, loading } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>("client");
   const [error, setError] = useState<string | null>(null);
-  const [adminCredentials, setAdminCredentials] = useState({ username: '', password: '' });
+  
+  // Email/Pass State
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleAdminLogin = async () => {
-      
-      if (adminCredentials.username !== 'admin' || adminCredentials.password !== '1234') {
-          setError("Invalid username or password");
-          return;
-      }
-
-      setIsLoggingIn(true);
-      setError(null);
-      try {
-        await loginAsAdmin();
-      } catch (error: any) {
-        console.error("Admin login failed", error);
-        setError("Failed to login as admin");
-      } finally {
-        setIsLoggingIn(false);
-      }
-  };
-
-  const handleLogin = async () => {
+  const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
     setError(null);
     try {
@@ -47,6 +33,25 @@ export default function LoginPage() {
       setError(error.message || "Login failed. Please try again.");
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+        setError("Please enter both email and password");
+        return;
+    }
+
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+        await loginWithEmail(email, password);
+    } catch (error: any) {
+        console.error("Email login failed", error);
+        setError("Invalid email or password");
+    } finally {
+        setIsLoggingIn(false);
     }
   };
 
@@ -69,13 +74,7 @@ export default function LoginPage() {
       id: "editor",
       title: "Video Editor",
       icon: PenTool,
-      description: "I edit videos for clients"
-    },
-    {
-      id: "admin",
-      title: "Admin",
-      icon: Shield,
-      description: "Platform management"
+      description: "Join the team"
     }
   ];
 
@@ -106,10 +105,10 @@ export default function LoginPage() {
           </Link>
           
           <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Welcome to EditoHub
+            Welcome Back
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Select your role to continue
+            Sign in to your account
           </p>
         </motion.div>
 
@@ -119,91 +118,71 @@ export default function LoginPage() {
             transition={{ delay: 0.1, duration: 0.5 }}
             className="rounded-2xl border border-white/10 bg-zinc-900/50 p-6 backdrop-blur-xl shadow-2xl space-y-6"
         >
-          <div className="grid grid-cols-1 gap-4">
-            {roles.map((role) => (
-              <button
-                key={role.id}
-                onClick={() => setSelectedRole(role.id as UserRole)}
-                className={cn(
-                  "relative flex items-center gap-4 rounded-xl border p-4 transition-all text-left group hover:scale-[1.02]",
-                  selectedRole === role.id 
-                    ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(99,102,241,0.2)]" 
-                    : "bg-black/20 border-white/10 hover:bg-white/5 hover:border-white/20"
-                )}
+          {/* Email Login Form */}
+          <form onSubmit={handleEmailLogin} className="space-y-4">
+              <div className="space-y-2">
+                  <Label className="text-zinc-300">Email Address</Label>
+                  <Input 
+                      type="email" 
+                      placeholder="you@example.com"
+                      className="bg-black/40 border-white/10 text-white"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                  />
+              </div>
+              <div className="space-y-2">
+                  <Label className="text-zinc-300">Password</Label>
+                  <Input 
+                      type="password" 
+                      placeholder="••••••••"
+                      className="bg-black/40 border-white/10 text-white"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                  />
+              </div>
+              
+              <Button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-6 rounded-xl"
               >
-                <div className={cn(
-                  "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg transition-colors",
-                  selectedRole === role.id ? "bg-primary text-white" : "bg-zinc-800 text-muted-foreground group-hover:text-white"
-                )}>
-                  <role.icon className="h-6 w-6" />
-                </div>
-                <div className="flex-1">
-                  <div className={cn("font-semibold", selectedRole === role.id ? "text-primary" : "text-white")}>
-                    {role.title}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {role.description}
-                  </div>
-                </div>
-                {selectedRole === role.id && (
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                    <Check className="h-5 w-5 text-primary" />
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
+                  {isLoggingIn ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Sign In with Email"}
+              </Button>
+          </form>
 
           <div className="relative">
               <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-white/10" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-zinc-900 px-2 text-muted-foreground">Secure Login</span>
+                  <span className="bg-zinc-900 px-2 text-muted-foreground">Or continue with Google</span>
               </div>
           </div>
 
-          {error && (
-            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
-                {error}
-            </div>
-          )}
-
-          {selectedRole === 'admin' ? (
-              <div className="space-y-4">
-                  <div className="space-y-2">
-                       <label className="text-sm font-medium text-gray-300">Username</label>
-                       <input 
-                          type="text" 
-                          placeholder="admin"
-                          className="w-full rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                          value={adminCredentials.username}
-                          onChange={(e) => setAdminCredentials({...adminCredentials, username: e.target.value})}
-                       />
-                  </div>
-                  <div className="space-y-2">
-                       <label className="text-sm font-medium text-gray-300">Password</label>
-                       <input 
-                          type="password" 
-                          placeholder="••••••"
-                          className="w-full rounded-xl bg-black/40 border border-white/10 px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                          value={adminCredentials.password}
-                          onChange={(e) => setAdminCredentials({...adminCredentials, password: e.target.value})}
-                       />
-                  </div>
-                  <Button
-                    onClick={handleAdminLogin}
-                    disabled={isLoggingIn}
-                    className="w-full rounded-xl bg-primary py-6 text-white hover:bg-primary/90"
+          <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                {roles.map((role) => (
+                  <button
+                    key={role.id}
+                    onClick={() => setSelectedRole(role.id as UserRole)}
+                    className={cn(
+                      "flex flex-col items-center gap-2 rounded-xl border p-3 transition-all text-center",
+                      selectedRole === role.id 
+                        ? "bg-primary/10 border-primary text-primary" 
+                        : "bg-black/20 border-white/10 hover:bg-white/5 text-zinc-400"
+                    )}
                   >
-                      {isLoggingIn ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Login as Admin"}
-                  </Button>
-              </div>
-          ) : (
+                    <role.icon className="h-5 w-5" />
+                    <span className="text-xs font-medium">{role.title}</span>
+                  </button>
+                ))}
+            </div>
+
             <Button
-                onClick={handleLogin}
+                onClick={handleGoogleLogin}
+                variant="outline"
                 disabled={isLoggingIn}
-                className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl bg-white px-4 py-6 text-black transition-all hover:bg-gray-100 disabled:opacity-70"
+                className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl border-white/10 bg-white/5 px-4 py-6 text-white transition-all hover:bg-white/10"
             >
                 {isLoggingIn ? (
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -227,8 +206,14 @@ export default function LoginPage() {
                         />
                     </svg>
                 )}
-                <span className="font-semibold">Continue with Google</span>
+                <span className="font-semibold">Sign in with Google</span>
             </Button>
+          </div>
+
+          {error && (
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
+                {error}
+            </div>
           )}
             
         </motion.div>

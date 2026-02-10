@@ -28,6 +28,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!user) return null; // Redirecting...
 
+  // Custom Layout for Sales Executives and Project Managers (They have their own dedicated dashboards)
+  if (user.role === 'sales_executive' || user.role === 'project_manager') {
+      return <>{children}</>;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background selection:bg-primary/20">
       <DashboardSidebar />

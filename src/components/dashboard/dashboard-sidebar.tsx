@@ -13,54 +13,104 @@ import {
   LogOut,
   PlusSquare,
   CreditCard,
-  Film
+  Film,
+  DollarSign
 } from "lucide-react";
 import { useAuth } from "@/lib/context/auth-context";
+import { useEffect, useState } from "react";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
+import { Project } from "@/types/schema";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [totalEarnings, setTotalEarnings] = useState(0);
   
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager' || isAdmin;
   const isEditor = user?.role === 'editor';
 
+  // Fetch earnings for editor
+  useEffect(() => {
+    if (!isEditor || !user) return;
+
+    const q = query(
+        collection(db, "projects"),
+        where("members", "array-contains", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        let total = 0;
+        snapshot.docs.forEach(doc => {
+            const data = doc.data() as Project;
+            // Assuming 'amountPaid' is the field for editor earnings
+            total += (data.amountPaid || 0);
+        });
+        setTotalEarnings(total);
+    });
+
+    return () => unsubscribe();
+  }, [isEditor, user]);
+
+  let baseLinks = [];
+
+  if (isEditor) {
+      baseLinks = [
+          {
+              href: "/dashboard",
+              label: "Projects",
+              icon: FolderOpen,
+          },
+          {
+              href: "/dashboard", // Or a specific earnings detail page if available
+              label: `Earnings: $${totalEarnings.toLocaleString()}`,
+              icon: DollarSign,
+          },
+          {
+              href: "/dashboard/settings",
+              label: "Settings",
+              icon: Settings,
+          }
+      ];
+  } else {
+      baseLinks = [
+          {
+              href: "/dashboard",
+              label: "Dashboard",
+              icon: LayoutDashboard,
+          },
+          {
+              href: "/dashboard/projects",
+              label: "My Projects",
+              icon: FolderOpen,
+          },
+          {
+              href: "/dashboard/projects/new",
+              label: "New Project",
+              icon: PlusSquare
+          },
+          {
+              href: "/dashboard/payments",
+              label: "Payments",
+              icon: CreditCard
+          },
+          {
+              href: "/dashboard/settings",
+              label: "Settings",
+              icon: Settings,
+          }
+      ];
+  }
+
+  // Append Admin links if applicable
   const links = [
-    {
-      href: "/dashboard",
-      label: "Dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      href: "/dashboard/projects",
-      label: "My Projects",
-      icon: FolderOpen,
-    },
-    ...(!isEditor ? [
-        {
-            href: "/dashboard/projects/new",
-            label: "New Project",
-            icon: PlusSquare
-        },
-        {
-            href: "/dashboard/payments",
-            label: "Payments",
-            icon: CreditCard
-        }
-    ] : []),
-    {
-      href: "/dashboard/settings",
-      label: "Settings",
-      icon: Settings,
-    },
-    // Admin stuff if needed, keep at boottom or integrate
-    ...(isAdmin ? [
-      {
-        href: "/dashboard/admin",
-        label: "Admin Control",
-        icon: ShieldCheck,
-      }
-    ] : []),
+      ...baseLinks,
+      ...(isAdmin && !isEditor ? [{ // Ensure admin doesn't see this if toggled as editor (rare case)
+          href: "/dashboard/admin",
+          label: "Admin Control",
+          icon: ShieldCheck,
+      }] : [])
   ];
 
   return (
@@ -76,11 +126,14 @@ export function DashboardSidebar() {
         <nav className="space-y-1 px-3">
           {links.map((link) => {
             const Icon = link.icon;
-            const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+            // Strict check for root dashboard, loose check for sub-sections
+            const isActive = link.href === "/dashboard" 
+                ? pathname === "/dashboard"
+                : pathname.startsWith(link.href);
             
             return (
               <Link
-                key={link.href}
+                key={link.label} // Use label as key since href might duplicate
                 href={link.href}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",

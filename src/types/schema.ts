@@ -1,7 +1,7 @@
 
 // Firestore Data Models
 
-export type UserRole = 'admin' | 'manager' | 'editor' | 'client' | 'guest';
+export type UserRole = 'admin' | 'manager' | 'editor' | 'client' | 'guest' | 'sales_executive' | 'project_manager';
 
 export interface User {
     uid: string;
@@ -11,6 +11,8 @@ export interface User {
     role: UserRole;
     createdAt: number; // Timestamp
     phoneNumber?: string; // For guests
+    customRates?: Record<string, number>; // Custom video rates for this specific client
+    allowedFormats?: Record<string, boolean>; // Which video formats are visible
 }
 
 export type ProjectStatus = 'active' | 'in_review' | 'approved' | 'completed' | 'archived' | 'pending_assignment';
@@ -23,12 +25,14 @@ export interface Project {
     description?: string;
     deadline?: string;
     duration?: number;
+    videoType?: string;
     budget?: number;
     totalCost?: number; // Calculated cost
     amountPaid?: number; // Upfront + Final
     paymentStatus?: string; // 'half_paid', 'full_paid'
     assignedEditorId?: string;
     footageLink?: string; // Link to cloud storage
+    rawFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[]; // Raw video files uploaded by client
     thumbnailUrl?: string; // Cover image
     status: ProjectStatus;
     createdAt: number;

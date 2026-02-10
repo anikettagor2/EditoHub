@@ -44,7 +44,7 @@ export function ClientDashboard() {
     const projectsRef = collection(db, "projects");
     const q = query(
         projectsRef, 
-        where("members", "array-contains", user.uid),
+        where("ownerId", "==", user.uid),
         orderBy("updatedAt", "desc")
     );
 

@@ -2,13 +2,19 @@
 
 import { useEffect } from "react";
 import Lenis from "lenis";
+import { usePathname } from "next/navigation";
 
 export function SmoothScroll() {
+  const pathname = usePathname();
+
   useEffect(() => {
+    // Disable smooth scroll on dashboard since it uses its own internal scrolling container
+    if (pathname.startsWith('/dashboard')) return;
+
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: "vertical", // 'direction' was deprecated/renamed or incorrect in typed options
+      orientation: "vertical",
       gestureOrientation: "vertical",
       smoothWheel: true,
       touchMultiplier: 2,
@@ -24,7 +30,7 @@ export function SmoothScroll() {
     return () => {
       lenis.destroy();
     };
-  }, []);
+  }, [pathname]);
 
   return null;
 }

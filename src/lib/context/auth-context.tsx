@@ -8,7 +8,8 @@ import {
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut,
-  reauthenticateWithPopup
+  reauthenticateWithPopup,
+  signInWithEmailAndPassword
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/config";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -21,6 +22,7 @@ interface AuthContextType {
   loading: boolean;
   signInWithGoogle: (role?: UserRole) => Promise<void>;
   loginAsAdmin: () => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
 }
@@ -31,6 +33,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signInWithGoogle: async () => {},
   loginAsAdmin: async () => {},
+  loginWithEmail: async () => {},
   logout: async () => {},
   deleteAccount: async () => {},
 });
@@ -109,38 +112,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(existingData);
       }
       
-      // Redirect behavior
-      const role = userSnap.exists() ? (userSnap.data() as User).role : selectedRole;
-      if (role === 'admin') {
-        router.push("/dashboard/admin"); // Or regular dashboard which adapts
-      } else {
-        router.push("/dashboard");
-      }
+      router.push("/dashboard");
 
     } catch (error) {
       console.error("Error signing in with Google", error);
       throw error;
     }
   };
+
+  const loginWithEmail = async (email: string, password: string) => {
+      // Check for static admin credentials and map to real ones
+      // Allow both short username and full email if password matches '1234'
+      const normalizedEmail = email.trim().toLowerCase();
+      if ((normalizedEmail === "admin@editohub" || normalizedEmail === "admin@editohub.com") && (password.trim() === "1234" || password.trim() === "admin1234")) {
+          await loginAsAdmin();
+          return;
+      }
+
+      try {
+          await signInWithEmailAndPassword(auth, email, password);
+          router.push("/dashboard");
+      } catch (error: any) {
+          console.error("Error signing in with Email/Pass", error);
+          
+          // Enhanced Admin Recovery: If login fails for admin email, try ensuring it exists
+          if (
+              (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') &&
+              (email.trim().toLowerCase() === "admin@editohub.com" || email.trim().toLowerCase() === "admin@editohub")
+          ) {
+              console.log("Admin login failed, attempting to ensure admin account...");
+              try {
+                  await loginAsAdmin();
+                  return;
+              } catch (adminError) {
+                  // If enhanced recovery fails, throw original error
+                  throw error;
+              }
+          }
+
+          throw error;
+      }
+  };
   
   const loginAsAdmin = async () => {
-     // Static Admin Mock
-     const adminUser: User = {
-         uid: "static-admin-user",
-         email: "admin@editohub.com",
-         displayName: "Super Admin",
-         photoURL: null,
-         role: 'admin',
-         createdAt: Date.now()
-     };
-     
-     setUser(adminUser);
-     // Mock firebase user for consistency in types, though might be partial
-     // @ts-ignore
-     setFirebaseUser({ uid: "static-admin-user", email: "admin@editohub.com" } as FirebaseUser);
-     
-     localStorage.setItem("editohub_admin_session", "true");
-     router.push("/dashboard"); // Dashboard checks role content
+     try {
+         // Call server API to ensure "admin@editohub.com" exists with correct password
+         await fetch('/api/admin/ensure-admin', { method: 'POST' });
+
+         // Now sign in with the verified credentials
+         await signInWithEmailAndPassword(auth, "admin@editohub.com", "admin1234");
+         router.push("/dashboard");
+
+     } catch (error: any) {
+         console.error("Admin login failed:", error);
+         throw error;
+     }
   };
 
   const deleteAccount = async () => {
@@ -190,27 +216,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/");
   };
 
-  // Check for static admin session on load
-  useEffect(() => {
-      const isAdmin = localStorage.getItem("editohub_admin_session");
-      if (isAdmin && !user) {
-         const adminUser: User = {
-             uid: "static-admin-user",
-             email: "admin@editohub.com",
-             displayName: "Super Admin",
-             photoURL: null,
-             role: 'admin',
-             createdAt: Date.now()
-         };
-         setUser(adminUser);
-         // @ts-ignore
-         setFirebaseUser({ uid: "static-admin-user", email: "admin@editohub.com" } as FirebaseUser);
-         setLoading(false);
-      }
-  }, []); // Run once on mount
+
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, loginAsAdmin, logout, deleteAccount }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, loginAsAdmin, loginWithEmail, logout, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   );

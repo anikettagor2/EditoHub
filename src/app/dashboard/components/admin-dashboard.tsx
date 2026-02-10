@@ -32,7 +32,9 @@ import {
     ArrowUpRight,
     MoreHorizontal,
     CheckCircle2,
-    XCircle
+    XCircle,
+    Copy,
+    Shield
 } from "lucide-react";
 import { deleteUser, deleteProject } from "@/app/actions/admin-actions";
 import { cn } from "@/lib/utils";
@@ -42,9 +44,10 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button"; 
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Label } from "@/components/ui/label";
 
 export function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'users' | 'team'>('overview');
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +57,10 @@ export function AdminDashboard() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+
+  // User Creation State
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'sales_executive' });
 
   const [editForm, setEditForm] = useState({
       totalCost: 0,
@@ -75,7 +82,6 @@ export function AdminDashboard() {
     const unsubProjects = onSnapshot(projectsQ, (snapshot) => {
         const fetchedProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
         setProjects(fetchedProjects);
-        updateStats(fetchedProjects, users); // Trigger recalculation
     }, (error) => toast.error("Live projects update failed"));
 
     // 2. Users Listener
@@ -83,43 +89,58 @@ export function AdminDashboard() {
     const unsubUsers = onSnapshot(usersQ, (snapshot) => {
         const fetchedUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as User));
         setUsers(fetchedUsers);
-        updateStats(projects, fetchedUsers); // Trigger recalculation
     }, (error) => toast.error("Live users update failed"));
 
-    // Cleanup
     return () => {
         unsubProjects();
         unsubUsers();
     };
-  }, []); // Run on mount
-
-  // Helper to sync stats when either projects or users change
-  // Note: We need this because closures might capture stale state if not careful, 
-  // but since we update 'projects' and 'users' state, we can use a separate effect 
-  // OR just calculate stats on the fly. 
-  // BETTER APPROACH: Use a useEffect dependent on projects/users to update stats.
+  }, []);
 
   useEffect(() => {
-      if(projects.length > 0 || users.length > 0) {
-          setLoading(false);
-          setStats({
-            revenue: projects.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0),
-            activeProjects: projects.filter(p => !['completed', 'approved'].includes(p.status)).length,
-            pendingAssignment: projects.filter(p => p.status === 'pending_assignment').length,
-            totalUsers: users.length
-        });
-      }
+    if(projects.length > 0 || users.length > 0) {
+        setLoading(false);
+        setStats({
+          revenue: projects.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0),
+          activeProjects: projects.filter(p => !['completed', 'approved'].includes(p.status)).length,
+          pendingAssignment: projects.filter(p => p.status === 'pending_assignment').length,
+          totalUsers: users.length
+      });
+    }
   }, [projects, users]);
 
-  // Removed async fetchData entirely as it's replaced by listeners
-  function updateStats(currentProjects: Project[], currentUsers: User[]) {
-      // Placeholder if strict syncing needed immediately inside callbacks,
-      // but the useEffect [projects, users] handles it cleaner.
-  }
+  const handleCreateUser = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsCreatingUser(true);
+      try {
+          const res = await fetch('/api/admin/create-user', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  email: newUser.email,
+                  password: newUser.password,
+                  displayName: newUser.name,
+                  role: newUser.role,
+                  createdBy: 'admin'
+              })
+          });
+          
+          if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data.error || "Failed");
+          }
+
+          toast.success(`${newUser.role} created successfully!`);
+          setNewUser({ name: '', email: '', password: '', role: 'sales_executive' });
+      } catch (err: any) {
+          toast.error(err.message);
+      } finally {
+          setIsCreatingUser(false);
+      }
+  };
 
   const handleDeleteProject = async (projectId: string) => {
     if(!confirm("Are you sure?")) return;
-    // Listener will update state
     const result = await deleteProject(projectId);
     if (result.success) toast.success("Project deleted");
     else toast.error("Failed");
@@ -127,14 +148,9 @@ export function AdminDashboard() {
 
   const handleDeleteUser = async (uid: string) => {
     if(!confirm("Are you sure you want to delete this user? ALL their data will be lost.")) return;
-    
-    // Listener will update state
     const result = await deleteUser(uid);
-    if (result.success) {
-        toast.success("User deleted successfully");
-    } else {
-        toast.error("Failed to delete user: " + result.error);
-    }
+    if (result.success) toast.success("User deleted successfully");
+    else toast.error("Failed to delete user: " + result.error);
   };
 
   const handleAssignEditor = async (editorId: string) => {
@@ -176,7 +192,7 @@ export function AdminDashboard() {
                 <p className="text-muted-foreground text-sm mt-1">Global operations, financial tracking, and user management.</p>
             </div>
             <div className="flex bg-muted p-1.5 border border-border rounded-xl">
-                 {['overview', 'projects', 'users'].map(tab => (
+                 {['overview', 'projects', 'users', 'team'].map(tab => (
                      <button
                         key={tab}
                         onClick={() => setActiveTab(tab as any)}
@@ -185,7 +201,7 @@ export function AdminDashboard() {
                             activeTab === tab ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                         )}
                      >
-                        {tab}
+                        {tab === 'team' ? 'Team' : tab}
                      </button>
                  ))}
             </div>
@@ -304,11 +320,75 @@ export function AdminDashboard() {
             {activeTab === 'users' && (
                 <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} className="space-y-6">
                      <div className="grid gap-6 lg:grid-cols-2">
-                        <UserTable title="Clients" users={users.filter(u => u.role === 'client')} onDelete={handleDeleteUser} />
-                        <UserTable title="Editors" users={users.filter(u => u.role === 'editor')} onDelete={handleDeleteUser} />
+                        <UserTable title="Clients" users={users.filter(u => u.role === 'client')} onDelete={handleDeleteUser} allUsers={users} />
+                        <UserTable title="Editors" users={users.filter(u => u.role === 'editor')} onDelete={handleDeleteUser} allUsers={users} />
                      </div>
                 </motion.div>
             )}
+
+            {/* TEAM TAB */}
+            {activeTab === 'team' && (
+                <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} className="space-y-6">
+                     <div className="grid gap-8 lg:grid-cols-3">
+                         {/* Create User Form */}
+                         <div className="lg:col-span-1 bg-card border border-border p-6 rounded-2xl h-fit">
+                             <div className="flex items-center gap-2 mb-6">
+                                <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                                    <UserPlus className="w-5 h-5" />
+                                </div>
+                                <h3 className="font-bold text-lg">Create New User</h3>
+                             </div>
+                             
+                             <form onSubmit={handleCreateUser} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Full Name</Label>
+                                    <Input placeholder="e.g. Sarah Smith" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} required className="bg-background" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Email (Login ID)</Label>
+                                    <Input type="email" placeholder="sarah@editohub.com" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} required className="bg-background" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Password</Label>
+                                    <Input type="text" placeholder="Set initial password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required minLength={6} className="bg-background" />
+                                    <p className="text-[10px] text-muted-foreground">Visible for you to copy.</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Role</Label>
+                                    <select 
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                        value={newUser.role}
+                                        onChange={e => setNewUser({...newUser, role: e.target.value})}
+                                    >
+                                        <option value="sales_executive">Sales Executive</option>
+                                        <option value="project_manager">Project Manager</option>
+                                    </select>
+                                </div>
+                                <Button type="submit" className="w-full mt-4" disabled={isCreatingUser}>
+                                    {isCreatingUser ? <Loader2 className="animate-spin mr-2" /> : 'Create User'}
+                                </Button>
+                             </form>
+                         </div>
+
+                         {/* Team List with Credentials */}
+                         <div className="lg:col-span-2 space-y-6">
+                             <CredentialTable 
+                                title="Sales Executives" 
+                                role="sales_executive" 
+                                users={users.filter(u => u.role === 'sales_executive')} 
+                                onDelete={handleDeleteUser} 
+                            />
+                            <CredentialTable 
+                                title="Project Managers" 
+                                role="project_manager" 
+                                users={users.filter(u => u.role === 'project_manager')} 
+                                onDelete={handleDeleteUser} 
+                            />
+                         </div>
+                     </div>
+                </motion.div>
+            )}
+
        </AnimatePresence>
 
        {/* Modals maintained from original code but styled consistently */}
@@ -358,7 +438,7 @@ export function AdminDashboard() {
   );
 }
 
-// --- SUB COMPONENTS FOR "TABLE" LOOK --- //
+// --- SUB COMPONENTS --- //
 
 function Table({ children }: { children: React.ReactNode }) {
     return <div className="w-full text-sm text-left">{children}</div>;
@@ -454,7 +534,7 @@ function RecentTable({ title, headers, data, type, onAssign }: any) {
     );
 }
 
-function UserTable({ title, users, onDelete }: any) {
+function UserTable({ title, users, onDelete, allUsers = [] }: any) {
     return (
         <div className="bg-card border border-border rounded-3xl overflow-hidden flex flex-col h-[500px] shadow-sm">
             <div className="p-6 border-b border-border">
@@ -464,14 +544,27 @@ function UserTable({ title, users, onDelete }: any) {
             </div>
             <div className="flex-1 overflow-auto">
                 <div className="divide-y divide-border">
-                    {users.map((u: any) => (
+                    {users.map((u: any) => {
+                        // Find Creator (Sales Exec)
+                        const creator = allUsers.find((rep: any) => rep.uid === u.createdBy);
+                        
+                        return (
                          <div key={u.uid} className="flex items-center justify-between p-4 px-6 hover:bg-muted/30 transition-all group">
                              <div className="flex items-center gap-4">
                                 <Avatar className="h-10 w-10 border border-border">
                                     <AvatarFallback className="bg-muted text-muted-foreground font-bold">{u.displayName?.[0]}</AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <p className="text-foreground font-medium text-sm">{u.displayName}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-foreground font-medium text-sm">{u.displayName}</p>
+                                        {/* Show Sales Rep Label for Clients */}
+                                        {u.role === 'client' && creator && (
+                                            <span className="text-[10px] bg-indigo-500/10 text-indigo-500 px-1.5 py-0.5 rounded border border-indigo-500/20 flex items-center gap-1" title={`Managed by ${creator.displayName}`}>
+                                                <Shield className="w-2.5 h-2.5" />
+                                                {creator.displayName}
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="text-xs text-muted-foreground">{u.email}</p>
                                 </div>
                              </div>
@@ -487,9 +580,72 @@ function UserTable({ title, users, onDelete }: any) {
                                 </Button>
                              </div>
                          </div>
-                    ))}
+                    )})}
                 </div>
             </div>
+        </div>
+    );
+}
+
+// change has been seen it if need chage the DB schema and update it in the reall time 
+
+
+function CredentialTable({ title, role, users, onDelete }: any) {
+    return (
+        <div className="bg-card border border-border rounded-3xl overflow-hidden flex flex-col shadow-sm">
+            <div className="p-6 border-b border-border">
+                <h3 className="font-bold text-foreground flex items-center gap-2">
+                    {title} <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">{users.length}</span>
+                </h3>
+            </div>
+            
+            {users.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                    No {role.replace('_', ' ')}s found.
+                </div>
+            ) : (
+                <div className="flex-1 overflow-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-muted/50 text-xs text-muted-foreground uppercase font-bold tracking-wider">
+                            <tr>
+                                <th className="px-6 py-3">Name</th>
+                                <th className="px-6 py-3">Credentials</th>
+                                <th className="px-6 py-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/50">
+                            {users.map((u: any) => (
+                                <tr key={u.uid} className="hover:bg-muted/30">
+                                    <td className="px-6 py-4 font-medium">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500 font-bold text-xs">
+                                                {u.displayName?.[0]}
+                                            </div>
+                                            {u.displayName}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs text-muted-foreground">ID: <span className="text-foreground font-mono">{u.email}</span></div>
+                                            {u.initialPassword && (
+                                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                                    PW: <span className="text-emerald-500 font-mono bg-emerald-500/10 px-1 rounded">{u.initialPassword}</span>
+                                                    <Copy  className="w-3 h-3 cursor-pointer hover:text-foreground" onClick={() => { navigator.clipboard.writeText(u.initialPassword); toast.success("Copied"); }} />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-500" onClick={() => onDelete(u.uid)}>
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 }

@@ -42,7 +42,7 @@ export function EditorDashboard() {
     const projectsRef = collection(db, "projects");
     const q = query(
         projectsRef, 
-        where("members", "array-contains", user.uid),
+        where("assignedEditorId", "==", user.uid),
         orderBy("updatedAt", "desc")
     );
 
@@ -237,7 +237,6 @@ function TaskCard({ project }: { project: Project }) {
     const isUrgent = deadlineDate ? (deadlineDate.getTime() - Date.now() < 172800000) : false; // < 48h
 
     return (
-        <Link href={`/dashboard/projects/${project.id}`}>
             <motion.div
                 layout
                 initial={{ opacity: 0, y: 20 }}
@@ -245,8 +244,9 @@ function TaskCard({ project }: { project: Project }) {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="group h-[280px] rounded-3xl bg-card border border-border p-1 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300"
             >
-                 <div className="flex flex-col h-full bg-muted/30 rounded-[20px] p-6 relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-4">
+                <div className="flex flex-col h-full bg-muted/30 rounded-[20px] p-6 relative overflow-hidden">
+                    <Link href={`/dashboard/projects/${project.id}`} className="absolute inset-0 z-0" aria-label={`View ${project.name}`} />
+                    <div className="flex justify-between items-start mb-4 relative z-10">
                         <div className={cn(
                             "px-2.5 py-1 rounded-md font-bold text-[10px] uppercase tracking-wider border", 
                             status.color
@@ -283,7 +283,7 @@ function TaskCard({ project }: { project: Project }) {
 
                          {/* Action Button for Active Projects */}
                          {(project.status === 'active' || project.status === 'in_review') && (
-                            <Link href={`/dashboard/projects/${project.id}/upload`} className="block mt-4">
+                            <Link href={`/dashboard/projects/${project.id}/upload`} className="block mt-4 relative z-20">
                                 <Button className="w-full bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-10 rounded-xl font-semibold">
                                      <Upload className="h-4 w-4 mr-2" />
                                      Submit Draft
@@ -302,7 +302,6 @@ function TaskCard({ project }: { project: Project }) {
                     </div>
                 </div>
             </motion.div>
-        </Link>
     );
 }
 

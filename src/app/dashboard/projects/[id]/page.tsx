@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
-import { db } from "@/lib/firebase/config";
-import { doc, getDoc, collection, query, where, orderBy, getDocs, updateDoc } from "firebase/firestore";
+import { db, storage } from "@/lib/firebase/config";
+import { doc, getDoc, collection, query, where, orderBy, getDocs, updateDoc, arrayUnion } from "firebase/firestore";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Project, Revision } from "@/types/schema";
 import { 
     Loader2, 
@@ -55,6 +56,60 @@ export default function ProjectDetailsPage() {
     // Admin Assignment State
     const [editors, setEditors] = useState<User[]>([]);
     const [assigning, setAssigning] = useState(false);
+    
+    // Asset Upload State
+    const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+    const [uploadAssetProgress, setUploadAssetProgress] = useState(0);
+
+    const handleAssetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || !e.target.files[0] || !project) return;
+        const file = e.target.files[0];
+        
+        setIsUploadingAsset(true);
+        try {
+            const storageRef = ref(storage, `raw_footage/${project.ownerId}/${Date.now()}_${file.name}`);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            await new Promise<void>((resolve, reject) => {
+                uploadTask.on('state_changed', 
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        setUploadAssetProgress(progress);
+                    }, 
+                    (error) => reject(error), 
+                    () => resolve()
+                );
+            });
+
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            const newFileMetadata = {
+                name: file.name,
+                url: downloadURL,
+                size: file.size,
+                type: file.type,
+                uploadedAt: Date.now()
+            };
+
+            await updateDoc(doc(db, "projects", project.id), {
+                rawFiles: arrayUnion(newFileMetadata)
+            });
+
+            // Update local state
+            setProject(prev => prev ? {
+                ...prev,
+                rawFiles: [...(prev.rawFiles || []), newFileMetadata]
+            } : null);
+
+            toast.success("Asset uploaded successfully");
+
+        } catch (error) {
+            console.error("Asset upload failed:", error);
+            toast.error("Failed to upload asset");
+        } finally {
+            setIsUploadingAsset(false);
+            setUploadAssetProgress(0);
+        }
+    };
 
     useEffect(() => {
         async function fetchData() {
@@ -508,29 +563,82 @@ export default function ProjectDetailsPage() {
                                 Production Assets
                             </h3>
                             
-                            {project.footageLink ? (
+                            {/* 1. Existing Cloud Link */}
+                            {project.footageLink && (
                                 <a 
                                     href={project.footageLink.startsWith('http') ? project.footageLink : `https://${project.footageLink}`} 
                                     target="_blank" 
-                                    className="block p-4 bg-zinc-900 border border-zinc-800 rounded-2xl hover:border-primary/50 transition-all group"
+                                    className="block p-4 bg-zinc-900 border border-zinc-800 rounded-2xl hover:border-primary/50 transition-all group mb-4"
                                 >
                                     <p className="text-[10px] text-zinc-500 uppercase font-bold mb-2">Cloud Master Repository</p>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm text-zinc-300 font-medium group-hover:text-primary truncate mr-2">Open Asset Folder</span>
+                                        <span className="text-sm text-zinc-300 font-medium group-hover:text-primary truncate mr-2">Open External Link</span>
                                         <ExternalLink className="h-4 w-4 text-zinc-600 group-hover:text-primary" />
                                     </div>
                                 </a>
-                            ) : (
-                                <div className="text-center py-6 bg-zinc-900/50 rounded-2xl border border-dashed border-zinc-800">
-                                    <p className="text-xs text-zinc-600">No external assets linked.</p>
+                            )}
+
+                            {/* 2. Raw Files List */}
+                            {project.rawFiles && project.rawFiles.length > 0 && (
+                                <div className="space-y-2 mb-4">
+                                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Uploaded Files</p>
+                                    {project.rawFiles.map((file, idx) => (
+                                        <a 
+                                            key={idx}
+                                            href={file.url}
+                                            target="_blank"
+                                            className="flex items-center gap-3 p-3 bg-zinc-900/50 hover:bg-zinc-900 rounded-xl border border-zinc-800 transition-colors group"
+                                        >
+                                            <div className="h-8 w-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-primary group-hover:bg-primary/10">
+                                                <FileVideo className="h-4 w-4" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-zinc-300 truncate group-hover:text-white">{file.name}</p>
+                                                <p className="text-[10px] text-zinc-500">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB • {new Date(file.uploadedAt || 0).toLocaleDateString()}</p>
+                                            </div>
+                                            <Download className="h-4 w-4 text-zinc-600 group-hover:text-white" />
+                                        </a>
+                                    ))}
                                 </div>
                             )}
 
-                            {isClient && !project.footageLink && (
-                                <Button className="w-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-xs h-10 rounded-xl">
-                                    Connect Assets
-                                </Button>
+                            {/* 3. Upload Action */}
+                            {isClient && (
+                                <div className="relative">
+                                    {isUploadingAsset ? (
+                                        <div className="h-10 w-full bg-zinc-900/50 rounded-xl border border-zinc-800 flex items-center px-4 gap-3">
+                                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                            <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-primary transition-all duration-300"
+                                                    style={{ width: `${uploadAssetProgress}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="relative">
+                                            <Button className="w-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-xs h-10 rounded-xl relative overflow-hidden group">
+                                                <div className="flex items-center gap-2 relative z-10">
+                                                    <Upload className="h-3 w-3" />
+                                                    Upload New Asset
+                                                </div>
+                                                <input 
+                                                    type="file" 
+                                                    className="absolute inset-0 opacity-0 cursor-pointer z-20"
+                                                    onChange={handleAssetUpload}
+                                                />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
                             )}
+
+                            {!project.footageLink && (!project.rawFiles || project.rawFiles.length === 0) && !isClient && (
+                                <div className="text-center py-6 bg-zinc-900/50 rounded-2xl border border-dashed border-zinc-800">
+                                    <p className="text-xs text-zinc-600">No assets provided yet.</p>
+                                </div>
+                            )}
+
                         </div>
 
                         {/* Status Timeline */}
