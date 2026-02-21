@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { adminDb } from '@/lib/firebase/admin';
+import { db } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(request: Request) {
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         console.log("Updating project with:", updateData);
 
         // Perform Update using Admin SDK (Bypasses rules)
-        await adminDb.collection('projects').doc(projectId).update(updateData);
+        await db.collection('projects').doc(projectId).update(updateData);
 
         // --- AUTOMATIC WHATSAPP NOTIFICATION ---
         try {
@@ -69,11 +69,11 @@ export async function POST(request: Request) {
 
         // --- AUTOMATIC INVOICE GENERATION ---
         try {
-            const projectSnap = await adminDb.collection('projects').doc(projectId).get();
+            const projectSnap = await db.collection('projects').doc(projectId).get();
             const projectData = projectSnap.data();
 
             if (projectData && projectData.clientId) {
-                const clientSnap = await adminDb.collection('users').doc(projectData.clientId).get();
+                const clientSnap = await db.collection('users').doc(projectData.clientId).get();
                 const clientData = clientSnap.data();
 
                 const invoiceNumber = `INV-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
                     razorpayPaymentId: razorpay_payment_id
                 };
 
-                await adminDb.collection('invoices').add(invoiceData);
+                await db.collection('invoices').add(invoiceData);
                 console.log("Auto-generated invoice:", invoiceNumber);
             }
         } catch (invoiceError) {

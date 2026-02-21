@@ -1,7 +1,7 @@
 'use server';
 
 import { notifyClientOfStatusUpdate } from "@/lib/whatsapp";
-import { adminDb } from "@/lib/firebase/admin";
+import { db } from "@/lib/firebaseAdmin";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 export async function handleRevisionUploaded(projectId: string) {
     try {
         // 1. Update project status to 'in_review'
-        await adminDb.collection('projects').doc(projectId).update({
+        await db.collection('projects').doc(projectId).update({
             status: 'in_review',
             updatedAt: Date.now()
         });

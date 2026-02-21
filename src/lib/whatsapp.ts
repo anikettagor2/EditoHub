@@ -2,7 +2,7 @@
 const AISENSY_API_KEY = process.env.AISENSY_API_KEY;
 const AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2";
 
-import { adminDb } from "@/lib/firebase/admin";
+import { db } from "@/lib/firebaseAdmin";
 import { Project, User } from "@/types/schema";
 
 /**
@@ -111,13 +111,13 @@ export async function sendWhatsAppNotification(
 export async function notifyClientOfStatusUpdate(projectId: string, status: string) {
     try {
         // 1. Fetch Project
-        const projectSnap = await adminDb.collection('projects').doc(projectId).get();
+        const projectSnap = await db.collection('projects').doc(projectId).get();
         if (!projectSnap.exists) return { success: false, error: "Project not found" };
         const project = projectSnap.data() as Project;
 
         // 2. Fetch Client
         if (!project.clientId) return { success: false, error: "No client assigned to project" };
-        const clientSnap = await adminDb.collection('users').doc(project.clientId).get();
+        const clientSnap = await db.collection('users').doc(project.clientId).get();
         if (!clientSnap.exists) return { success: false, error: "Client not found" };
         const client = clientSnap.data() as User;
 

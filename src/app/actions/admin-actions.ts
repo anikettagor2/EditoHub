@@ -1,6 +1,6 @@
 'use server';
 
-import { adminAuth, adminDb, adminStorage } from '@/lib/firebase/admin';
+import { auth, db, storage } from '@/lib/firebaseAdmin';
 import { UserRole } from '@/types/schema';
 import { revalidatePath } from 'next/cache';
 import { notifyClientOfStatusUpdate } from '@/lib/whatsapp';
@@ -13,7 +13,7 @@ export async function deleteUser(uid: string) {
     try {
         // 1. Delete from Firebase Auth
         try {
-            await adminAuth.deleteUser(uid);
+            await auth.deleteUser(uid);
         } catch (authError: any) {
             console.warn(`Auth deletion skipped for ${uid}:`, authError.code);
             // Continue if user is already missing in Auth
@@ -23,11 +23,11 @@ export async function deleteUser(uid: string) {
         }
 
         // 2. Delete from Firestore
-        await adminDb.collection('users').doc(uid).delete();
+        await db.collection('users').doc(uid).delete();
 
         // 3. Optional: Delete their storage folder? 
         // This is risky if they shared files, but for strict cleanup:
-        // await adminStorage.bucket().deleteFiles({ prefix: `users/${uid}/` });
+        // await storage.bucket().deleteFiles({ prefix: `users/${uid}/` });
 
         revalidatePath('/dashboard');
         return { success: true };
@@ -44,7 +44,7 @@ export async function deleteUser(uid: string) {
 export async function deleteProject(projectId: string) {
     try {
         // 1. Delete the project document
-        await adminDb.collection('projects').doc(projectId).delete();
+        await db.collection('projects').doc(projectId).delete();
 
         // 2. Delete subcollections (recursively is hard in standard API, 
         // usually we just leave them or use a recursive helper. 
@@ -67,11 +67,11 @@ export async function deleteProject(projectId: string) {
 export async function updateProject(projectId: string, data: any) {
     try {
         // Fetch current status to check for changes
-        const projectDoc = await adminDb.collection('projects').doc(projectId).get();
+        const projectDoc = await db.collection('projects').doc(projectId).get();
         const currentData = projectDoc.data();
         const oldStatus = currentData?.status;
 
-        await adminDb.collection('projects').doc(projectId).update({
+        await db.collection('projects').doc(projectId).update({
             ...data,
             updatedAt: Date.now()
         });
@@ -94,7 +94,7 @@ export async function updateProject(projectId: string, data: any) {
 export async function assignEditor(projectId: string, editorId: string) {
     try {
         // Get the project to check current members
-        const projectRef = adminDb.collection('projects').doc(projectId);
+        const projectRef = db.collection('projects').doc(projectId);
         const projectSnap = await projectRef.get();
 
         if (!projectSnap.exists) throw new Error("Project not found");
@@ -131,7 +131,7 @@ export async function assignEditor(projectId: string, editorId: string) {
  */
 export async function respondToAssignment(projectId: string, response: 'accepted' | 'rejected') {
     try {
-        await adminDb.collection('projects').doc(projectId).update({
+        await db.collection('projects').doc(projectId).update({
             assignmentStatus: response,
             status: response === 'accepted' ? 'active' : 'pending_assignment', // Revert to pending if rejected? Or stay separate?
             updatedAt: Date.now()
@@ -155,7 +155,7 @@ export async function respondToAssignment(projectId: string, response: 'accepted
  */
 export async function getAllUsers() {
     try {
-        const usersSnap = await adminDb.collection('users').get();
+        const usersSnap = await db.collection('users').get();
         const users = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
         return { success: true, data: users };
     } catch (error: any) {
@@ -168,7 +168,7 @@ export async function getAllUsers() {
  */
 export async function togglePayLater(uid: string, payLater: boolean) {
     try {
-        await adminDb.collection('users').doc(uid).update({
+        await db.collection('users').doc(uid).update({
             payLater: payLater
         });
         revalidatePath('/dashboard');

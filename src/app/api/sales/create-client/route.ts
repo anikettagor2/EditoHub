@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase/admin';
+import { auth, db } from '@/lib/firebaseAdmin';
 
 export async function POST(request: Request) {
     try {
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
         }
 
         // 1. Create User in Firebase Auth
-        const userRecord = await adminAuth.createUser({
+        const userRecord = await auth.createUser({
             email,
             password,
             displayName,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
         });
 
         // 2. Create User Profile in Firestore
-        await adminDb.collection('users').doc(userRecord.uid).set({
+        await db.collection('users').doc(userRecord.uid).set({
             uid: userRecord.uid,
             email,
             displayName,
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
         });
 
         // 3. Set Custom Claim (optional but good for Security Rules)
-        await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'client' });
+        await auth.setCustomUserClaims(userRecord.uid, { role: 'client' });
 
         return NextResponse.json({
             success: true,

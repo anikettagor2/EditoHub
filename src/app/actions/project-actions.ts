@@ -1,6 +1,6 @@
 'use server';
 
-import { adminDb } from "@/lib/firebase/admin";
+import { db } from "@/lib/firebaseAdmin";
 import { Revision, Project } from "@/types/schema";
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
@@ -10,7 +10,7 @@ import { FieldValue } from "firebase-admin/firestore";
  */
 export async function registerDownload(projectId: string, revisionId: string) {
     try {
-        const docRef = adminDb.collection('revisions').doc(revisionId);
+        const docRef = db.collection('revisions').doc(revisionId);
         const snap = await docRef.get();
 
         if (!snap.exists) {
@@ -65,7 +65,7 @@ import { notifyClientOfStatusUpdate } from "@/lib/whatsapp";
 export async function unlockProjectDownloads(projectId: string, userId: string) {
     try {
         // Verify user has permission
-        const userDoc = await adminDb.collection('users').doc(userId).get();
+        const userDoc = await db.collection('users').doc(userId).get();
         if (!userDoc.exists) {
             return { success: false, error: "User not found" };
         }
@@ -77,7 +77,7 @@ export async function unlockProjectDownloads(projectId: string, userId: string) 
             return { success: false, error: "Unauthorized: Only Admins or Project Managers can unlock downloads." };
         }
 
-        await adminDb.collection('projects').doc(projectId).update({
+        await db.collection('projects').doc(projectId).update({
             paymentStatus: 'full_paid',
             status: 'completed',
             downloadsUnlocked: true,
@@ -101,10 +101,10 @@ export async function unlockProjectDownloads(projectId: string, userId: string) 
  */
 export async function requestDownloadUnlock(projectId: string, userId: string) {
     try {
-        const userDoc = await adminDb.collection('users').doc(userId).get();
+        const userDoc = await db.collection('users').doc(userId).get();
         if (!userDoc.exists) return { success: false, error: "User not found" };
 
-        const project = await adminDb.collection('projects').doc(projectId).get();
+        const project = await db.collection('projects').doc(projectId).get();
         if (!project.exists) return { success: false, error: "Project not found" };
 
         const projectData = project.data();
@@ -119,7 +119,7 @@ export async function requestDownloadUnlock(projectId: string, userId: string) {
             return { success: false, error: "Unauthorized: You are not a member of this project." };
         }
 
-        await adminDb.collection('projects').doc(projectId).update({
+        await db.collection('projects').doc(projectId).update({
             downloadUnlockRequested: true,
             updatedAt: Date.now()
         });
@@ -135,7 +135,7 @@ export async function requestDownloadUnlock(projectId: string, userId: string) {
  */
 export async function createProject(data: Omit<Project, 'id'>) {
     try {
-        const docRef = await adminDb.collection('projects').add({
+        const docRef = await db.collection('projects').add({
             ...data,
             createdAt: Date.now(),
             updatedAt: Date.now()
