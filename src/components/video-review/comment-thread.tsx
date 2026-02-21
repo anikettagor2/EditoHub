@@ -123,7 +123,7 @@ export function CommentThread({
                             <div className="flex items-start justify-between gap-3 mb-2">
                                 <div className="flex items-center gap-2">
                                     <Avatar className="h-6 w-6 ring-1 ring-white/10">
-                                        <AvatarImage src={comment.userAvatar} />
+                                        <AvatarImage src={comment.userAvatar || undefined} />
                                         <AvatarFallback className="text-[10px] bg-zinc-700 text-zinc-300 font-bold">
                                             {comment.userName.substring(0,2).toUpperCase()}
                                         </AvatarFallback>

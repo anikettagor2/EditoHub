@@ -58,6 +58,63 @@ export async function POST(request: Request) {
         // Perform Update using Admin SDK (Bypasses rules)
         await adminDb.collection('projects').doc(projectId).update(updateData);
 
+        // --- AUTOMATIC WHATSAPP NOTIFICATION ---
+        try {
+            const { notifyClientOfStatusUpdate } = await import('@/lib/whatsapp');
+            await notifyClientOfStatusUpdate(projectId, updateData.status);
+            console.log(`[WhatsApp] Auto-notified client for status: ${updateData.status}`);
+        } catch (waError) {
+            console.error("[WhatsApp] Failed to send auto-notification after payment:", waError);
+        }
+
+        // --- AUTOMATIC INVOICE GENERATION ---
+        try {
+            const projectSnap = await adminDb.collection('projects').doc(projectId).get();
+            const projectData = projectSnap.data();
+
+            if (projectData && projectData.clientId) {
+                const clientSnap = await adminDb.collection('users').doc(projectData.clientId).get();
+                const clientData = clientSnap.data();
+
+                const invoiceNumber = `INV-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
+                const description = paymentType === 'initial'
+                    ? `Upfront Payment for Project: ${projectData.name}`
+                    : `Final Balance for Project: ${projectData.name}`;
+
+                const invoiceData = {
+                    invoiceNumber,
+                    projectId,
+                    clientId: projectData.clientId,
+                    clientName: clientData?.displayName || projectData.clientName || "Client",
+                    clientEmail: clientData?.email || "Unknown",
+                    clientAddress: "",
+                    items: [{
+                        description,
+                        quantity: 1,
+                        rate: amount,
+                        amount: amount
+                    }],
+                    subtotal: amount,
+                    tax: 0,
+                    total: amount,
+                    status: 'paid', // Automatically marked as paid
+                    issueDate: Date.now(),
+                    dueDate: Date.now(),
+                    notes: `Auto-generated via Razorpay Payment (ID: ${razorpay_payment_id})`,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    razorpayOrderId: razorpay_order_id,
+                    razorpayPaymentId: razorpay_payment_id
+                };
+
+                await adminDb.collection('invoices').add(invoiceData);
+                console.log("Auto-generated invoice:", invoiceNumber);
+            }
+        } catch (invoiceError) {
+            console.error("Failed to auto-generate invoice:", invoiceError);
+            // Don't block the response, payment was successful
+        }
+
         return NextResponse.json({ success: true });
 
     } catch (error: any) {

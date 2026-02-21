@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/context/auth-context";
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { Loader2 } from "lucide-react";
+import { DashboardFooter } from "@/components/dashboard/dashboard-footer";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -28,18 +29,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!user) return null; // Redirecting...
 
-  // Custom Layout for Sales Executives and Project Managers (They have their own dedicated dashboards)
-  if (user.role === 'sales_executive' || user.role === 'project_manager') {
-      return <>{children}</>;
-  }
+
 
   return (
     <div className="flex h-screen overflow-hidden bg-background selection:bg-primary/20">
       <DashboardSidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <DashboardHeader />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
-           {children}
+        <main className="flex-1 overflow-y-auto relative flex flex-col">
+           <div className="flex-1 p-6 md:p-8">
+              {children}
+           </div>
+           <DashboardFooter />
         </main>
       </div>
     </div>

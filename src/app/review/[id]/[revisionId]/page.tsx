@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useRef, useState, use } from "react";
@@ -10,22 +9,18 @@ import { Comment, Revision, UserRole } from "@/types/schema";
 import { doc, collection, query, where, onSnapshot, setDoc, updateDoc, orderBy, arrayUnion } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Share2, Download, MessageSquarePlus, DollarSign, Loader2, ShieldCheck } from "lucide-react";
+import { ChevronLeft, Share2, Download, MessageSquarePlus, DollarSign, Loader2, ShieldCheck, Film } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/context/auth-context";
 import { v4 as uuidv4 } from 'uuid';
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
-import { PaymentButton } from "@/components/payment-button";
 import { toast } from "sonner";
 import { registerDownload, requestDownloadUnlock } from "@/app/actions/project-actions";
 
-// Mock Data Source - In production this comes from Firestore
-const MOCK_VIDEO_URL = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-
-export default function ReviewPage(props: { params: Promise<{ id: string; revisionId: string }> }) {
+export default function PublicReviewPage(props: { params: Promise<{ id: string; revisionId: string }> }) {
   const params = use(props.params); 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const playerRef = useRef<VideoPlayerHandle>(null);
   
   // State
@@ -41,28 +36,34 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
 
   // Real Data State
   const [revision, setRevision] = useState<Revision | null>(null);
-  const [project, setProject] = useState<any>(null); // Store full project
+  const [project, setProject] = useState<any>(null); 
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
 
+  // Force Guest Identity for Public Viewers
+  useEffect(() => {
+    if (!authLoading && !user && !guestInfo) {
+      setIsGuestModalOpen(true);
+    }
+  }, [authLoading, user, guestInfo]);
+
   // 1. Real-time Revision & Project Details
   useEffect(() => {
     if (!params.id || !params.revisionId) return;
 
-    // Listen to Revision
     const unsubRev = onSnapshot(doc(db, "revisions", params.revisionId), (snap) => {
       if (snap.exists()) {
         setRevision({ id: snap.id, ...snap.data() } as Revision);
       }
     });
 
-    // Listen to Project
     const unsubProj = onSnapshot(doc(db, "projects", params.id), (snap) => {
       if (snap.exists()) {
         setProject({ id: snap.id, ...snap.data() });
       }
+      setLoading(false);
     });
 
     return () => {
@@ -71,15 +72,32 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
     };
   }, [params.id, params.revisionId]);
 
+  // 2. Real-time Comments Sync
+  useEffect(() => {
+    if (!params.revisionId) return;
+
+    const q = query(
+        collection(db, "comments"),
+        where("revisionId", "==", params.revisionId),
+        orderBy("timestamp", "asc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedComments: Comment[] = [];
+        snapshot.forEach((doc) => {
+            fetchedComments.push({ id: doc.id, ...doc.data() } as Comment);
+        });
+        setComments(fetchedComments);
+    });
+
+    return () => unsubscribe();
+  }, [params.revisionId]);
 
   const handleDownloadAttempt = () => {
-      // Logic: If user is client AND not fully paid, block execution
       const isClient = user?.role === 'client' || user?.uid === project?.ownerId;
-      
       if (isClient && project?.paymentStatus !== 'full_paid') {
           setIsUnlockModalOpen(true);
       } else {
-          // Proceed to download
           if (revision?.videoUrl) {
               window.open(revision.videoUrl, '_blank');
           }
@@ -104,60 +122,12 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
       }
   };
 
-  // 2. Real-time Comments Sync
-  useEffect(() => {
-    if (!params.revisionId) return;
-
-    const q = query(
-        collection(db, "comments"),
-        where("revisionId", "==", params.revisionId),
-        orderBy("timestamp", "asc") // Order by video time
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedComments: Comment[] = [];
-        snapshot.forEach((doc) => {
-            fetchedComments.push({ id: doc.id, ...doc.data() } as Comment);
-        });
-        setComments(fetchedComments);
-        setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [params.revisionId]);
-
-  // Auto-Cleanup Effect for Expired Downloads
-  useEffect(() => {
-      if (revision && (revision.downloadCount || 0) >= 3 && revision.status !== 'archived') {
-          // Trigger cleanup silently
-          registerDownload(params.id, params.revisionId).then((res) => {
-             console.log("Expired revision cleanup:", res);
-          });
-      }
-  }, [revision, params.id, params.revisionId]);
-
-  // Draft State
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [draftTime, setDraftTime] = useState<number | null>(null);
+  const waitingForGuest = useRef(false);
 
-  const handleShareReview = () => {
-      if (typeof window === "undefined") return;
-      const publicLink = `${window.location.origin}/review/${params.id}/${params.revisionId}`;
-      navigator.clipboard.writeText(publicLink);
-      toast.success("Review link copied to clipboard!", {
-          description: "Anyone with this link can view and comment (after providing their name)."
-      });
-  };
-
-  // ... (keep useEffects)
-
-  const handleTimeUpdate = (time: number) => {
-     setCurrentTime(time);
-  };
-
-  const handleSeek = (time: number) => {
-     playerRef.current?.seekTo(time);
-  };
+  const handleTimeUpdate = (time: number) => setCurrentTime(time);
+  const handleSeek = (time: number) => playerRef.current?.seekTo(time);
 
   const handleSelectComment = (comment: Comment) => {
      setActiveCommentId(comment.id);
@@ -168,15 +138,12 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
   const handleGuestIdentify = (name: string, email: string) => {
       setGuestInfo({ name, email });
       setIsGuestModalOpen(false);
-      // Resume adding comment if that was the intent
       if (waitingForGuest.current) {
           setIsAddingComment(true);
           setDraftTime(currentTime);
           waitingForGuest.current = false;
       }
   };
-
-  const waitingForGuest = useRef(false);
 
   const handleAddCommentStart = () => {
       if (!user && !guestInfo) {
@@ -185,11 +152,10 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           setIsGuestModalOpen(true);
           return;
       }
-      
       playerRef.current?.pause();
       setDraftTime(currentTime);
       setIsAddingComment(true);
-      setIsSidebarOpen(true); // Ensure sidebar is open to show input
+      setIsSidebarOpen(true);
   };
 
   const handleCancelComment = () => {
@@ -200,9 +166,7 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
 
   const handleSaveComment = async (content: string) => {
       if (!draftTime && draftTime !== 0) return;
-
       const newId = uuidv4(); 
-      
       const userId = user?.uid || (guestInfo?.email ? `guest-${guestInfo.email}` : `guest-${Date.now()}`);
       const userName = user?.displayName || guestInfo?.name || "Guest";
       const userRole: UserRole = user?.role || 'guest';
@@ -222,7 +186,6 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           replies: []
       };
 
-      // Optimistic Update
       setComments(prev => [...prev, newComment]);
       setIsAddingComment(false);
       setDraftTime(null);
@@ -234,28 +197,19 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
       } catch (err) {
           console.error("Failed to add comment:", err);
           setComments(prev => prev.filter(c => c.id !== newId));
-          alert("Failed to save comment. Please try again.");
+          toast.error("Failed to save comment");
       }
   };
 
   const handleResolveComment = async (commentId: string) => {
-      // Optimistic
       const originalComments = [...comments];
       const targetComment = comments.find(c => c.id === commentId);
       if (!targetComment) return;
-
       const newStatus = targetComment.status === 'open' ? 'resolved' : 'open';
-      
-      setComments(prev => prev.map(c => 
-          c.id === commentId ? { ...c, status: newStatus } : c
-      ));
-
+      setComments(prev => prev.map(c => c.id === commentId ? { ...c, status: newStatus } : c));
       try {
-          await updateDoc(doc(db, "comments", commentId), {
-              status: newStatus
-          });
+          await updateDoc(doc(db, "comments", commentId), { status: newStatus });
       } catch (err) {
-          console.error("Failed to update status:", err);
           setComments(originalComments);
       }
   };
@@ -265,11 +219,9 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           setIsGuestModalOpen(true);
           return;
       }
-      
       const userId = user?.uid || (guestInfo?.email ? `guest-${guestInfo.email}` : `guest-${Date.now()}`);
       const userName = user?.displayName || guestInfo?.name || "Guest";
       const userRole: UserRole = user?.role || 'guest';
-
       const newReply = {
           id: uuidv4(),
           userId: userId,
@@ -278,107 +230,116 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           content,
           createdAt: Date.now()
       };
-
-      // Optimistic
       setComments(prev => prev.map(c => {
-          if (c.id === commentId) {
-              return { ...c, replies: [...(c.replies || []), newReply] };
-          }
+          if (c.id === commentId) return { ...c, replies: [...(c.replies || []), newReply] };
           return c;
       }));
-
       try {
-          await updateDoc(doc(db, "comments", commentId), {
-              replies: arrayUnion(newReply)
-          });
-      } catch (err) {
-          console.error("Failed to reply:", err);
-      }
+          await updateDoc(doc(db, "comments", commentId), { replies: arrayUnion(newReply) });
+      } catch (err) {}
   };
+
+  if (loading) {
+      return (
+          <div className="flex h-screen items-center justify-center bg-black">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+      );
+  }
 
   if(!revision && !loading) return <div className="text-white p-10">Revision not found</div>;
 
-  const isClientUser = user?.role === "client" || user?.uid === project?.ownerId;
-  const showPaymentLock = isClientUser && project?.paymentStatus !== "full_paid";
+  const isInternalUser = user?.role === "admin" || user?.role === "project_manager" || user?.role === "editor";
+  const isProjectOwner = user?.uid === project?.ownerId || user?.uid === project?.clientId;
+  
+  // Downloads are unlocked if the project is paid OR explicit override OR user is internal
+  const isUnlocked = project?.paymentStatus === "full_paid" || project?.downloadsUnlocked === true || isInternalUser;
+  const showPaymentLock = !isUnlocked;
 
   return (
     <div className="flex h-screen flex-col bg-black text-white overflow-hidden">
-       {/* Top Bar for Review Page */}
+       {/* Public Header */}
        <header className="flex h-16 items-center justify-between border-b border-white/10 px-4 bg-zinc-900/50 backdrop-blur">
-          {/* ... (header content same as before) */}
           <div className="flex items-center gap-4">
-             <Link href={`/dashboard/projects/${params.id}`} className="p-2 hover:bg-white/10 rounded-full transition">
-                <ChevronLeft className="h-5 w-5" />
-             </Link>
+             <div className="flex items-center gap-2 font-bold text-lg tracking-tight mr-4">
+                <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
+                    <Film className="h-5 w-5" />
+                </div>
+                <span className="hidden sm:inline">EditoHub</span>
+             </div>
+             <div className="h-8 w-px bg-white/10 hidden sm:block" />
              <div>
-                <h1 className="text-sm font-bold text-white">{project?.name || "Loading..."}</h1>
+                <h1 className="text-sm font-bold text-white uppercase tracking-wider">{project?.name || "Review"}</h1>
                 <div className="flex items-center gap-2 text-xs text-zinc-400">
                    <span className="bg-primary/20 text-primary px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider">V{revision?.version || '?'}</span>
-                   <span suppressHydrationWarning>Uploaded {revision ? new Date(revision.createdAt).toLocaleDateString() : '...'}</span>
+                   <span>Shared Review</span>
                 </div>
              </div>
           </div>
 
           <div className="flex items-center gap-3">
-                <Button 
-                onClick={async () => {
-                   if (!showPaymentLock) {
-                       // Handle Paid Download with Limits
-                       try {
-                           const res = await registerDownload(params.id, params.revisionId);
-                           if (!res.success) {
-                               toast.error(res.error || "Download limit reached");
-                               return;
-                           }
-                           
-                           // Update local state to reflect new count
-                           if (revision) {
-                               setRevision({ ...revision, downloadCount: (revision.downloadCount || 0) + 1 });
-                           }
+              {showPaymentLock && (
+                  <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-500 uppercase">
+                      <ShieldCheck className="h-3 w-3" />
+                      View Only Mode
+                  </div>
+              )}
+              
+              {/* Only show download button if unlocked, or if project owner can see the unlock modal */}
+              {(!showPaymentLock || isProjectOwner) ? (
+                  <Button 
+                    onClick={async () => {
+                        if (!showPaymentLock) {
+                            try {
+                                const res = await registerDownload(params.id, params.revisionId);
+                                if (!res.success) {
+                                    toast.error(res.error || "Download limit reached");
+                                    return;
+                                }
+                                if (res.downloadUrl) {
+                                    window.location.href = res.downloadUrl;
+                                }
+                            } catch (e) {
+                                toast.error("Failed to process download");
+                            }
+                        } else {
+                            setIsUnlockModalOpen(true);
+                        }
+                    }}
+                    size="sm" 
+                    variant="outline" 
+                    disabled={!showPaymentLock && (revision?.downloadCount || 0) >= 3}
+                    className={cn(
+                        "h-8 gap-2 bg-transparent border-zinc-700 hover:text-white transition-colors",
+                        !showPaymentLock ? "text-zinc-300" : "text-amber-500 border-amber-500/50 hover:bg-amber-500/10"
+                    )}
+                  >
+                     {!showPaymentLock ? <Download className="h-4 w-4" /> : <DollarSign className="h-4 w-4" />}
+                     <span className="hidden sm:inline">
+                        {!showPaymentLock 
+                          ? ((revision?.downloadCount || 0) >= 3 ? "Expired" : `Download (${3 - (revision?.downloadCount || 0)} left)`)
+                          : "Unlock Full Quality"}
+                     </span>
+                  </Button>
+              ) : (
+                  <div className="flex items-center gap-2 px-3 h-8 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-500 text-xs font-medium grayscale">
+                      <Download className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Download Locked</span>
+                  </div>
+              )}
 
-                           // Proceed to download
-                           if (res.downloadUrl) {
-                               // Use the signed URL which forces download
-                               window.location.href = res.downloadUrl;
-                           } else if (revision?.videoUrl) {
-                               window.open(revision.videoUrl, '_blank');
-                           }
-                       } catch (e) {
-                           toast.error("Failed to process download");
-                       }
-                   } else {
-                       // Handle Payment Lock
-                       handleDownloadAttempt();
-                   }
-                }}
-                size="sm" 
-                variant="outline" 
-                disabled={!showPaymentLock && (revision?.downloadCount || 0) >= 3}
-                className={cn(
-                    "h-8 gap-2 bg-transparent border-zinc-700 hover:text-white transition-colors",
-                    !showPaymentLock ? "text-zinc-300" : "text-amber-500 border-amber-500/50 hover:bg-amber-500/10"
-                )}
-              >
-                 {!showPaymentLock ? <Download className="h-4 w-4" /> : <DollarSign className="h-4 w-4" />}
-                 <span className="hidden sm:inline">
-                    {!showPaymentLock 
-                      ? ((revision?.downloadCount || 0) >= 3 ? "Expired" : `Download (${3 - (revision?.downloadCount || 0)} left)`)
-                      : "Unlock Download"}
-                 </span>
-              </Button>
-              <Button 
-                onClick={handleShareReview}
-                size="sm" 
-                className="h-8 gap-2 bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20"
-              >
-                 <Share2 className="h-4 w-4" />
-                 <span className="hidden sm:inline">Share Review</span>
+              <Button size="sm" variant="outline" onClick={() => {
+                  const url = window.location.href;
+                  navigator.clipboard.writeText(url);
+                  toast.success("Link copied to clipboard!");
+              }} className="h-8 gap-2 bg-transparent border-zinc-700 hover:text-white transition-colors">
+                  <Share2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Copy Link</span>
               </Button>
           </div>
        </header>
 
        <div className="flex flex-1 overflow-hidden">
-          {/* Main Video Area */}
           <main className="relative flex-1 flex flex-col items-center justify-center bg-zinc-950 p-6">
              <div className="relative w-full max-w-5xl aspect-video bg-black shadow-2xl rounded-xl border border-white/5 overflow-visible">
                 {revision && (
@@ -390,7 +351,6 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
                     />
                 )}
                 
-                 {/* Floating Timeline Markers */}
                  <div className="absolute -bottom-6 left-0 right-0 h-8">
                      <TimelineComments 
                         duration={duration} 
@@ -401,7 +361,6 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
                  </div>
              </div>
 
-             {/* Quick Actions Bar under video */}
              <div className="mt-12 flex gap-4">
                  <Button onClick={handleAddCommentStart} className="gap-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-white/10 shadow-lg transition-transform active:scale-95">
                     <MessageSquarePlus className="h-4 w-4" />
@@ -410,7 +369,6 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
              </div>
           </main>
 
-          {/* Sidebar */}
           <aside className={cn(
               "w-96 border-l border-white/10 bg-zinc-900 flex flex-col transition-all duration-300",
               !isSidebarOpen && "w-0 opacity-0 overflow-hidden"
@@ -432,7 +390,15 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
        <GuestIdentityModal 
             isOpen={isGuestModalOpen}
             onIdentify={handleGuestIdentify}
-            onClose={() => setIsGuestModalOpen(false)}
+            onClose={() => {
+                if (user || guestInfo) {
+                    setIsGuestModalOpen(false);
+                } else {
+                    toast.info("Identification required", {
+                        description: "Please enter your name to participate in the review."
+                    });
+                }
+            }}
        />
 
        {/* Unlock Download Modal */}

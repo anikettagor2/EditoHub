@@ -58,6 +58,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         ref={videoRef}
         src={src} 
         controls 
+        controlsList="nodownload"
+        onContextMenu={(e) => e.preventDefault()}
         className="w-full h-full object-contain"
       />
     );

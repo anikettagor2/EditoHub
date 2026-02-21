@@ -13,6 +13,10 @@ export interface User {
     phoneNumber?: string; // For guests
     customRates?: Record<string, number>; // Custom video rates for this specific client
     allowedFormats?: Record<string, boolean>; // Which video formats are visible
+    initialPassword?: string; // Temp password for new users
+    createdBy?: string; // UID of sales exec or admin who created this user
+    managedBy?: string; // UID of sales exec managing this client
+    payLater?: boolean; // New feature: allows client to skip immediate payment
 }
 
 export type ProjectStatus = 'active' | 'in_review' | 'approved' | 'completed' | 'archived' | 'pending_assignment';
@@ -20,6 +24,7 @@ export type ProjectStatus = 'active' | 'in_review' | 'approved' | 'completed' | 
 export interface Project {
     id: string;
     name: string;
+    clientId: string; // ID of the client who owns this project
     clientName: string; // Deprecated in favor of 'brand' maybe?
     brand?: string;
     description?: string;
@@ -41,11 +46,14 @@ export interface Project {
     currentRevisionId?: string; // ID of the latest active revision
     ownerId?: string;
     assignmentStatus?: ProjectAssignmentStatus;
+    downloadUnlockRequested?: boolean; // true when a payLater client requests download unlock from PM
+    downloadsUnlocked?: boolean;       // true when PM has explicitly approved downloads for this project
+    isPayLaterRequest?: boolean;       // true for projects submitted via the Pay Later workflow
 }
 
 export type ProjectAssignmentStatus = 'pending' | 'accepted' | 'rejected';
 
-export type RevisionStatus = 'active' | 'approved' | 'changes_requested';
+export type RevisionStatus = 'active' | 'approved' | 'changes_requested' | 'archived';
 
 export interface Revision {
     id: string;
@@ -57,6 +65,7 @@ export interface Revision {
     status: RevisionStatus;
     uploadedBy: string; // User UID
     createdAt: number;
+    downloadCount?: number; // Track downloads by client for limits
 }
 
 export type CommentStatus = 'open' | 'resolved';
@@ -67,7 +76,7 @@ export interface Comment {
     revisionId: string;
     userId: string;
     userName: string;
-    userAvatar?: string;
+    userAvatar?: string | null;
     userRole: UserRole;
     content: string;
     timestamp: number; // Video timestamp in seconds (float)
@@ -117,4 +126,31 @@ export interface Notification {
     link: string;
     read: boolean;
     createdAt: number;
+}
+
+export interface InvoiceItem {
+    description: string;
+    quantity: number;
+    rate: number;
+    amount: number;
+}
+
+export interface Invoice {
+    id: string;
+    invoiceNumber: string; // e.g. INV-2024-001
+    projectId?: string;
+    clientId: string;
+    clientName: string;
+    clientEmail: string;
+    clientAddress?: string;
+    items: InvoiceItem[];
+    subtotal: number;
+    tax?: number; // e.g. 18%
+    total: number;
+    status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+    issueDate: number; // timestamp
+    dueDate: number; // timestamp
+    notes?: string;
+    createdAt: number;
+    updatedAt: number;
 }

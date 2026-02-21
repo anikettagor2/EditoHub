@@ -4,10 +4,9 @@ import { useState, useEffect } from "react";
 import { 
     collection, 
     query, 
-    getDocs, 
     orderBy, 
-    doc,
     updateDoc, 
+    doc,
     arrayUnion,
     onSnapshot
 } from "firebase/firestore";
@@ -16,7 +15,6 @@ import { Project, User } from "@/types/schema";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Users, 
-    Briefcase, 
     Search, 
     Filter, 
     Trash2, 
@@ -26,28 +24,36 @@ import {
     RefreshCw,
     Edit,
     FileVideo,
-    Clock,
-    User as UserIcon,
-    Loader2,
-    ArrowUpRight,
     MoreHorizontal,
+    ArrowUpRight,
+    ArrowDownLeft,
     CheckCircle2,
-    XCircle,
-    Copy,
     Shield
 } from "lucide-react";
-import { deleteUser, deleteProject } from "@/app/actions/admin-actions";
+
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button"; 
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { 
+    DropdownMenu, 
+    DropdownMenuContent, 
+    DropdownMenuItem, 
+    DropdownMenuTrigger,
+    DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
+
+import { useSearchParams } from "next/navigation";
+import { assignEditor, updateProject, togglePayLater, deleteProject, deleteUser } from "@/app/actions/admin-actions";
 
 export function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'users' | 'team'>('overview');
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as 'overview' | 'projects' | 'users' | 'team') || 'overview';
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'users' | 'team'>(initialTab);
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +66,7 @@ export function AdminDashboard() {
 
   // User Creation State
   const [isCreatingUser, setIsCreatingUser] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'sales_executive' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'sales_executive', phoneNumber: '' });
 
   const [editForm, setEditForm] = useState({
       totalCost: 0,
@@ -74,28 +80,39 @@ export function AdminDashboard() {
     totalUsers: 0
   });
 
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setRefreshKey(k => k + 1);
+    setTimeout(() => {
+      setIsRefreshing(false);
+      setLastUpdated(new Date());
+    }, 1000);
+  };
+
   useEffect(() => {
     setLoading(true);
 
-    // 1. Projects Listener
     const projectsQ = query(collection(db, "projects"), orderBy("updatedAt", "desc"));
     const unsubProjects = onSnapshot(projectsQ, (snapshot) => {
         const fetchedProjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
         setProjects(fetchedProjects);
-    }, (error) => toast.error("Live projects update failed"));
+    });
 
-    // 2. Users Listener
     const usersQ = collection(db, "users");
     const unsubUsers = onSnapshot(usersQ, (snapshot) => {
         const fetchedUsers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as User));
         setUsers(fetchedUsers);
-    }, (error) => toast.error("Live users update failed"));
+    });
 
     return () => {
         unsubProjects();
         unsubUsers();
     };
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     if(projects.length > 0 || users.length > 0) {
@@ -119,10 +136,11 @@ export function AdminDashboard() {
               body: JSON.stringify({
                   email: newUser.email,
                   password: newUser.password,
-                  displayName: newUser.name,
-                  role: newUser.role,
-                  createdBy: 'admin'
-              })
+                   displayName: newUser.name,
+                   role: newUser.role,
+                   phoneNumber: newUser.phoneNumber,
+                   createdBy: 'admin'
+               })
           });
           
           if (!res.ok) {
@@ -130,9 +148,9 @@ export function AdminDashboard() {
               throw new Error(data.error || "Failed");
           }
 
-          toast.success(`${newUser.role} created successfully!`);
-          setNewUser({ name: '', email: '', password: '', role: 'sales_executive' });
-      } catch (err: any) {
+           toast.success(`${newUser.role} created successfully!`);
+           setNewUser({ name: '', email: '', password: '', role: 'sales_executive', phoneNumber: '' });
+       } catch (err: any) {
           toast.error(err.message);
       } finally {
           setIsCreatingUser(false);
@@ -147,505 +165,468 @@ export function AdminDashboard() {
   };
 
   const handleDeleteUser = async (uid: string) => {
-    if(!confirm("Are you sure you want to delete this user? ALL their data will be lost.")) return;
+    if(!confirm("Are you sure?")) return;
     const result = await deleteUser(uid);
-    if (result.success) toast.success("User deleted successfully");
-    else toast.error("Failed to delete user: " + result.error);
+    if (result.success) toast.success("User deleted");
+    else toast.error("Failed: " + result.error);
   };
 
-  const handleAssignEditor = async (editorId: string) => {
+   const handleAssignEditor = async (editorId: string) => {
     if (!selectedProject) return;
     try {
-        await updateDoc(doc(db, "projects", selectedProject.id), {
-             assignedEditorId: editorId,
-             status: 'active', 
-             members: arrayUnion(editorId),
-             updatedAt: Date.now()
-        });
-        toast.success("Editor assigned");
-        setIsAssignModalOpen(false);
+        const res = await assignEditor(selectedProject.id, editorId);
+        if (res.success) {
+            toast.success("Editor assigned & notification sent");
+            setIsAssignModalOpen(false);
+        } else {
+            toast.error(res.error || "Failed");
+        }
     } catch (err) { toast.error("Failed"); }
   };
 
-  const handleUpdateProject = async () => {
+   const handleUpdateProject = async () => {
       if (!selectedProject) return;
       try {
-          await updateDoc(doc(db, "projects", selectedProject.id), {
+          const res = await updateProject(selectedProject.id, {
               totalCost: Number(editForm.totalCost),
-              status: editForm.status,
-              updatedAt: Date.now()
+              status: editForm.status
           });
-          toast.success("Updated");
-          setIsEditModalOpen(false);
+          if (res.success) {
+              toast.success("Project updated successfully");
+              setIsEditModalOpen(false);
+          } else {
+              toast.error(res.error || "Failed");
+          }
       } catch (err) { toast.error("Failed"); }
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground bg-background"><Loader2 className="animate-spin mr-2" /> Loading Admin Dashboard...</div>;
-
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto pb-20">
-       {/* 1. Header & Stats Row */}
-       <div className="flex flex-col gap-8">
-         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border pb-6">
+    <div className="space-y-6 max-w-[1600px] mx-auto p-6 md:p-8 bg-background min-h-screen">
+       {/* 1. Header */}
+       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-border">
             <div>
-                <h1 className="text-3xl font-bold text-foreground font-heading">Admin Overview</h1>
-                <p className="text-muted-foreground text-sm mt-1">Global operations, financial tracking, and user management.</p>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">Admin Console</h1>
+                <p className="text-sm text-muted-foreground mt-1">System Overview & Management</p>
             </div>
-            <div className="flex bg-muted p-1.5 border border-border rounded-xl">
-                 {['overview', 'projects', 'users', 'team'].map(tab => (
-                     <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab as any)}
-                        className={cn(
-                            "px-6 py-2.5 text-sm font-semibold rounded-lg capitalize transition-all",
-                            activeTab === tab ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                        )}
-                     >
-                        {tab === 'team' ? 'Team' : tab}
-                     </button>
-                 ))}
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-all disabled:opacity-50 shadow-sm"
+                >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : `Updated ${lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}</span>
+                </button>
+                <div className="flex bg-muted p-1 border border-border rounded-lg">
+                     {['overview', 'projects', 'users', 'team'].map(tab => (
+                         <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab as any)}
+                            className={cn(
+                                "px-4 py-1.5 text-xs font-semibold rounded-md capitalize transition-all",
+                                activeTab === tab ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                            )}
+                         >
+                            {tab === 'team' ? 'Team' : tab}
+                         </button>
+                     ))}
+                </div>
             </div>
-         </div>
-
-         {activeTab === 'overview' && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatsCard label="Total Revenue" value={`₹${stats.revenue.toLocaleString()}`} icon={DollarSign} color="text-emerald-500" trend="+12.5%" />
-                <StatsCard label="Active Projects" value={stats.activeProjects} icon={FileVideo} color="text-blue-500" trend="+4 new" />
-                <StatsCard label="Pending Assignment" value={stats.pendingAssignment} icon={AlertCircle} color="text-amber-500" trend="Action needed" />
-                <StatsCard label="Total Users" value={stats.totalUsers} icon={Users} color="text-purple-500" trend="Stable" />
-            </div>
-         )}
        </div>
 
-       {/* 2. Content Sections */}
-       <AnimatePresence mode="wait">
-            
-            {/* OVERVIEW TAB */}
-            {activeTab === 'overview' && (
-                <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} className="grid gap-8 lg:grid-cols-2">
-                    <RecentTable 
-                        title="Recent Projects" 
-                        headers={['Project', 'Status', 'Date']} 
-                        data={projects.slice(0, 5)} 
-                        type="project"
-                    />
-                     <RecentTable 
-                        title="Needs Attention" 
-                        headers={['Project', 'Client', 'Action']} 
-                        data={projects.filter(p => p.status === 'pending_assignment')} 
-                        type="pending"
-                        onAssign={(p: Project) => { setSelectedProject(p); setIsAssignModalOpen(true); }}
-                    />
-                </motion.div>
-            )}
+       {/* 2. KPIs */}
+       {activeTab === 'overview' && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <MetricCard 
+                    label="Total Revenue" 
+                    value={`₹${stats.revenue.toLocaleString()}`} 
+                    trend="+12.5%" 
+                    trendUp={true}
+                    subtext="Gross volume"
+                />
+                <MetricCard 
+                    label="Active Projects" 
+                    value={stats.activeProjects} 
+                    trend="+4 new"
+                    trendUp={true}
+                    subtext="In pipeline"
+                />
+                <MetricCard 
+                    label="Pending Assignment" 
+                    value={stats.pendingAssignment} 
+                    alert={stats.pendingAssignment > 0}
+                    subtext="Requires action"
+                />
+                <MetricCard 
+                    label="Total Users" 
+                    value={stats.totalUsers} 
+                    subtext="Registered accounts"
+                />
+            </div>
+        )}
 
-            {/* PROJECTS TAB */}
+       {/* 3. Content Area */}
+       <div className="rounded-lg border border-border bg-card shadow-sm flex flex-col min-h-[500px]">
+            {/* Toolbar if needed */}
             {activeTab === 'projects' && (
-                <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} className="space-y-6">
-                    <div className="flex items-center justify-between bg-card p-4 rounded-2xl border border-border">
-                         <div className="relative w-96">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                                placeholder="Search all projects..." 
-                                className="pl-10 bg-background border-input focus:border-emerald-500/50"
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                            />
-                         </div>
-                         <div className="flex gap-2">
-                             <Button variant="outline" className="border-border hover:bg-muted"><Filter className="h-4 w-4 mr-2" /> Filter</Button>
-                             <Button variant="outline" className="border-border hover:bg-muted"><RefreshCw className="h-4 w-4" /></Button>
-                         </div>
+                <div className="p-4 border-b border-border flex justify-between bg-muted/30">
+                    <div className="relative w-72">
+                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                         <Input 
+                            placeholder="Search projects..." 
+                            className="pl-9 h-9 bg-background" 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
                     </div>
-                    
-                    <div className="rounded-2xl border border-border bg-card overflow-hidden">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Project Name</TableHead>
-                                    <TableHead>Client</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Value</TableHead>
-                                    <TableHead>Assigned To</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {projects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((project) => (
-                                    <TableRow key={project.id}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center border border-border">
-                                                    <FileVideo className="h-5 w-5 text-muted-foreground" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-semibold text-foreground">{project.name}</div>
-                                                    <div className="text-xs text-muted-foreground font-mono">ID: {project.id.slice(0,6)}</div>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">{project.clientName}</TableCell>
-                                        <TableCell>
-                                            <StatusBadge status={project.status} />
-                                        </TableCell>
-                                        <TableCell className="font-mono text-foreground">₹{project.totalCost?.toLocaleString() || 0}</TableCell>
-                                        <TableCell>
-                                            {project.assignedEditorId ? (
-                                                <div className="flex items-center gap-2">
-                                                    <div className="h-6 w-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[10px] font-bold border border-indigo-500/30">
-                                                        ED
-                                                    </div>
-                                                    <span className="text-sm text-muted-foreground">Editor</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground italic">Unassigned</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Button size="icon" variant="ghost" onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }} className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"><Edit className="h-4 w-4" /></Button>
-                                                <Button size="icon" variant="ghost" onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }} className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10"><UserPlus className="h-4 w-4" /></Button>
-                                                <Button size="icon" variant="ghost" onClick={() => handleDeleteProject(project.id)} className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </motion.div>
+                    <Button variant="outline" size="sm" className="h-9"><Filter className="mr-2 h-4 w-4" /> Filter</Button>
+                </div>
             )}
 
-            {/* USERS TAB */}
-            {activeTab === 'users' && (
-                <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} className="space-y-6">
-                     <div className="grid gap-6 lg:grid-cols-2">
-                        <UserTable title="Clients" users={users.filter(u => u.role === 'client')} onDelete={handleDeleteUser} allUsers={users} />
-                        <UserTable title="Editors" users={users.filter(u => u.role === 'editor')} onDelete={handleDeleteUser} allUsers={users} />
-                     </div>
-                </motion.div>
-            )}
-
-            {/* TEAM TAB */}
-            {activeTab === 'team' && (
-                <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} className="space-y-6">
-                     <div className="grid gap-8 lg:grid-cols-3">
-                         {/* Create User Form */}
-                         <div className="lg:col-span-1 bg-card border border-border p-6 rounded-2xl h-fit">
-                             <div className="flex items-center gap-2 mb-6">
-                                <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                    <UserPlus className="w-5 h-5" />
-                                </div>
-                                <h3 className="font-bold text-lg">Create New User</h3>
-                             </div>
-                             
-                             <form onSubmit={handleCreateUser} className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label>Full Name</Label>
-                                    <Input placeholder="e.g. Sarah Smith" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} required className="bg-background" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Email (Login ID)</Label>
-                                    <Input type="email" placeholder="sarah@editohub.com" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} required className="bg-background" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Password</Label>
-                                    <Input type="text" placeholder="Set initial password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required minLength={6} className="bg-background" />
-                                    <p className="text-[10px] text-muted-foreground">Visible for you to copy.</p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Role</Label>
-                                    <select 
-                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                                        value={newUser.role}
-                                        onChange={e => setNewUser({...newUser, role: e.target.value})}
-                                    >
-                                        <option value="sales_executive">Sales Executive</option>
-                                        <option value="project_manager">Project Manager</option>
-                                    </select>
-                                </div>
-                                <Button type="submit" className="w-full mt-4" disabled={isCreatingUser}>
-                                    {isCreatingUser ? <Loader2 className="animate-spin mr-2" /> : 'Create User'}
-                                </Button>
-                             </form>
-                         </div>
-
-                         {/* Team List with Credentials */}
-                         <div className="lg:col-span-2 space-y-6">
-                             <CredentialTable 
-                                title="Sales Executives" 
-                                role="sales_executive" 
-                                users={users.filter(u => u.role === 'sales_executive')} 
-                                onDelete={handleDeleteUser} 
-                            />
-                            <CredentialTable 
-                                title="Project Managers" 
-                                role="project_manager" 
-                                users={users.filter(u => u.role === 'project_manager')} 
-                                onDelete={handleDeleteUser} 
-                            />
-                         </div>
-                     </div>
-                </motion.div>
-            )}
-
-       </AnimatePresence>
-
-       {/* Modals maintained from original code but styled consistently */}
-       <Modal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} title="Assign Team Member">
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {users.filter(u => u.role === 'editor').map(ed => (
-                    <button key={ed.uid} onClick={() => handleAssignEditor(ed.uid)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-muted border border-border hover:border-primary/50 transition-all text-left group">
-                        <Avatar className="h-10 w-10 border border-border">
-                            <AvatarFallback className="bg-primary/20 text-primary font-bold">{ed.displayName?.[0]}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <p className="text-foreground font-medium group-hover:text-primary transition-colors">{ed.displayName}</p>
-                            <p className="text-xs text-muted-foreground">{ed.email}</p>
-                        </div>
-                    </button>
-                ))}
-            </div>
-       </Modal>
-
-       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Quick Actions">
-            <div className="space-y-6 pt-4">
-                 <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground uppercase font-bold tracking-widest pl-1">Project Value (₹)</label>
-                    <Input type="number" value={editForm.totalCost} onChange={e => setEditForm({...editForm, totalCost: Number(e.target.value)})} className="bg-background border-border h-12 text-lg font-mono" />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground uppercase font-bold tracking-widest pl-1">Status Phase</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {['pending_assignment', 'active', 'in_review', 'approved', 'completed'].map(s => (
-                            <button
-                                key={s}
-                                onClick={() => setEditForm({...editForm, status: s})}
-                                className={cn(
-                                    "px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider border transition-all text-left",
-                                    editForm.status === s ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border text-muted-foreground hover:border-foreground/20"
-                                )}
-                            >
-                                {s.replace('_', ' ')}
-                            </button>
-                        ))}
-                    </div>
-                 </div>
-                 <Button onClick={handleUpdateProject} className="w-full bg-foreground text-background hover:bg-foreground/90 h-12 font-bold rounded-xl mt-4">Save Changes</Button>
-            </div>
-       </Modal>
-    </div>
-  );
-}
-
-// --- SUB COMPONENTS --- //
-
-function Table({ children }: { children: React.ReactNode }) {
-    return <div className="w-full text-sm text-left">{children}</div>;
-}
-
-function TableHeader({ children }: { children: React.ReactNode }) {
-    return <div className="bg-muted/50 border-b border-border font-medium text-muted-foreground uppercase tracking-wider text-xs">{children}</div>;
-}
-
-function TableBody({ children }: { children: React.ReactNode }) {
-    return <div className="divide-y divide-border/50">{children}</div>;
-}
-
-function TableRow({ children }: { children: React.ReactNode }) {
-    return <div className="grid grid-cols-6 gap-4 items-center px-6 py-4 hover:bg-muted/30 transition-colors">{children}</div>;
-}
-
-function TableHead({ children, className }: { children: React.ReactNode, className?: string }) {
-    return <div className={cn("px-2 py-3", className)}>{children}</div>;
-}
-
-function TableCell({ children, className }: { children: React.ReactNode, className?: string }) {
-    return <div className={cn("px-2", className)}>{children}</div>;
-}
-
-function StatusBadge({ status }: { status: string }) {
-     const config: any = {
-        pending_assignment: "bg-amber-500/10 text-amber-500 border-amber-500/20",
-        active: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-        in_review: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-        approved: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-        completed: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20"
-    };
-    return (
-        <span className={cn("px-2.5 py-1 rounded-full text-[10px] uppercase font-bold border", config[status] || config['active'])}>
-            {status.replace('_', ' ')}
-        </span>
-    );
-}
-
-function StatsCard({ label, value, icon: Icon, color, trend }: any) {
-    return (
-        <div className="p-6 rounded-2xl bg-card border border-border relative overflow-hidden group hover:border-foreground/20 transition-all shadow-sm ">
-            <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-2 rounded-lg bg-muted", color)}>
-                    <Icon className="h-5 w-5" />
-                </div>
-                <div className="flex items-center gap-1 bg-muted/80 px-2 py-1 rounded-full border border-border">
-                    <ArrowUpRight className="h-3 w-3 text-emerald-500" />
-                    <span className="text-[10px] text-muted-foreground font-medium">{trend}</span>
-                </div>
-            </div>
-            <div className="space-y-1">
-                <div className="text-3xl font-bold text-foreground tracking-tight font-heading">{value}</div>
-                <span className="text-sm text-muted-foreground font-medium">{label}</span>
-            </div>
-        </div>
-    );
-}
-
-function RecentTable({ title, headers, data, type, onAssign }: any) {
-    return (
-        <div className="bg-card border border-border rounded-3xl overflow-hidden flex flex-col h-full shadow-sm">
-            <div className="p-6 border-b border-border flex justify-between items-center">
-                <h3 className="font-bold text-foreground">{title}</h3>
-                <Link href="#" className="text-xs text-primary hover:underline">View Report</Link>
-            </div>
-            <div className="flex-1 overflow-auto">
-                <div className="grid grid-cols-3 px-6 py-3 bg-muted/50 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    {headers.map((h:any) => <div key={h}>{h}</div>)}
-                </div>
-                <div className="divide-y divide-border">
-                    {data.length === 0 ? <p className="text-center py-8 text-muted-foreground text-sm italic">No records found</p> : data.map((item: any) => (
-                        <div key={item.id} className="grid grid-cols-3 px-6 py-4 text-sm items-center hover:bg-muted/20 transition-colors">
-                            <div className="font-medium text-foreground truncate pr-4">{item.name}</div>
-                            {type === 'project' ? (
-                                <StatusBadge status={item.status} />
-                            ) : (
-                                <div className="text-muted-foreground">{item.clientName}</div>
-                            )}
-                            <div className="flex items-center">
-                                {type === 'project' ? (
-                                    <span className="text-muted-foreground font-mono text-xs">{new Date(item.updatedAt).toLocaleDateString()}</span>
-                                ) : (
-                                     <Button size="sm" onClick={() => onAssign(item)} className="h-7 text-xs bg-foreground text-background hover:bg-foreground/80">Assign</Button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function UserTable({ title, users, onDelete, allUsers = [] }: any) {
-    return (
-        <div className="bg-card border border-border rounded-3xl overflow-hidden flex flex-col h-[500px] shadow-sm">
-            <div className="p-6 border-b border-border">
-                <h3 className="font-bold text-foreground flex items-center gap-2">
-                    {title} <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">{users.length}</span>
-                </h3>
-            </div>
-            <div className="flex-1 overflow-auto">
-                <div className="divide-y divide-border">
-                    {users.map((u: any) => {
-                        // Find Creator (Sales Exec)
-                        const creator = allUsers.find((rep: any) => rep.uid === u.createdBy);
-                        
-                        return (
-                         <div key={u.uid} className="flex items-center justify-between p-4 px-6 hover:bg-muted/30 transition-all group">
-                             <div className="flex items-center gap-4">
-                                <Avatar className="h-10 w-10 border border-border">
-                                    <AvatarFallback className="bg-muted text-muted-foreground font-bold">{u.displayName?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-foreground font-medium text-sm">{u.displayName}</p>
-                                        {/* Show Sales Rep Label for Clients */}
-                                        {u.role === 'client' && creator && (
-                                            <span className="text-[10px] bg-indigo-500/10 text-indigo-500 px-1.5 py-0.5 rounded border border-indigo-500/20 flex items-center gap-1" title={`Managed by ${creator.displayName}`}>
-                                                <Shield className="w-2.5 h-2.5" />
-                                                {creator.displayName}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">{u.email}</p>
-                                </div>
-                             </div>
-                             <div className="flex items-center gap-3">
-                                 <span className="text-[10px] bg-muted text-muted-foreground px-2 py-1 rounded border border-border uppercase tracking-wider">{u.role}</span>
-                                 <Button 
-                                    size="icon" 
-                                    variant="ghost" 
-                                    onClick={() => onDelete(u.uid)}
-                                    className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                             </div>
-                         </div>
-                    )})}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// change has been seen it if need chage the DB schema and update it in the reall time 
-
-
-function CredentialTable({ title, role, users, onDelete }: any) {
-    return (
-        <div className="bg-card border border-border rounded-3xl overflow-hidden flex flex-col shadow-sm">
-            <div className="p-6 border-b border-border">
-                <h3 className="font-bold text-foreground flex items-center gap-2">
-                    {title} <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">{users.length}</span>
-                </h3>
-            </div>
-            
-            {users.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground text-sm">
-                    No {role.replace('_', ' ')}s found.
-                </div>
-            ) : (
-                <div className="flex-1 overflow-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-muted/50 text-xs text-muted-foreground uppercase font-bold tracking-wider">
+            <div className="overflow-x-auto">
+                {/* OVERVIEW TABLE */}
+                {activeTab === 'overview' && (
+                    <table className="w-full text-sm text-left">
+                         <thead className="bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
                             <tr>
-                                <th className="px-6 py-3">Name</th>
-                                <th className="px-6 py-3">Credentials</th>
+                                <th className="px-6 py-3">Recent Activity</th>
+                                <th className="px-6 py-3">Status</th>
+                                <th className="px-6 py-3">Date</th>
                                 <th className="px-6 py-3 text-right">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border/50">
-                            {users.map((u: any) => (
-                                <tr key={u.uid} className="hover:bg-muted/30">
-                                    <td className="px-6 py-4 font-medium">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500 font-bold text-xs">
-                                                {u.displayName?.[0]}
-                                            </div>
-                                            {u.displayName}
-                                        </div>
-                                    </td>
+                        <tbody className="divide-y divide-border">
+                            {projects.slice(0, 8).map(project => (
+                                <tr key={project.id} className="hover:bg-muted/50">
                                     <td className="px-6 py-4">
-                                        <div className="flex flex-col gap-1">
-                                            <div className="text-xs text-muted-foreground">ID: <span className="text-foreground font-mono">{u.email}</span></div>
-                                            {u.initialPassword && (
-                                                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                    PW: <span className="text-emerald-500 font-mono bg-emerald-500/10 px-1 rounded">{u.initialPassword}</span>
-                                                    <Copy  className="w-3 h-3 cursor-pointer hover:text-foreground" onClick={() => { navigator.clipboard.writeText(u.initialPassword); toast.success("Copied"); }} />
-                                                </div>
-                                            )}
-                                        </div>
+                                        <div className="font-medium">{project.name}</div>
+                                        <div className="text-xs text-muted-foreground">ID: {project.id.slice(0,6)}</div>
+                                    </td>
+                                    <td className="px-6 py-4"><StatusBadge status={project.status} /></td>
+                                    <td className="px-6 py-4 text-muted-foreground text-xs">
+                                        {/* @ts-ignore */}
+                                        {new Date(project.updatedAt).toLocaleDateString()}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-500" onClick={() => onDelete(u.uid)}>
-                                            <Trash2 className="w-4 h-4" />
+                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => { setSelectedProject(project); setIsEditModalOpen(true); }}>
+                                            <Edit className="h-4 w-4 text-muted-foreground" />
                                         </Button>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
-                </div>
-            )}
+                )}
+
+                {/* PROJECTS TABLE */}
+                {activeTab === 'projects' && (
+                     <table className="w-full text-sm text-left">
+                        <thead className="bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
+                           <tr>
+                               <th className="px-6 py-3">Project</th>
+                               <th className="px-6 py-3">Client</th>
+                               <th className="px-6 py-3">Status</th>
+                               <th className="px-6 py-3">Value</th>
+                               <th className="px-6 py-3">Editor</th>
+                               <th className="px-6 py-3 text-right">Actions</th>
+                           </tr>
+                       </thead>
+                       <tbody className="divide-y divide-border">
+                           {projects.filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase())).map(project => (
+                               <tr key={project.id} className="hover:bg-muted/50 group">
+                                   <td className="px-6 py-4 font-medium">
+                                       {project.name}
+                                       <div className="text-xs text-muted-foreground font-normal mt-0.5 flex items-center gap-2">
+                                           ID: {project.id.slice(0,6)}
+                                           {(project as any).isPayLaterRequest && (
+                                               <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1 rounded uppercase font-bold tracking-tighter">Pay Later</span>
+                                           )}
+                                       </div>
+                                   </td>
+                                   <td className="px-6 py-4 text-muted-foreground">{project.clientName}</td>
+                                   <td className="px-6 py-4"><StatusBadge status={project.status} /></td>
+                                   <td className="px-6 py-4 font-mono text-foreground">₹{project.totalCost}</td>
+                                   <td className="px-6 py-4 text-xs">
+                                        {project.assignedEditorId ? (
+                                            <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 flex items-center w-fit gap-1">
+                                                <CheckCircle2 className="w-3 h-3" /> Assigned
+                                            </span>
+                                        ) : (
+                                            <span className="text-amber-600 italic">Unassigned</span>
+                                        )}
+                                   </td>
+                                   <td className="px-6 py-4 text-right">
+                                       <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }}>
+                                                    <Edit className="mr-2 h-4 w-4" /> Edit Details
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}>
+                                                    <UserPlus className="mr-2 h-4 w-4" /> Assign Editor
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="text-red-600">
+                                                    <Trash2 className="mr-2 h-4 w-4" /> Delete Project
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                       </DropdownMenu>
+                                   </td>
+                               </tr>
+                           ))}
+                       </tbody>
+                   </table>
+                )}
+
+                {/* USERS TABLE */}
+                {activeTab === 'users' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-border">
+                        {/* Clients Column */}
+                        <div>
+                            <div className="px-6 py-3 bg-muted/50 border-b border-border font-semibold text-xs uppercase text-muted-foreground">Clients</div>
+                            <div className="divide-y divide-border">
+                                {users.filter(u => u.role === 'client').map(u => (
+                                    <div key={u.uid} className="px-6 py-4 flex items-center justify-between hover:bg-muted/50">
+                                        <div className="flex items-center gap-3">
+                                            <Avatar className="h-8 w-8 border border-border">
+                                                <AvatarFallback>{u.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="font-medium text-sm text-foreground">{u.displayName}</div>
+                                                <div className="text-xs text-muted-foreground">{u.email}</div>
+                                                <div className="text-[10px] text-muted-foreground mt-0.5 max-w-[150px] truncate" title={u.uid}>ID: {u.uid}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button 
+                                                variant={u.payLater ? "default" : "outline"} 
+                                                size="sm" 
+                                                className={cn("text-xs h-7", u.payLater && "bg-emerald-600 hover:bg-emerald-700")}
+                                                onClick={async () => {
+                                                    const res = await togglePayLater(u.uid, !u.payLater);
+                                                    if(res.success) toast.success(`Pay Later ${!u.payLater ? 'enabled' : 'disabled'} for ${u.displayName}`);
+                                                    else toast.error("Failed to update");
+                                                }}
+                                            >
+                                                {u.payLater ? "Pay Later: ON" : "Pay Later: OFF"}
+                                            </Button>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        {/* Editors Column */}
+                        <div>
+                             <div className="px-6 py-3 bg-muted/50 border-b border-border font-semibold text-xs uppercase text-muted-foreground">Editors</div>
+                             <div className="divide-y divide-border">
+                                {users.filter(u => u.role === 'editor').map(u => (
+                                    <div key={u.uid} className="px-6 py-4 flex items-center justify-between hover:bg-muted/50">
+                                        <div className="flex items-center gap-3">
+                                             <Avatar className="h-8 w-8 border border-border">
+                                                <AvatarFallback className="bg-indigo-50 text-indigo-600">{u.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="font-medium text-sm text-foreground">{u.displayName}</div>
+                                                <div className="text-xs text-muted-foreground">{u.email}</div>
+                                            </div>
+                                        </div>
+                                         <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {/* TEAM TAB (Creation) */}
+                {activeTab === 'team' && (
+                    <div className="p-8">
+                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                             <div className="lg:col-span-1 border border-border rounded-lg p-6 bg-background space-y-4 shadow-sm">
+                                 <h3 className="font-semibold flex items-center gap-2">
+                                     <UserPlus className="h-5 w-5 text-primary" /> Create Internal User
+                                 </h3>
+                                 <form onSubmit={handleCreateUser} className="space-y-4">
+                                     <div className="space-y-1">
+                                         <Label>Full Name</Label>
+                                         <Input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} required className="bg-background" placeholder="e.g. John Doe" />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <Label>Email</Label>
+                                         <Input value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} required className="bg-background" type="email" placeholder="john@company.com" />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <Label>Password</Label>
+                                         <Input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required className="bg-background" type="text" minLength={6} placeholder="Initial password" />
+                                     </div>
+                                     <div className="space-y-1">
+                                         <Label>Phone Number (10 Digits)</Label>
+                                         <div className="flex gap-2">
+                                             <div className="flex items-center justify-center px-3 bg-muted border border-border rounded-lg text-xs font-bold text-muted-foreground">+91</div>
+                                             <Input 
+                                                 value={newUser.phoneNumber} 
+                                                 onChange={e => setNewUser({...newUser, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
+                                                 required 
+                                                 pattern="[0-9]{10}"
+                                                 className="bg-background" 
+                                                 placeholder="9876543210" 
+                                             />
+                                         </div>
+                                     </div>
+                                     <div className="space-y-1">
+                                         <Label>Role</Label>
+                                         <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
+                                             <option value="sales_executive">Sales Executive</option>
+                                             <option value="project_manager">Project Manager</option>
+                                         </select>
+                                     </div>
+                                     <Button className="w-full" disabled={isCreatingUser}>
+                                         {isCreatingUser ? "Creating..." : "Create Account"}
+                                     </Button>
+                                 </form>
+                             </div>
+                             
+                             <div className="lg:col-span-2 space-y-6">
+                                 <div className="border border-border rounded-lg overflow-hidden">
+                                    <div className="bg-muted/50 px-6 py-3 border-b border-border font-semibold text-xs text-muted-foreground uppercase">Sales Executives</div>
+                                    <div className="divide-y divide-border bg-background">
+                                        {users.filter(u => u.role === 'sales_executive').map(u => (
+                                            <div key={u.uid} className="px-6 py-4 flex justify-between items-center group">
+                                                 <div>
+                                                     <div className="font-medium text-sm">{u.displayName}</div>
+                                                     <div className="text-xs text-muted-foreground">{u.email}</div>
+                                                 </div>
+                                                 <div className="flex items-center gap-2">
+                                                     {u.initialPassword && <span className="text-xs font-mono bg-muted px-2 py-1 rounded select-all">PW: {u.initialPassword}</span>}
+                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                 </div>
+                                            </div>
+                                        ))}
+                                        {users.filter(u => u.role === 'sales_executive').length === 0 && (
+                                            <div className="px-6 py-4 text-sm text-muted-foreground text-center">No sales executives found.</div>
+                                        )}
+                                    </div>
+                                 </div>
+
+                                 <div className="border border-border rounded-lg overflow-hidden">
+                                    <div className="bg-muted/50 px-6 py-3 border-b border-border font-semibold text-xs text-muted-foreground uppercase">Project Managers</div>
+                                    <div className="divide-y divide-border bg-background">
+                                        {users.filter(u => u.role === 'project_manager').map(u => (
+                                            <div key={u.uid} className="px-6 py-4 flex justify-between items-center group">
+                                                 <div>
+                                                     <div className="font-medium text-sm">{u.displayName}</div>
+                                                     <div className="text-xs text-muted-foreground">{u.email}</div>
+                                                 </div>
+                                                 <div className="flex items-center gap-2">
+                                                     {u.initialPassword && <span className="text-xs font-mono bg-muted px-2 py-1 rounded select-all">PW: {u.initialPassword}</span>}
+                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                 </div>
+                                            </div>
+                                        ))}
+                                        {users.filter(u => u.role === 'project_manager').length === 0 && (
+                                            <div className="px-6 py-4 text-sm text-muted-foreground text-center">No project managers found.</div>
+                                        )}
+                                    </div>
+                                 </div>
+                             </div>
+                         </div>
+                    </div>
+                )}
+            </div>
+       </div>
+
+       {/* Modals */}
+       <Modal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} title="Assign Editor">
+             <div className="space-y-2 mt-4 max-h-[300px] overflow-y-auto">
+                 {users.filter(u => u.role === 'editor').map(ed => (
+                     <button key={ed.uid} onClick={() => handleAssignEditor(ed.uid)} className="w-full flex items-center gap-3 p-3 rounded-md hover:bg-muted transition-colors text-left border border-transparent hover:border-border">
+                         <Avatar className="h-8 w-8">
+                             <AvatarFallback className="text-xs">{ed.displayName?.[0]}</AvatarFallback>
+                         </Avatar>
+                         <div>
+                             <div className="text-sm font-medium">{ed.displayName}</div>
+                             <div className="text-xs text-muted-foreground">{ed.email}</div>
+                         </div>
+                     </button>
+                 ))}
+             </div>
+       </Modal>
+
+       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Update Project">
+             <div className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                     <Label>Project Value (₹)</Label>
+                     <Input type="number" value={editForm.totalCost} onChange={e => setEditForm({...editForm, totalCost: Number(e.target.value)})} />
+                  </div>
+                  <div className="space-y-2">
+                     <Label>Project Status</Label>
+                     <select className="w-full h-10 px-3 rounded-md border border-input bg-background" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})}>
+                          <option value="pending_assignment">Pending Assignment</option>
+                          <option value="active">Active</option>
+                          <option value="in_review">In Review</option>
+                          <option value="approved">Approved</option>
+                          <option value="completed">Completed</option>
+                     </select>
+                  </div>
+                  <Button onClick={handleUpdateProject} className="w-full mt-2">Save Changes</Button>
+             </div>
+       </Modal>
+    </div>
+  );
+}
+
+// Consistent components
+function MetricCard({ label, value, subtext, trend, trendUp, alert }: any) {
+    return (
+        <div className={cn(
+            "bg-card border border-border rounded-lg p-5 flex flex-col justify-between shadow-sm transition-all hover:border-muted-foreground/30",
+            alert && "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/10"
+        )}>
+            <div className="flex justify-between items-start mb-2">
+                <span className="text-sm font-medium text-muted-foreground">{label}</span>
+                {alert && <AlertCircle className="h-4 w-4 text-amber-500" />}
+            </div>
+            <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold tracking-tight text-foreground">{value}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+                 {trend && (
+                    <span className={cn("text-xs font-medium flex items-center gap-0.5", trendUp ? "text-emerald-600" : "text-muted-foreground")}>
+                        {trendUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                        {trend}
+                    </span>
+                 )}
+                 <span className="text-xs text-muted-foreground">{subtext}</span>
+            </div>
         </div>
+    );
+}
+
+function StatusBadge({ status }: { status: string }) {
+    const config: any = {
+        active: { label: "In Production", className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800" },
+        in_review: { label: "Review Needed", className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800" },
+        pending_assignment: { label: "Pending", className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800" },
+        approved: { label: "Approved", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800" },
+        completed: { label: "Completed", className: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
+    };
+    
+    const style = config[status] || config.completed;
+
+    return (
+        <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border", style.className)}>
+            {style.label}
+        </span>
     );
 }

@@ -3,6 +3,7 @@
 import { adminAuth, adminDb, adminStorage } from '@/lib/firebase/admin';
 import { UserRole } from '@/types/schema';
 import { revalidatePath } from 'next/cache';
+import { notifyClientOfStatusUpdate } from '@/lib/whatsapp';
 
 /**
  * Deletes a user from Firebase Auth and Firestore
@@ -65,10 +66,21 @@ export async function deleteProject(projectId: string) {
  */
 export async function updateProject(projectId: string, data: any) {
     try {
+        // Fetch current status to check for changes
+        const projectDoc = await adminDb.collection('projects').doc(projectId).get();
+        const currentData = projectDoc.data();
+        const oldStatus = currentData?.status;
+
         await adminDb.collection('projects').doc(projectId).update({
             ...data,
             updatedAt: Date.now()
         });
+
+        // Notify client only if status changed
+        if (data.status && data.status !== oldStatus) {
+            await notifyClientOfStatusUpdate(projectId, data.status);
+        }
+
         revalidatePath('/dashboard');
         return { success: true };
     } catch (error: any) {
@@ -104,6 +116,9 @@ export async function assignEditor(projectId: string, editorId: string) {
             updatedAt: Date.now()
         });
 
+        // Notify client that production is starting/pending
+        await notifyClientOfStatusUpdate(projectId, 'pending_assignment');
+
         revalidatePath('/dashboard');
         return { success: true };
     } catch (error: any) {
@@ -121,6 +136,12 @@ export async function respondToAssignment(projectId: string, response: 'accepted
             status: response === 'accepted' ? 'active' : 'pending_assignment', // Revert to pending if rejected? Or stay separate?
             updatedAt: Date.now()
         });
+
+        // Notify client that production has started
+        if (response === 'accepted') {
+            await notifyClientOfStatusUpdate(projectId, 'active');
+        }
+
         revalidatePath('/dashboard');
         return { success: true };
     } catch (error: any) {
@@ -137,6 +158,21 @@ export async function getAllUsers() {
         const usersSnap = await adminDb.collection('users').get();
         const users = usersSnap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
         return { success: true, data: users };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Toggles a user's Pay Later status
+ */
+export async function togglePayLater(uid: string, payLater: boolean) {
+    try {
+        await adminDb.collection('users').doc(uid).update({
+            payLater: payLater
+        });
+        revalidatePath('/dashboard');
+        return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message };
     }

@@ -18,8 +18,12 @@ const loadRazorpayScript = () => {
   });
 };
 
+
+import { User } from "@/types/schema";
+
 interface PaymentButtonProps {
     projectId: string;
+    user?: User | null;
     amount: number;
     description: string;
     prefill?: {
@@ -28,9 +32,10 @@ interface PaymentButtonProps {
         contact?: string;
     };
     onSuccess?: () => void;
+    className?: string;
 }
 
-export function PaymentButton({ projectId, amount, description, prefill, onSuccess }: PaymentButtonProps) {
+export function PaymentButton({ projectId, user, amount, description, prefill, onSuccess, className }: PaymentButtonProps) {
     const [isLoading, setIsLoading] = useState(false);
 
     const handlePayment = async (e: React.MouseEvent) => {
@@ -114,11 +119,20 @@ export function PaymentButton({ projectId, amount, description, prefill, onSucce
         }
     };
 
+    if (user?.payLater) {
+        return (
+            <div className={`p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg text-center ${className || ''}`}>
+                 <p className="text-sm font-medium text-blue-400 mb-1">Pay Later Enabled</p>
+                 <p className="text-xs text-zinc-400">Please contact your Project Manager to settle payment. Downloads will be unlocked manually after verification.</p>
+            </div>
+        );
+    }
+
     return (
         <button
             onClick={handlePayment}
             disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-lg bg-green-500 hover:bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-all disabled:opacity-50"
+            className={`inline-flex items-center gap-2 rounded-lg bg-green-500 hover:bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-all disabled:opacity-50 ${className || ''}`}
         >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
             Pay ₹{amount.toLocaleString()}

@@ -5,18 +5,15 @@ import { useState } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Loader2, Film, Check, User, PenTool, Shield, Briefcase, Users } from "lucide-react";
+import { Loader2, Film } from "lucide-react";
 import Link from "next/link";
 import { SnowBackground } from "@/components/snow-background";
-import { UserRole } from "@/types/schema";
-import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const { signInWithGoogle, loginWithEmail, loading } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole>("client");
   const [error, setError] = useState<string | null>(null);
   
   // Email/Pass State
@@ -27,7 +24,7 @@ export default function LoginPage() {
     setIsLoggingIn(true);
     setError(null);
     try {
-      await signInWithGoogle(selectedRole);
+      await signInWithGoogle(); // No role arg = Login Mode
     } catch (error: any) {
       console.error("Login failed", error);
       setError(error.message || "Login failed. Please try again.");
@@ -62,21 +59,6 @@ export default function LoginPage() {
       </div>
     );
   }
-
-  const roles = [
-    {
-      id: "client",
-      title: "Client",
-      icon: User,
-      description: "I need videos edited"
-    },
-    {
-      id: "editor",
-      title: "Video Editor",
-      icon: PenTool,
-      description: "Join the team"
-    }
-  ];
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-black text-white selection:bg-primary/30">
@@ -131,7 +113,10 @@ export default function LoginPage() {
                   />
               </div>
               <div className="space-y-2">
-                  <Label className="text-zinc-300">Password</Label>
+                  <div className="flex justify-between items-center">
+                      <Label className="text-zinc-300">Password</Label>
+                      <Link href="#" className="text-xs text-primary hover:text-primary/80">Forgot Password?</Link>
+                  </div>
                   <Input 
                       type="password" 
                       placeholder="••••••••"
@@ -144,7 +129,7 @@ export default function LoginPage() {
               <Button
                   type="submit"
                   disabled={isLoggingIn}
-                  className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-6 rounded-xl"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6 rounded-xl"
               >
                   {isLoggingIn ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Sign In with Email"}
               </Button>
@@ -160,24 +145,6 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                {roles.map((role) => (
-                  <button
-                    key={role.id}
-                    onClick={() => setSelectedRole(role.id as UserRole)}
-                    className={cn(
-                      "flex flex-col items-center gap-2 rounded-xl border p-3 transition-all text-center",
-                      selectedRole === role.id 
-                        ? "bg-primary/10 border-primary text-primary" 
-                        : "bg-black/20 border-white/10 hover:bg-white/5 text-zinc-400"
-                    )}
-                  >
-                    <role.icon className="h-5 w-5" />
-                    <span className="text-xs font-medium">{role.title}</span>
-                  </button>
-                ))}
-            </div>
-
             <Button
                 onClick={handleGoogleLogin}
                 variant="outline"
@@ -219,16 +186,17 @@ export default function LoginPage() {
         </motion.div>
         
         <p className="px-8 text-center text-sm text-muted-foreground">
-            By continuing, you agree to our{" "}
-            <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
-              Privacy Policy
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="underline underline-offset-4 hover:text-primary font-medium text-white">
+              Create Account
             </Link>
-            .
         </p>
+      </div>
+      
+      <div className="pb-8 text-center">
+          <p className="text-xs text-zinc-500">
+             &copy; {new Date().getFullYear()} EditoHub. All rights reserved.
+          </p>
       </div>
     </main>
   );

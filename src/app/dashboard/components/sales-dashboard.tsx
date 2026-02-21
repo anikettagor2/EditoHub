@@ -5,21 +5,50 @@ import { useAuth } from "@/lib/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, UserPlus, Mail, Lock, User, LogOut, RefreshCw, Copy, ExternalLink, Shield } from "lucide-react";
+import { 
+    Loader2, 
+    UserPlus, 
+    Mail, 
+    Lock, 
+    User, 
+    LogOut, 
+    RefreshCw, 
+    Copy, 
+    ExternalLink, 
+    Shield,
+    Search,
+    Filter,
+    CheckCircle2,
+    Clock,
+    MoreHorizontal,
+    ArrowUpRight,
+    ArrowDownLeft,
+    AlertCircle,
+    Briefcase
+} from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { cn } from "@/lib/utils";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
 
 export function SalesDashboard() {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [myClients, setMyClients] = useState<any[]>([]);
     
     // Form State
+    const [isCreateOpen, setIsCreateOpen] = useState(false); // Toggle for form
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [phone, setPhone] = useState("");
     const [customRates, setCustomRates] = useState<Record<string, number>>({
         "Short Videos": 500,
         "Long Videos": 1000,
@@ -35,12 +64,25 @@ export function SalesDashboard() {
         "Ads/UGC Videos": false
     });
     const [pendingClients, setPendingClients] = useState<any[]>([]);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+    const handleRefresh = () => {
+        setIsRefreshing(true);
+        setRefreshKey(k => k + 1);
+        setTimeout(() => {
+            setIsRefreshing(false);
+            setLastUpdated(new Date());
+        }, 1000);
+    };
 
     const VIDEO_TYPES_LABELS = [
         "Short Videos", "Long Videos", "Reels", "Graphics Videos", "Ads/UGC Videos"
     ];
 
-    // Fetch Clients Managed by Current User
+    // Fetch Clients
     useEffect(() => {
         if (!user?.uid) return;
 
@@ -56,20 +98,17 @@ export function SalesDashboard() {
                 ...doc.data()
             }));
             setMyClients(clients);
-        }, (error) => {
-            console.error("Error fetching clients:", error);
-            // If index is missing, it will log a link to create it.
-            // Fallback to client-side sorting if needed, but index is better.
         });
 
         return () => unsubscribe();
-    }, [user]);
+    }, [user, refreshKey]);
 
-    // Merge pending and real clients, favoring real ones (from DB) if email matches
+    // Merge & Filter
     const displayedClients = [...myClients, ...pendingClients]
         .filter((client, index, self) => 
             index === self.findIndex(t => t.email === client.email)
         )
+        .filter(c => !searchQuery || c.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) || c.email?.toLowerCase().includes(searchQuery.toLowerCase()))
         .sort((a, b) => b.createdAt - a.createdAt);
 
     const generatePassword = () => {
@@ -85,15 +124,14 @@ export function SalesDashboard() {
     const handleCreateClient = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Backup current state for rollback
         const backup = { name, email, password, customRates, allowedFormats };
         const tempId = `temp-${Date.now()}`;
 
-        // 1. Optimistic Update (Instant Feedback)
         const tempClient = {
             id: tempId,
             displayName: name,
             email: email,
+            phoneNumber: phone,
             initialPassword: password,
             createdAt: Date.now(),
             role: 'client',
@@ -104,25 +142,12 @@ export function SalesDashboard() {
         setPendingClients(prev => [tempClient, ...prev]);
         setIsLoading(true);
 
-        // 2. Clear Form Immediately
+        // Reset Form
         setName("");
         setEmail("");
         setPassword("");
-        setCustomRates({
-            "Short Videos": 500,
-            "Long Videos": 1000,
-            "Reels": 500,
-            "Graphics Videos": 1500,
-            "Ads/UGC Videos": 2000
-        });
-        setAllowedFormats({
-            "Short Videos": false,
-            "Long Videos": false,
-            "Reels": false,
-            "Graphics Videos": false,
-            "Ads/UGC Videos": false
-        });
-
+        setPhone("");
+        
         try {
             const res = await fetch('/api/sales/create-client', {
                 method: 'POST',
@@ -131,6 +156,7 @@ export function SalesDashboard() {
                     email: backup.email,
                     password: backup.password,
                     displayName: backup.name,
+                    phoneNumber: phone, 
                     createdBy: user?.uid,
                     customRates: backup.customRates, 
                     allowedFormats: backup.allowedFormats
@@ -138,263 +164,257 @@ export function SalesDashboard() {
             });
 
             const data = await res.json();
-
             if (!res.ok) throw new Error(data.error || "Failed to create client");
 
             toast.success(`Client "${backup.name}" created successfully!`);
-            
-            // Note: We DO NOT remove the pending client here. 
-            // We wait for the Firestore onSnapshot to receive the real data.
-            // The cleanup is handled in the useEffect below.
+            setIsCreateOpen(false); // Close form on success
 
         } catch (error: any) {
-            // Only log unexpected errors
             if (!error.message.includes("already registered")) {
                 console.error(error);
             }
             toast.error(error.message);
-            
-            // Revert changes on error
             setPendingClients(prev => prev.filter(c => c.id !== tempId));
-            setName(backup.name);
-            setEmail(backup.email);
-            setPassword(backup.password);
-            setCustomRates(backup.customRates);
-            setAllowedFormats(backup.allowedFormats);
-            
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Cleanup Pending Clients when Real Data Arrives
-    useEffect(() => {
-        if (myClients.length > 0 && pendingClients.length > 0) {
-             const existingEmails = new Set(myClients.map(c => c.email));
-             setPendingClients(prev => {
-                const filtered = prev.filter(p => !existingEmails.has(p.email));
-                // Only update if changes found to prevent rerenders
-                return filtered.length !== prev.length ? filtered : prev;
-             });
-        }
-    }, [myClients, pendingClients.length]);
-
     return (
-        <div className="flex min-h-screen bg-black text-white">
-            {/* Sidebar (Simplified) */}
-            <div className="w-64 border-r border-white/10 p-6 flex flex-col hidden md:flex">
-                <div className="flex items-center gap-2 mb-10">
-                    <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent">
-                        Sales Portal
-                    </span>
+        <div className="space-y-6 max-w-[1600px] mx-auto p-6 md:p-8 bg-background min-h-screen">
+            {/* 1. Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-border">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Sales Portal</h1>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                        <span>{user?.displayName || 'Sales Executive'}</span>
+                        <span className="h-1 w-1 rounded-full bg-border" />
+                        <span>Client Management</span>
+                    </div>
                 </div>
-
-                <div className="space-y-2 flex-1">
-                    <Button variant="ghost" className="w-full justify-start gap-2 bg-green-500/10 text-green-400">
-                        <UserPlus className="w-4 h-4" />
-                        Create Client
-                    </Button>
-                </div>
-
-                <div className="mt-auto border-t border-white/10 pt-4">
-                     <div className="flex items-center gap-3 mb-4 px-2">
-                        <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 font-bold">
-                            {user?.displayName?.[0]}
-                        </div>
-                        <div className="overflow-hidden">
-                            <p className="text-sm font-medium truncate">{user?.displayName}</p>
-                            <p className="text-xs text-zinc-500 truncate">Sales Executive</p>
-                        </div>
-                     </div>
-                    <Button variant="ghost" className="w-full justify-start gap-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10" onClick={logout}>
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-all disabled:opacity-50 shadow-sm"
+                    >
+                        <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : `Updated ${lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}</span>
+                    </button>
+                     <Button 
+                        onClick={() => setIsCreateOpen(!isCreateOpen)} 
+                        className={cn("h-9 font-medium shadow-sm transition-all", isCreateOpen ? "bg-muted text-foreground hover:bg-muted/80" : "bg-primary text-primary-foreground hover:bg-primary/90")}
+                    >
+                        {isCreateOpen ? "Cancel Creation" : <><UserPlus className="mr-2 h-4 w-4" /> Add New Client</>}
                     </Button>
                 </div>
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1 p-4 md:p-8 overflow-y-auto">
-                <header className="mb-8 flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-bold">Client Management</h1>
-                        <p className="text-zinc-400">Create accounts and share credentials.</p>
-                    </div>
-                    {/* Mobile Logout */}
-                     <Button variant="ghost" size="icon" className="md:hidden text-zinc-400" onClick={logout}>
-                        <LogOut className="w-5 h-5" />
-                    </Button>
-                </header>
+            {/* 2. KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <MetricCard 
+                    label="Total Clients" 
+                    value={myClients.length} 
+                    subtext="Managed accounts"
+                    trend="+1 this week"
+                    trendUp={true}
+                />
+                 <MetricCard 
+                    label="Pending Setup" 
+                    value={pendingClients.length} 
+                    subtext="Processing creation"
+                    alert={pendingClients.length > 0}
+                />
+                 <MetricCard 
+                    label="Active Revenue" 
+                    value="$0.00" 
+                    subtext="Total client value"
+                />
+            </div>
 
-                <div className="grid lg:grid-cols-3 gap-8">
-                    {/* LEFT COLUMN: Create Form */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-zinc-900 border border-white/10 rounded-xl overflow-hidden sticky top-8">
-                            <div className="p-6 border-b border-white/10 bg-zinc-900/50">
-                                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    <UserPlus className="w-5 h-5 text-green-500" />
-                                    New Client
-                                </h3>
-                            </div>
-                            <div className="p-6">
-                                <form onSubmit={handleCreateClient} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-zinc-300">Client Name</Label>
-                                        <Input 
-                                            placeholder="Company or Contact Name" 
-                                            className="bg-black/40 border-white/10 text-white"
-                                            value={name}
-                                            onChange={e => setName(e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-zinc-300">Email (Login ID)</Label>
-                                        <Input 
-                                            type="email"
-                                            placeholder="client@company.com" 
-                                            className="bg-black/40 border-white/10 text-white"
-                                            value={email}
-                                            onChange={e => setEmail(e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-zinc-300">Password</Label>
-                                        <div className="flex gap-2">
-                                            <Input 
-                                                type="text" 
-                                                placeholder="Secure Password" 
-                                                className="bg-black/40 border-white/10 text-white font-mono"
-                                                value={password}
-                                                onChange={e => setPassword(e.target.value)}
-                                                required
-                                                minLength={6}
-                                            />
-                                            <Button type="button" variant="outline" size="icon" onClick={generatePassword} className="shrink-0 border-white/10 hover:bg-white/5">
-                                                <RefreshCw className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                        <p className="text-xs text-zinc-500">Auto-generate or type manually.</p>
-                                    </div>
-
-                                    {/* Custom Rates Section */}
-                                    <div className="space-y-3 pt-4 border-t border-white/10">
-                                        <Label className="text-zinc-300 flex items-center gap-2">
-                                            <Shield className="w-3 h-3 text-emerald-500" /> 
-                                            Custom Video Rates (INR)
-                                        </Label>
-                                        <div className="grid gap-2">
-                                            {VIDEO_TYPES_LABELS.map((type) => (
-                                                <div key={type} className={cn("flex items-center justify-between text-sm bg-black/20 p-2 rounded border transition-all", allowedFormats[type] ? "border-green-500/20 bg-green-500/5" : "border-white/5 opacity-60")}>
-                                                    <div className="flex items-center gap-2">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={allowedFormats[type]} 
-                                                            onChange={(e) => setAllowedFormats({...allowedFormats, [type]: e.target.checked})}
-                                                            className="w-4 h-4 rounded border-zinc-600 bg-black/40 text-green-500 focus:ring-green-500 focus:ring-offset-0"
-                                                        />
-                                                        <span className={cn("text-xs transition-colors", allowedFormats[type] ? "text-zinc-200" : "text-zinc-500")}>{type}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-zinc-500 text-sm">₹</span>
-                                                        <Input 
-                                                            type="text" 
-                                                            disabled={!allowedFormats[type]}
-                                                            className="h-9 w-24 bg-black/40 border-white/10 text-white font-mono disabled:opacity-50" 
-                                                            placeholder="0"
-                                                            value={customRates[type]} 
-                                                            onChange={(e) => {
-                                                                const val = e.target.value.replace(/[^0-9]/g, '');
-                                                                setCustomRates({...customRates, [type]: val ? parseInt(val) : 0});
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <Button 
-                                        type="submit" 
-                                        className="w-full bg-green-600 hover:bg-green-700 text-white mt-4 h-11 font-medium"
-                                        disabled={isLoading}
-                                    >
-                                        {isLoading ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
-                                            </>
-                                        ) : (
-                                            "Create Account"
-                                        )}
-                                    </Button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* RIGHT COLUMN: Client List */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <div className="bg-zinc-900 border border-white/10 rounded-xl overflow-hidden min-h-[500px] flex flex-col">
-                             <div className="p-6 border-b border-white/10 flex justify-between items-center bg-zinc-900/50">
-                                <h3 className="text-lg font-semibold text-white">Your Clients</h3>
-                                <div className="text-xs text-zinc-500 bg-white/5 px-2 py-1 rounded-full">
-                                    Total: {displayedClients.length}
+            <div className="grid lg:grid-cols-3 gap-8 items-start">
+                 {/* 3. Create Client Form (Conditional or Side Panel) */}
+                 {isCreateOpen && (
+                     <div className="lg:col-span-1 bg-card border border-border rounded-lg shadow-sm overflow-hidden animate-in slide-in-from-right-4 fade-in duration-300">
+                         <div className="p-4 border-b border-border bg-muted/30">
+                             <h3 className="font-semibold text-foreground flex items-center gap-2">
+                                 <UserPlus className="h-4 w-4 text-primary" /> New Client Details
+                             </h3>
+                         </div>
+                         <div className="p-6 space-y-4">
+                            <form onSubmit={handleCreateClient} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Client Name</Label>
+                                    <Input placeholder="Company or Contact Name" value={name} onChange={e => setName(e.target.value)} required className="bg-background" />
                                 </div>
-                            </div>
-                            
-                            <div className="flex-1 overflow-x-auto">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="text-xs uppercase bg-white/5 text-zinc-400 font-medium">
-                                        <tr>
-                                            <th className="px-6 py-4 w-1/3">Client Name</th>
-                                            <th className="px-6 py-4 w-1/3">Login ID</th>
-                                            <th className="px-6 py-4 w-1/3">Password</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {displayedClients.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={3} className="px-6 py-12 text-center text-zinc-500">
-                                                    No clients created yet.
+                                <div className="space-y-2">
+                                    <Label>Email (Login ID)</Label>
+                                    <Input type="email" placeholder="client@company.com" value={email} onChange={e => setEmail(e.target.value)} required className="bg-background" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Phone Number (10 Digits)</Label>
+                                    <div className="flex gap-2">
+                                        <div className="flex items-center justify-center px-3 bg-muted border border-border rounded-lg text-xs font-bold text-muted-foreground">+91</div>
+                                        <Input 
+                                            type="tel" 
+                                            placeholder="9876543210" 
+                                            value={phone} 
+                                            onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} 
+                                            required 
+                                            pattern="[0-9]{10}"
+                                            className="bg-background" 
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">Required for WhatsApp status notifications</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Password</Label>
+                                    <div className="flex gap-2">
+                                        <Input type="text" placeholder="Secure Password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} className="bg-background font-mono" />
+                                        <Button type="button" variant="outline" size="icon" onClick={generatePassword} className="shrink-0"><RefreshCw className="h-4 w-4" /></Button>
+                                    </div>
+                                </div>
+                                
+                                <div className="pt-4 border-t border-border">
+                                    <Label className="mb-3 block text-xs uppercase text-muted-foreground font-bold tracking-wider">Custom Rates</Label>
+                                    <div className="space-y-2">
+                                        {VIDEO_TYPES_LABELS.map((type) => (
+                                            <div key={type} className={cn("flex items-center justify-between text-sm p-2 rounded border transition-all", allowedFormats[type] ? "bg-primary/5 border-primary/20" : "bg-muted/20 border-border opacity-60")}>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={allowedFormats[type]} 
+                                                        onChange={(e) => setAllowedFormats({...allowedFormats, [type]: e.target.checked})}
+                                                        className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                                                    />
+                                                    <span className="text-xs font-medium">{type}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-xs text-muted-foreground">₹</span>
+                                                    <Input 
+                                                        disabled={!allowedFormats[type]}
+                                                        className="h-7 w-20 text-xs font-mono bg-background" 
+                                                        value={customRates[type]} 
+                                                        onChange={(e) => setCustomRates({...customRates, [type]: parseInt(e.target.value) || 0})}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <Button type="submit" className="w-full mt-4" disabled={isLoading}>
+                                    {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...</> : "Create Client Account"}
+                                </Button>
+                            </form>
+                         </div>
+                     </div>
+                 )}
+
+                 {/* 4. Client List Table */}
+                 <div className={cn("bg-card border border-border rounded-lg shadow-sm flex flex-col", isCreateOpen ? "lg:col-span-2" : "lg:col-span-3")}>
+                      <div className="p-4 border-b border-border flex justify-between bg-muted/30">
+                        <div className="relative w-72">
+                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                             <Input 
+                                placeholder="Search clients..." 
+                                className="pl-9 h-9 bg-background" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-9"><Filter className="mr-2 h-4 w-4" /> Filter</Button>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                           <table className="w-full text-sm text-left">
+                                <thead className="bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
+                                    <tr>
+                                        <th className="px-6 py-3">Client Name</th>
+                                        <th className="px-6 py-3">Login ID</th>
+                                        <th className="px-6 py-3">Initial Password</th>
+                                        <th className="px-6 py-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {displayedClients.length === 0 ? (
+                                        <tr><td colSpan={4} className="px-6 py-16 text-center text-muted-foreground">No clients found. Add one to get started.</td></tr>
+                                    ) : (
+                                        displayedClients.map((client) => (
+                                            <tr key={client.id} className={cn("hover:bg-muted/50 transition-colors", client.isPending && "bg-amber-50/50 dark:bg-amber-900/10")}>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20">
+                                                            {client.displayName?.[0]}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-medium text-foreground">{client.displayName}</div>
+                                                            {client.isPending && <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">Creating...</span>}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                     <div className="flex items-center gap-2 group cursor-pointer" onClick={() => { navigator.clipboard.writeText(client.email); toast.success("Copied"); }}>
+                                                        <span className="font-mono text-muted-foreground group-hover:text-foreground transition-colors">{client.email}</span>
+                                                        <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {client.initialPassword ? (
+                                                        <div className="flex items-center gap-2 group cursor-pointer" onClick={() => { navigator.clipboard.writeText(client.initialPassword); toast.success("Copied"); }}>
+                                                            <span className="font-mono text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded border border-emerald-100 dark:border-emerald-800">{client.initialPassword}</span>
+                                                            <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground italic text-xs">Hidden</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem><Mail className="mr-2 h-4 w-4" /> Send Email</DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem className="text-red-600"><LogOut className="mr-2 h-4 w-4" /> Deactivate</DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </td>
                                             </tr>
-                                        ) : (
-                                            displayedClients.map((client) => (
-                                                <tr key={client.id} className={cn("transition-colors group", client.isPending ? "bg-green-500/5 animate-pulse" : "hover:bg-white/5")}>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs ring-1 ring-white/10">
-                                                                {client.displayName?.[0]}
-                                                            </div>
-                                                            <span className="font-medium text-white">{client.displayName}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded border border-white/5 w-fit group-hover:border-white/10 transition-colors">
-                                                            <span className="font-mono text-sm text-zinc-300">{client.email}</span>
-                                                            <Copy className="w-3.5 h-3.5 cursor-pointer text-zinc-500 hover:text-white transition-colors" onClick={() => { navigator.clipboard.writeText(client.email); toast.success("Email copied"); }} />
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        {client.initialPassword ? (
-                                                            <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded border border-white/5 w-fit group-hover:border-white/10 transition-colors">
-                                                                <span className="font-mono text-sm text-emerald-400">{client.initialPassword}</span>
-                                                                <Copy className="w-3.5 h-3.5 cursor-pointer text-zinc-500 hover:text-white transition-colors" onClick={() => { navigator.clipboard.writeText(client.initialPassword); toast.success("Password copied"); }} />
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-zinc-600 text-xs italic">Not visible</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                                        ))
+                                    )}
+                                </tbody>
+                           </table>
+                      </div>
+                 </div>
+            </div>
+        </div>
+    );
+}
+
+// Consistent Metric Card
+function MetricCard({ label, value, subtext, trend, trendUp, alert }: any) {
+    return (
+        <div className={cn(
+            "bg-card border border-border rounded-lg p-5 flex flex-col justify-between shadow-sm transition-all hover:border-muted-foreground/30",
+            alert && "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/10"
+        )}>
+            <div className="flex justify-between items-start mb-2">
+                <span className="text-sm font-medium text-muted-foreground">{label}</span>
+                {alert && <AlertCircle className="h-4 w-4 text-amber-500" />}
+            </div>
+            <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold tracking-tight text-foreground">{value}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+                 {trend && (
+                    <span className={cn("text-xs font-medium flex items-center gap-0.5", trendUp ? "text-emerald-600" : "text-muted-foreground")}>
+                        {trendUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                        {trend}
+                    </span>
+                 )}
+                 <span className="text-xs text-muted-foreground">{subtext}</span>
             </div>
         </div>
     );

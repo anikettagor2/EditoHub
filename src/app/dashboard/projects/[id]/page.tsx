@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
 import { db, storage } from "@/lib/firebase/config";
-import { doc, getDoc, collection, query, where, orderBy, getDocs, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, collection, query, where, orderBy, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Project, Revision } from "@/types/schema";
 import { 
@@ -28,9 +28,10 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ProjectChat } from "@/components/project-chat";
+
 import { toast } from "sonner";
 import { assignEditor, getAllUsers, respondToAssignment } from "@/app/actions/admin-actions";
+import { unlockProjectDownloads, requestDownloadUnlock, registerDownload } from "@/app/actions/project-actions";
 import { User, ProjectAssignmentStatus } from "@/types/schema";
 import { Modal } from "@/components/ui/modal";
 import { PaymentButton } from "@/components/payment-button";
@@ -60,6 +61,7 @@ export default function ProjectDetailsPage() {
     // Asset Upload State
     const [isUploadingAsset, setIsUploadingAsset] = useState(false);
     const [uploadAssetProgress, setUploadAssetProgress] = useState(0);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const handleAssetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || !e.target.files[0] || !project) return;
@@ -94,12 +96,6 @@ export default function ProjectDetailsPage() {
                 rawFiles: arrayUnion(newFileMetadata)
             });
 
-            // Update local state
-            setProject(prev => prev ? {
-                ...prev,
-                rawFiles: [...(prev.rawFiles || []), newFileMetadata]
-            } : null);
-
             toast.success("Asset uploaded successfully");
 
         } catch (error) {
@@ -112,32 +108,39 @@ export default function ProjectDetailsPage() {
     };
 
     useEffect(() => {
-        async function fetchData() {
-            if (!id || typeof id !== 'string') return;
-            try {
-                const pSnap = await getDoc(doc(db, "projects", id));
-                if (pSnap.exists()) {
-                    setProject({ id: pSnap.id, ...pSnap.data() } as ExtendedProject);
-                }
+        if (!id || typeof id !== 'string' || authLoading) return;
 
-                const q = query(
-                    collection(db, "revisions"),
-                    where("projectId", "==", id),
-                    orderBy("version", "desc")
-                );
-                const rSnap = await getDocs(q);
-                const revs: Revision[] = [];
-                rSnap.forEach(doc => revs.push({ id: doc.id, ...doc.data() } as Revision));
-                setRevisions(revs);
+        setLoading(true);
 
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
+        // 1. Listen to Project Document
+        const unsubProject = onSnapshot(doc(db, "projects", id), (snap) => {
+            if (snap.exists()) {
+                setProject({ id: snap.id, ...snap.data() } as ExtendedProject);
             }
-        }
-        
-        if (!authLoading) fetchData();
+            setLoading(false);
+        }, (err) => {
+            console.error("Error listening to project:", err);
+            setLoading(false);
+        });
+
+        // 2. Listen to Revisions
+        const q = query(
+            collection(db, "revisions"),
+            where("projectId", "==", id),
+            orderBy("version", "desc")
+        );
+        const unsubRevisions = onSnapshot(q, (snap) => {
+            const revs: Revision[] = [];
+            snap.forEach(doc => revs.push({ id: doc.id, ...doc.data() } as Revision));
+            setRevisions(revs);
+        }, (err) => {
+            console.error("Error listening to revisions:", err);
+        });
+
+        return () => {
+            unsubProject();
+            unsubRevisions();
+        };
     }, [id, authLoading]);
 
     // Admin: Fetch Editors
@@ -157,6 +160,8 @@ export default function ProjectDetailsPage() {
     const [selectedEditorId, setSelectedEditorId] = useState<string | null>(null);
 
     const handleFinalPayment = () => {
+        // Pay Later clients never open the payment gateway
+        if (user?.payLater) return;
         setIsPaymentModalOpen(true);
     };
 
@@ -188,12 +193,14 @@ export default function ProjectDetailsPage() {
     const latestRevision = revisions[0];
     const isClient = user?.role === 'client' || project.ownerId === user?.uid;
     const isAdmin = user?.role === 'admin';
+    const isPM = user?.role === 'project_manager';
+    const canManage = isAdmin || isPM;
     const isEditor = user?.role === 'editor';
     const isAssignedEditor = isEditor && project.assignedEditorId === user?.uid;
     const isPaymentLocked = isClient && project.paymentStatus !== 'full_paid';
 
     // Logic: Admin feedback tool lock
-    const showFeedbackTool = isAdmin ? (project.assignmentStatus === 'accepted') : true;
+    const showFeedbackTool = canManage ? (project.assignmentStatus === 'accepted') : true;
 
     // EDITOR OFFER VIEW
     if (isAssignedEditor && project.assignmentStatus === 'pending') {
@@ -233,7 +240,7 @@ export default function ProjectDetailsPage() {
                         </Button>
                         <Button 
                             onClick={() => handleAssignmentResponse('accepted')} 
-                            className="flex-1 h-14 text-base bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20"
+                            className="flex-1 h-14 text-base bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
                         >
                             Accept Job
                         </Button>
@@ -277,7 +284,7 @@ export default function ProjectDetailsPage() {
                          </Button>
                          {(isAdmin || (isAssignedEditor && (project.assignmentStatus === 'accepted' || project.status === 'active'))) && (
                             <Link href={`/dashboard/projects/${id}/upload`}>
-                                <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 rounded-xl px-6 h-12">
+                                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 rounded-xl px-6 h-12">
                                     <Upload className="h-4 w-4 mr-2" /> Draft Upload
                                 </Button>
                             </Link>
@@ -290,6 +297,18 @@ export default function ProjectDetailsPage() {
                     
                     {/* Left Column (8 units) */}
                     <div className="lg:col-span-8 space-y-8">
+                        
+                        {(project as any).isPayLaterRequest && (
+                            <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                                <div className="h-8 w-8 bg-emerald-500/20 rounded-full flex items-center justify-center shrink-0">
+                                    <DollarSign className="h-4 w-4 text-emerald-500" />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-bold text-emerald-500 font-mono">PAY LATER REQUEST</h4>
+                                    <p className="text-xs text-emerald-200/60 font-sans tracking-tight">This project was submitted via the direct request workflow. Settlement is due upon completion.</p>
+                                </div>
+                            </div>
+                        )}
                         
                         {/* Latest Version Display */}
                         {revisions.length > 0 ? (
@@ -344,16 +363,86 @@ export default function ProjectDetailsPage() {
                                                 <Button variant="outline" className="h-11 border-zinc-800 hover:bg-zinc-900 rounded-xl px-6">Feedback Tool</Button>
                                             </Link>
                                         )}
-                                        {isClient && isPaymentLocked ? (
-                                            <Button onClick={handleFinalPayment} className="bg-emerald-600 hover:bg-emerald-700 h-11 px-8 rounded-xl shadow-lg shadow-emerald-900/20">
-                                                <DollarSign className="h-4 w-4 mr-2" />
-                                                Unlock Download
-                                            </Button>
-                                        ) : (
-                                            <Button className="bg-primary hover:bg-primary/90 h-11 px-8 rounded-xl shadow-lg shadow-primary/20">
-                                                <Download className="h-4 w-4 mr-2" /> Download
-                                            </Button>
-                                        )}
+                                        {isClient ? (
+                                            (() => {
+                                                // State 1: Non-payLater client hasn't paid yet → show payment gateway first
+                                                if (isPaymentLocked && !user?.payLater) {
+                                                    return (
+                                                        <Button onClick={handleFinalPayment} className="bg-emerald-600 hover:bg-emerald-700 h-11 px-8 rounded-xl shadow-lg shadow-emerald-900/20">
+                                                            <DollarSign className="h-4 w-4 mr-2" />
+                                                            Complete Payment
+                                                        </Button>
+                                                    );
+                                                }
+
+                                                // State 2: PM has approved downloads → real download
+                                                if (project.downloadsUnlocked) {
+                                                    return (
+                                                        <Button
+                                                            disabled={isDownloading}
+                                                            onClick={async () => {
+                                                                if (!latestRevision) return;
+                                                                setIsDownloading(true);
+                                                                try {
+                                                                    const res = await registerDownload(id as string, latestRevision.id);
+                                                                    if (res.success && res.downloadUrl) {
+                                                                        const anchor = document.createElement('a');
+                                                                        anchor.href = res.downloadUrl;
+                                                                        anchor.download = `${project?.name || 'video'}_v${latestRevision.version}.mp4`;
+                                                                        document.body.appendChild(anchor);
+                                                                        anchor.click();
+                                                                        document.body.removeChild(anchor);
+                                                                        toast.success(`Download started! ${res.remaining} download${res.remaining !== 1 ? 's' : ''} remaining.`);
+                                                                    } else {
+                                                                        toast.error(res.error || 'Download failed. Please try again.');
+                                                                    }
+                                                                } catch (e: any) {
+                                                                    toast.error('Download failed: ' + e.message);
+                                                                } finally {
+                                                                    setIsDownloading(false);
+                                                                }
+                                                            }}
+                                                            className="bg-primary hover:bg-primary/90 h-11 px-8 rounded-xl shadow-lg shadow-primary/20"
+                                                        >
+                                                            {isDownloading
+                                                                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Preparing...</>
+                                                                : <><Download className="h-4 w-4 mr-2" /> Download</>
+                                                            }
+                                                        </Button>
+                                                    );
+                                                }
+
+                                                // State 3: Request already sent, waiting for PM
+                                                if (project.downloadUnlockRequested) {
+                                                    return (
+                                                        <div className="flex items-center gap-2 h-11 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                                            <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
+                                                            <span className="text-xs text-amber-400 font-medium">Awaiting PM Approval</span>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                // State 4: Paid (or payLater) but no request sent yet → request unlock
+                                                return (
+                                                    <Button
+                                                        onClick={async () => {
+                                                            if (!user) return;
+                                                            const res = await requestDownloadUnlock(id as string, user.uid);
+                                                            if (res.success) {
+                                                                toast.success("Unlock request sent to your Project Manager!");
+                                                                setProject(prev => prev ? ({ ...prev, downloadUnlockRequested: true }) : null);
+                                                            } else {
+                                                                toast.error(res.error);
+                                                            }
+                                                        }}
+                                                        className="bg-emerald-600 hover:bg-emerald-700 h-11 px-8 rounded-xl shadow-lg shadow-emerald-900/20"
+                                                    >
+                                                        <Download className="h-4 w-4 mr-2" />
+                                                        Request Download Unlock
+                                                    </Button>
+                                                );
+                                            })()
+                                        ) : null}
                                     </div>
                                 </div>
                             </div>
@@ -388,7 +477,7 @@ export default function ProjectDetailsPage() {
                                                     </div>
                                                     <div>
                                                         <p className="font-semibold text-sm">Version {rev.version}</p>
-                                                        <p className="text-xs text-zinc-500">{new Date(rev.createdAt).toLocaleDateString()}</p>
+                                                        <p className="text-xs text-zinc-500" suppressHydrationWarning>{new Date(rev.createdAt).toLocaleDateString()}</p>
                                                     </div>
                                                 </div>
                                                 <Button size="sm" variant="ghost" className="text-zinc-500 hover:text-white">View</Button>
@@ -399,28 +488,17 @@ export default function ProjectDetailsPage() {
                             </div>
                         )}
 
-                        {/* Project Chat Integrated */}
-                         <div className="bg-[#09090b] rounded-3xl border border-zinc-800 overflow-hidden mt-8 shadow-xl">
-                             <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
-                                 <h3 className="font-bold text-lg">Project Communications</h3>
-                                 <div className="flex items-center gap-2">
-                                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                                     <span className="text-xs text-zinc-500 font-medium uppercase tracking-widest">Active Thread</span>
-                                 </div>
-                             </div>
-                             <div className="h-[400px]">
-                                <ProjectChat projectId={id as string} currentUser={user} assignedEditorId={project.toString() === '' ? undefined : project.assignedEditorId} />
-                             </div>
-                        </div>
+
 
                     </div>
 
                     {/* Right Column (4 units) */}
                     <div className="lg:col-span-4 space-y-6">
                         
-                        {/* Admin: Assignment Card */}
-                        {isAdmin && (
-                            <div className="bg-[#09090b] rounded-3xl border border-zinc-800 p-6 space-y-6 shadow-xl relative overflow-hidden">
+                        {/* Admin/PM: Assignment & Controls */}
+                        {canManage && (
+                            <>
+                            <div className="bg-[#09090b] rounded-3xl border border-zinc-800 p-6 space-y-6 shadow-xl relative overflow-hidden mb-6">
                                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500" />
                                 <div className="flex justify-between items-start">
                                     <h3 className="font-bold text-base uppercase tracking-widest text-zinc-500 flex items-center gap-2">
@@ -534,6 +612,40 @@ export default function ProjectDetailsPage() {
                                     </div>
                                 </Modal>
                             </div>
+
+                            {/* Payment Control Card for Pay Later Users */}
+                            {project.paymentStatus !== 'full_paid' && (
+                                <div className="bg-[#09090b] rounded-3xl border border-zinc-800 p-6 space-y-4 shadow-xl mb-6 relative overflow-hidden">
+                                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+                                     <div className="flex items-center gap-2 mb-2">
+                                         <DollarSign className="h-5 w-5 text-emerald-500" />
+                                         <h3 className="font-bold text-base uppercase tracking-widest text-zinc-400">Payment Access</h3>
+                                     </div>
+                                     <p className="text-sm text-zinc-500 bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
+                                         Client sees "Pay Later" message. Unlock downloads manually below.
+                                     </p>
+                                     <Button 
+                                        onClick={async () => {
+                                            if (!user) return;
+                                            try {
+                                                const res = await unlockProjectDownloads(id as string, user.uid);
+                                                if (res.success) {
+                                                    toast.success("Project unlocked manually.");
+                                                    setProject(prev => prev ? ({ ...prev, paymentStatus: 'full_paid', status: 'completed' }) : null);
+                                                } else {
+                                                    toast.error(res.error);
+                                                }
+                                            } catch (e) {
+                                                toast.error("Error unlocking");
+                                            }
+                                        }}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-900/20"
+                                     >
+                                        Unlock Downloads
+                                     </Button>
+                                </div>
+                            )}
+                            </>
                         )}
 
                         {/* Project Brief Card */}
@@ -656,9 +768,9 @@ export default function ProjectDetailsPage() {
                     </div>
                 </div>
 
-                {/* Payment Modal */}
+                {/* Payment Modal — hidden entirely for Pay Later clients */}
                 <Modal
-                   isOpen={isPaymentModalOpen}
+                   isOpen={isPaymentModalOpen && !user?.payLater}
                    onClose={() => setIsPaymentModalOpen(false)}
                    title="Payment Required"
                 >
@@ -693,6 +805,7 @@ export default function ProjectDetailsPage() {
                             <div className="w-full">
                                 <PaymentButton 
                                     projectId={id as string}
+                                    user={user}
                                     amount={(project?.totalCost || 0) - (project?.amountPaid || 0)}
                                     description={`Remaining Balance for ${project?.name}`}
                                     prefill={{

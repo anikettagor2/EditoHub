@@ -5,7 +5,7 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin';
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { email, password, displayName, role, createdBy } = body;
+        const { email, password, displayName, role, createdBy, phoneNumber } = body;
 
         if (!email || !password || !displayName || !role) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
             email,
             password,
             displayName,
+            phoneNumber: phoneNumber ? `+91${phoneNumber}` : undefined // Assuming Indian numbers as per request context
         });
 
         // 2. Create User Profile in Firestore
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
             email,
             displayName,
             role: role,
+            phoneNumber: phoneNumber || null,
             photoURL: null,
             createdAt: Date.now(),
             createdBy: createdBy || 'admin',

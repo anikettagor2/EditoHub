@@ -12,7 +12,7 @@ import {
   signInWithEmailAndPassword
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/config";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { User, UserRole } from "@/types/schema";
 import { useRouter } from "next/navigation";
 
@@ -23,6 +23,7 @@ interface AuthContextType {
   signInWithGoogle: (role?: UserRole) => Promise<void>;
   loginAsAdmin: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
+  signupWithEmail: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
 }
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   signInWithGoogle: async () => {},
   loginAsAdmin: async () => {},
   loginWithEmail: async () => {},
+  signupWithEmail: async () => {},
   logout: async () => {},
   deleteAccount: async () => {},
 });
@@ -47,31 +49,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    let unsubProfile: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
       
       if (fbUser) {
-        // Fetch user profile from Firestore
+        // Fetch user profile from Firestore real-time
         const userRef = doc(db, "users", fbUser.uid);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-          setUser(userSnap.data() as User);
-        } else {
-            // New users are handled in signInWithGoogle usually, 
-            // but if they exist in Auth but not Firestore (rare edge case), 
-            // we'll handle it there or let them be 'guest'
-        }
+        unsubProfile = onSnapshot(userRef, (snapshot) => {
+          if (snapshot.exists()) {
+            setUser(snapshot.data() as User);
+          }
+          setLoading(false);
+        }, (err) => {
+          console.error("Error listening to user profile:", err);
+          setLoading(false);
+        });
       } else {
+        if (unsubProfile) {
+          unsubProfile();
+          unsubProfile = null;
+        }
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubProfile) unsubProfile();
+    };
   }, []);
 
-  const signInWithGoogle = async (selectedRole: UserRole = 'client') => {
+  const signInWithGoogle = async (selectedRole?: UserRole) => {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -80,33 +91,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
-        // Create new user profile with selected role
-        const newUser: User = {
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName,
-            photoURL: result.user.photoURL,
-            role: selectedRole,
-            createdAt: Date.now(),
-        };
-        await setDoc(userRef, newUser);
-        setUser(newUser);
+        // CASE: New User
+        if (selectedRole) {
+            // Signup Flow: Create new user profile with selected role
+            const newUser: User = {
+                uid: result.user.uid,
+                email: result.user.email,
+                displayName: result.user.displayName,
+                photoURL: result.user.photoURL,
+                role: selectedRole,
+                createdAt: Date.now(),
+            };
+            await setDoc(userRef, newUser);
+            setUser(newUser);
+        } else {
+            // Login Flow: Block new users who haven't selected a role via Signup
+            await result.user.delete(); // revert the auth creation
+            await signOut(auth);
+            throw new Error("Account not found. Please Sign Up to create an account.");
+        }
       } else {
-        // Existing user: Verify Role
+        // CASE: Existing User
         const existingData = userSnap.data() as User;
         
-        // STRICT ROLE ENFORCEMENT
-        // If the existing role doesn't match the role the user is trying to log in as, deny access.
-        if (existingData.role !== selectedRole && existingData.role !== 'admin') { 
-            // Allow admin to sign in regardless of selected role if needed, or stick to strict.
-            // Actually, for this request, admin is handled separately now.
-            
-            if (existingData.role !== selectedRole) {
-                 await signOut(auth);
-                 setUser(null);
-                 setFirebaseUser(null);
-                 throw new Error(`This account is already registered as a ${existingData.role}. Please log in as a ${existingData.role}.`);
-            }
+        // If coming from Signup (with a role), verify it matches (or just log them in)
+        if (selectedRole && existingData.role !== selectedRole && existingData.role !== 'admin') {
+             // Optional: You could allow them to "link" or just warn. 
+             // For now, let's just warn and log them in as their original role, 
+             // OR block them to avoid confusion. Blocking is safer.
+             await signOut(auth);
+             throw new Error(`You already have an account as a ${existingData.role}. Please Log In.`);
         }
 
         setUser(existingData);
@@ -150,6 +164,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
           }
 
+          throw error;
+      }
+  };
+
+  const signupWithEmail = async (email: string, password: string, name: string, role: UserRole) => {
+      try {
+          const { createUserWithEmailAndPassword, updateProfile } = await import("firebase/auth");
+          
+          // 1. Create Auth User
+          const result = await createUserWithEmailAndPassword(auth, email, password);
+          
+          // 2. Update Display Name
+          await updateProfile(result.user, { displayName: name });
+          
+          // 3. Create Firestore Profile
+          const newUser: User = {
+              uid: result.user.uid,
+              email: result.user.email,
+              displayName: name,
+              photoURL: null,
+              role: role,
+              createdAt: Date.now(),
+          };
+          
+          await setDoc(doc(db, "users", result.user.uid), newUser);
+          setUser(newUser);
+          
+          router.push("/dashboard");
+      } catch (error) {
+          console.error("Error signing up with Email/Pass", error);
           throw error;
       }
   };
@@ -219,7 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, loginAsAdmin, loginWithEmail, logout, deleteAccount }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, loginAsAdmin, loginWithEmail, signupWithEmail, logout, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   );

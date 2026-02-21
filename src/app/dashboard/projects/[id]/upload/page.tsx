@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, ArrowLeft, UploadCloud, FileVideo } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { handleRevisionUploaded } from "@/app/actions/notification-actions";
 
 export default function UploadRevisionPage() {
     const params = useParams();
@@ -93,6 +94,9 @@ export default function UploadRevisionPage() {
                         };
             
                         await addDoc(collection(db, "revisions"), newRevision);
+                        
+                        // 4. Trigger Notification & Update Status
+                        await handleRevisionUploaded(id);
                         
                         setIsUploading(false);
                         // Redirect
@@ -191,7 +195,7 @@ export default function UploadRevisionPage() {
                     <Button 
                         type="submit" 
                         disabled={!file || isUploading}
-                        className="w-full bg-primary text-white hover:bg-primary/90 py-6 text-lg shadow-[0_0_20px_rgba(99,102,241,0.2)]"
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-6 text-lg shadow-[0_0_20px_rgba(99,102,241,0.2)]"
                     >
                         {isUploading ? (
                              <>

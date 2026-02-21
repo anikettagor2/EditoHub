@@ -1,18 +1,99 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // --- Helper Functions ---
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Check if user exists and has one of the allowed roles
+    function hasRole(roles) {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             getUserData().role in roles;
+    }
+
+    function isAdmin() {
+      return hasRole(['admin']);
+    }
+
+    function isStaff() {
+      return hasRole(['admin', 'manager', 'sales_executive', 'project_manager']);
+    }
+
+    function isEditor() {
+      return hasRole(['editor']);
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow creation (e.g. sign up)
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // 2. Projects Collection
+    match /projects/{projectId} {
+      allow create: if isAuthenticated();
+      
+      allow read: if true; // Allow public sharing via link (trusting UUID)
+
+      allow update: if isAuthenticated() && (
+        isStaff() ||
+        resource.data.assignedEditorId == request.auth.uid ||
+        (resource.data.members is list && request.auth.uid in resource.data.members) ||
+        resource.data.clientId == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // 3. Invoices Collection
+    match /invoices/{invoiceId} {
+      allow read: if isAuthenticated() && (
+        isStaff() || 
+        resource.data.clientId == request.auth.uid
+      );
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // 4. Revisions Collection
+    match /revisions/{revisionId} {
+      allow read: if true; // Allow public sharing via link
+      
+      allow create, update: if isAuthenticated() && (
+        isStaff() ||
+        isEditor() ||
+        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.assignedEditorId == request.auth.uid ||
+        (get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.members is list &&
+          request.auth.uid in get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.members)
+      );
+
+       allow delete: if isAdmin() || isStaff();
+    }
+
+    // 5. Comments Collection
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if true; 
+      allow update: if isAuthenticated(); // Only registered users can update (resolve) for now
+    }
+
+    // Default deny for anything else
     match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2026, 3, 12);
+      allow read, write: if false; 
     }
   }
 }
