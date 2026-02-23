@@ -18,11 +18,15 @@ export async function POST(request: Request) {
         }
 
         // 1. Create User in Firebase Auth
+        const finalPhoneNumber = (phoneNumber && phoneNumber.length === 10)
+            ? `+91${phoneNumber}`
+            : undefined;
+
         const userRecord = await auth.createUser({
             email,
             password,
             displayName,
-            phoneNumber: phoneNumber ? `+91${phoneNumber}` : undefined // Assuming Indian numbers as per request context
+            phoneNumber: finalPhoneNumber
         });
 
         // 2. Create User Profile in Firestore

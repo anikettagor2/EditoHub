@@ -467,24 +467,26 @@ export function AdminDashboard() {
                                          <Input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required className="bg-background" type="text" minLength={6} placeholder="Initial password" />
                                      </div>
                                      <div className="space-y-1">
-                                         <Label>Phone Number (10 Digits)</Label>
+                                         <Label>Phone Number (Optional)</Label>
                                          <div className="flex gap-2">
                                              <div className="flex items-center justify-center px-3 bg-muted border border-border rounded-lg text-xs font-bold text-muted-foreground">+91</div>
                                              <Input 
                                                  value={newUser.phoneNumber} 
                                                  onChange={e => setNewUser({...newUser, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
-                                                 required 
-                                                 pattern="[0-9]{10}"
                                                  className="bg-background" 
                                                  placeholder="9876543210" 
                                              />
                                          </div>
+                                         <p className="text-[10px] text-muted-foreground italic">Skip if not needed for this role</p>
                                      </div>
                                      <div className="space-y-1">
                                          <Label>Role</Label>
                                          <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
                                              <option value="sales_executive">Sales Executive</option>
                                              <option value="project_manager">Project Manager</option>
+                                             <option value="admin">Admin</option>
+                                             <option value="manager">Manager</option>
+                                             <option value="editor">Editor</option>
                                          </select>
                                      </div>
                                      <Button className="w-full" disabled={isCreatingUser}>
