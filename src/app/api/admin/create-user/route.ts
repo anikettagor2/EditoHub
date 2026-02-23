@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { auth, db } from '@/lib/firebaseAdmin';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
 
 export async function POST(request: Request) {
     try {
@@ -18,19 +18,15 @@ export async function POST(request: Request) {
         }
 
         // 1. Create User in Firebase Auth
-        const finalPhoneNumber = (phoneNumber && phoneNumber.length === 10)
-            ? `+91${phoneNumber}`
-            : undefined;
-
-        const userRecord = await auth.createUser({
+        const userRecord = await adminAuth.createUser({
             email,
             password,
             displayName,
-            phoneNumber: finalPhoneNumber
+            phoneNumber: phoneNumber ? `+91${phoneNumber}` : undefined // Assuming Indian numbers as per request context
         });
 
         // 2. Create User Profile in Firestore
-        await db.collection('users').doc(userRecord.uid).set({
+        await adminDb.collection('users').doc(userRecord.uid).set({
             uid: userRecord.uid,
             email,
             displayName,
@@ -43,7 +39,7 @@ export async function POST(request: Request) {
         });
 
         // 3. Set Custom Claim
-        await auth.setCustomUserClaims(userRecord.uid, { role: role });
+        await adminAuth.setCustomUserClaims(userRecord.uid, { role: role });
 
         return NextResponse.json({
             success: true,

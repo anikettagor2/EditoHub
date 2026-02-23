@@ -1,7 +1,7 @@
 'use server';
 
-import { db } from "@/lib/firebaseAdmin";
-import { Revision, Project } from "@/types/schema";
+import { adminDb } from "@/lib/firebase/admin";
+import { Revision } from "@/types/schema";
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -10,7 +10,7 @@ import { FieldValue } from "firebase-admin/firestore";
  */
 export async function registerDownload(projectId: string, revisionId: string) {
     try {
-        const docRef = db.collection('revisions').doc(revisionId);
+        const docRef = adminDb.collection('revisions').doc(revisionId);
         const snap = await docRef.get();
 
         if (!snap.exists) {
@@ -65,7 +65,7 @@ import { notifyClientOfStatusUpdate } from "@/lib/whatsapp";
 export async function unlockProjectDownloads(projectId: string, userId: string) {
     try {
         // Verify user has permission
-        const userDoc = await db.collection('users').doc(userId).get();
+        const userDoc = await adminDb.collection('users').doc(userId).get();
         if (!userDoc.exists) {
             return { success: false, error: "User not found" };
         }
@@ -77,7 +77,7 @@ export async function unlockProjectDownloads(projectId: string, userId: string) 
             return { success: false, error: "Unauthorized: Only Admins or Project Managers can unlock downloads." };
         }
 
-        await db.collection('projects').doc(projectId).update({
+        await adminDb.collection('projects').doc(projectId).update({
             paymentStatus: 'full_paid',
             status: 'completed',
             downloadsUnlocked: true,
@@ -101,10 +101,10 @@ export async function unlockProjectDownloads(projectId: string, userId: string) 
  */
 export async function requestDownloadUnlock(projectId: string, userId: string) {
     try {
-        const userDoc = await db.collection('users').doc(userId).get();
+        const userDoc = await adminDb.collection('users').doc(userId).get();
         if (!userDoc.exists) return { success: false, error: "User not found" };
 
-        const project = await db.collection('projects').doc(projectId).get();
+        const project = await adminDb.collection('projects').doc(projectId).get();
         if (!project.exists) return { success: false, error: "Project not found" };
 
         const projectData = project.data();
@@ -119,7 +119,7 @@ export async function requestDownloadUnlock(projectId: string, userId: string) {
             return { success: false, error: "Unauthorized: You are not a member of this project." };
         }
 
-        await db.collection('projects').doc(projectId).update({
+        await adminDb.collection('projects').doc(projectId).update({
             downloadUnlockRequested: true,
             updatedAt: Date.now()
         });
@@ -130,31 +130,6 @@ export async function requestDownloadUnlock(projectId: string, userId: string) {
         return { success: false, error: error.message };
     }
 }
-/**
- * Creates a new project and notifies the client.
- */
-export async function createProject(data: Omit<Project, 'id'>) {
-    try {
-        const docRef = await db.collection('projects').add({
-            ...data,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-        });
 
-        const projectId = docRef.id;
 
-        // Notify client that we've received the project
-        try {
-            await notifyClientOfStatusUpdate(projectId, 'pending_assignment');
-            console.log(`[WhatsApp] Auto-notified client for project creation: ${projectId}`);
-        } catch (waError) {
-            console.error("[WhatsApp] Failed to send creation notification:", waError);
-        }
 
-        revalidatePath('/dashboard');
-        return { success: true, id: projectId };
-    } catch (error: any) {
-        console.error("Create project error:", error);
-        return { success: false, error: error.message };
-    }
-}

@@ -10,26 +10,26 @@ import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
-    apiKey: process.env.EDITOHUB_FIREBASE_API_KEY || "dummy-api-key",
-    authDomain: process.env.EDITOHUB_FIREBASE_AUTH_DOMAIN || "dummy-auth-domain",
-    projectId: process.env.EDITOHUB_FIREBASE_PROJECT_ID || "dummy-project-id",
-    storageBucket: process.env.EDITOHUB_FIREBASE_STORAGE_BUCKET || "dummy-storage-bucket",
-    messagingSenderId: process.env.EDITOHUB_FIREBASE_MESSAGING_SENDER_ID || "dummy-sender-id",
-    appId: process.env.EDITOHUB_FIREBASE_APP_ID || "dummy-app-id"
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
+// Initialize Firebase (singleton pattern)
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// Initialize Firestore with specialized settings
+// Initialize Firestore with specialized settings for better connectivity and offline support
 export const db = getApps().length > 0
     ? getFirestore(app)
     : initializeFirestore(app, {
         localCache: persistentLocalCache({
             tabManager: persistentMultipleTabManager()
         }),
-        experimentalForceLongPolling: true,
+        experimentalForceLongPolling: true, // Helps with "Could not reach backend" errors
     });
 
 export const storage = getStorage(app);

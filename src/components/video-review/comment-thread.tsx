@@ -4,7 +4,7 @@ import { Comment, UserRole } from "@/types/schema";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Circle, MessageSquare, Reply, X } from "lucide-react";
+import { CheckCircle2, Circle, MessageSquare, Reply, X, Image as ImageIcon, Paperclip, Loader2, Download as DownloadIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,9 +16,10 @@ interface CommentThreadProps {
     draftTime: number | null;
     onSelectComment: (comment: Comment) => void;
     onResolveComment: (commentId: string) => void;
-    onReply: (commentId: string, content: string) => void;
-    onSaveComment: (content: string) => void;
+    onReply: (commentId: string, content: string, attachments?: string[]) => void;
+    onSaveComment: (content: string, attachments?: string[]) => void;
     onCancelComment: () => void;
+    onUploadFile?: (file: File) => Promise<string>;
 }
 
 export function CommentThread({ 
@@ -30,13 +31,31 @@ export function CommentThread({
     onResolveComment,
     onReply,
     onSaveComment,
-    onCancelComment
+    onCancelComment,
+    onUploadFile
 }: CommentThreadProps) {
     
     // Sort comments by timestamp
     const sortedComments = [...comments].sort((a, b) => a.timestamp - b.timestamp);
     const [draftContent, setDraftContent] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
+    const [draftAttachments, setDraftAttachments] = useState<string[]>([]);
+    
+    const [replyingTo, setReplyingTo] = useState<string | null>(null);
+    const [replyContent, setReplyContent] = useState("");
+    const [replyAttachments, setReplyAttachments] = useState<string[]>([]);
+    const [isUploadingReply, setIsUploadingReply] = useState(false);
+
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const replyInputRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const replyFileInputRef = useRef<HTMLInputElement>(null);
+
+    // This would ideally be handled by a parent or a hook, 
+    // but for simplicity in this component we'll pass the file up or handle here.
+    // Let's assume onSaveComment handles the content.
+    // If we want to allow immediate upload, we need a prop for that.
+    // For now, let's just allow the parent to handle the full save.
 
     useEffect(() => {
         if (isAddingComment && inputRef.current) {
@@ -45,9 +64,57 @@ export function CommentThread({
     }, [isAddingComment]);
 
     const handleSave = () => {
-        if (!draftContent.trim()) return;
-        onSaveComment(draftContent);
+        if (!draftContent.trim() && draftAttachments.length === 0) return;
+        onSaveComment(draftContent, draftAttachments);
         setDraftContent("");
+        setDraftAttachments([]);
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, isReply: boolean = false) => {
+        const file = e.target.files?.[0];
+        if (!file || !onUploadFile) return;
+
+        if (isReply) setIsUploadingReply(true); 
+        else setIsUploading(true);
+
+        try {
+            const url = await onUploadFile(file);
+            if (isReply) setReplyAttachments(prev => [...prev, url]);
+            else setDraftAttachments(prev => [...prev, url]);
+        } catch (err) {
+            console.error("Upload failed:", err);
+        } finally {
+            if (isReply) setIsUploadingReply(false);
+            else setIsUploading(false);
+            if (e.target) e.target.value = "";
+        }
+    };
+
+    const handleSendReply = (commentId: string) => {
+        if (!replyContent.trim() && replyAttachments.length === 0) return;
+        onReply(commentId, replyContent, replyAttachments);
+        setReplyContent("");
+        setReplyAttachments([]);
+        setReplyingTo(null);
+    };
+
+    const handleDownloadFile = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Download failed:", error);
+            // Fallback: open in new tab
+            window.open(url, '_blank');
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -90,13 +157,51 @@ export function CommentThread({
                                 placeholder="Type your feedback here..."
                                 className="min-h-[80px] bg-black/50 border-primary/20 focus:border-primary/50 resize-none text-sm mb-3"
                             />
-                            <div className="flex justify-end gap-2">
-                                <Button size="sm" variant="ghost" onClick={onCancelComment} className="text-zinc-400 hover:text-white h-8">
-                                    Cancel
-                                </Button>
-                                <Button size="sm" onClick={handleSave} className="bg-primary hover:bg-primary/90 h-8">
-                                    Post Comment
-                                </Button>
+
+                            {/* Attachment Previews */}
+                            {draftAttachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {draftAttachments.map((url, idx) => (
+                                        <div key={idx} className="relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 group/img">
+                                            <img src={url} alt="upload" className="h-full w-full object-cover" />
+                                            <button 
+                                                onClick={() => setDraftAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                                className="absolute top-1 right-1 bg-black/50 p-0.5 rounded-full opacity-0 group-hover/img:opacity-100 transition-opacity"
+                                            >
+                                                <X className="h-3 w-3 text-white" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1">
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        onChange={handleFileChange}
+                                        className="hidden" 
+                                        accept="image/*"
+                                    />
+                                    <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        disabled={isUploading}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="text-zinc-400 hover:text-white h-8 w-8 p-0"
+                                    >
+                                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="ghost" onClick={onCancelComment} className="text-zinc-400 hover:text-white h-8">
+                                        Cancel
+                                    </Button>
+                                    <Button size="sm" onClick={handleSave} disabled={isUploading} className="bg-primary hover:bg-primary/90 h-8">
+                                        Post Comment
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -155,6 +260,30 @@ export function CommentThread({
                                 {comment.content}
                             </p>
 
+                            {/* Comment Attachments */}
+                            {comment.attachments && comment.attachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {comment.attachments.map((url, idx) => (
+                                        <div key={idx} className="relative h-24 w-auto min-w-[100px] max-w-full rounded-lg overflow-hidden border border-white/10 bg-black/20 group/att">
+                                            <a href={url} target="_blank" rel="noopener noreferrer">
+                                                <img src={url} alt="attachment" className="h-full w-auto object-contain cursor-zoom-in" />
+                                            </a>
+                                            <Button 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                className="absolute bottom-1 right-1 h-6 w-6 p-0 bg-black/60 text-white opacity-0 group-hover/att:opacity-100 transition-opacity"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDownloadFile(url, `attachment-${idx}`);
+                                                }}
+                                            >
+                                                <DownloadIcon className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             {/* Replies would go here */}
                             {comment.replies && comment.replies.length > 0 && (
                                 <div className="ml-4 pl-3 border-l-2 border-white/5 space-y-3 mt-2">
@@ -164,17 +293,107 @@ export function CommentThread({
                                                 <span className="font-bold text-zinc-300">{reply.userName}</span>
                                                 <span className="text-[9px] text-zinc-600">{new Date(reply.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                             </div>
-                                            <p>{reply.content}</p>
+                                            <p className="mb-2">{reply.content}</p>
+                                            {reply.attachments && reply.attachments.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                    {reply.attachments.map((url, idx) => (
+                                                        <div key={idx} className="relative h-16 w-auto rounded border border-white/5 overflow-hidden bg-black/20 group/ratt">
+                                                            <a href={url} target="_blank" rel="noopener noreferrer">
+                                                                <img src={url} alt="attachment" className="h-full w-auto object-contain cursor-zoom-in" />
+                                                            </a>
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="ghost" 
+                                                                className="absolute bottom-0.5 right-0.5 h-5 w-5 p-0 bg-black/60 text-white opacity-0 group-hover/ratt:opacity-100 transition-opacity"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDownloadFile(url, `reply-attachment-${idx}`);
+                                                                }}
+                                                            >
+                                                                <DownloadIcon className="h-2.5 w-2.5" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             )}
 
-                            <div className="flex items-center gap-2 pt-2 mt-2 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-zinc-400 hover:text-white hover:bg-white/5">
-                                    <Reply className="h-3 w-3 mr-1" /> Reply
-                                </Button>
-                            </div>
+                            {/* Reply Input Area */}
+                            {replyingTo === comment.id ? (
+                                <div className="mt-4 p-3 rounded-lg border border-white/10 bg-black/20 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <Textarea
+                                        ref={replyInputRef}
+                                        value={replyContent}
+                                        onChange={(e) => setReplyContent(e.target.value)}
+                                        placeholder="Write a reply..."
+                                        className="min-h-[60px] bg-transparent border-none focus-visible:ring-0 text-xs p-0 mb-2 resize-none"
+                                    />
+                                    
+                                    {replyAttachments.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-2">
+                                            {replyAttachments.map((url, idx) => (
+                                                <div key={idx} className="relative h-12 w-12 rounded border border-white/10 overflow-hidden group/rimg">
+                                                    <img src={url} alt="reply upload" className="h-full w-full object-cover" />
+                                                    <button 
+                                                        onClick={() => setReplyAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                                        className="absolute top-0.5 right-0.5 bg-black/70 p-0.5 rounded-full opacity-0 group-hover/rimg:opacity-100 transition-opacity"
+                                                    >
+                                                        <X className="h-2 w-2 text-white" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center">
+                                            <input 
+                                                type="file" 
+                                                ref={replyFileInputRef}
+                                                onChange={(e) => handleFileChange(e, true)}
+                                                className="hidden" 
+                                                accept="image/*"
+                                            />
+                                            <Button 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                disabled={isUploadingReply}
+                                                onClick={() => replyFileInputRef.current?.click()}
+                                                className="text-zinc-500 hover:text-white h-7 w-7 p-0"
+                                            >
+                                                {isUploadingReply ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                                            </Button>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" variant="ghost" onClick={() => setReplyingTo(null)} className="h-7 text-[10px] px-2 text-zinc-400">
+                                                Cancel
+                                            </Button>
+                                            <Button 
+                                                size="sm" 
+                                                onClick={() => handleSendReply(comment.id)} 
+                                                disabled={isUploadingReply || (!replyContent.trim() && replyAttachments.length === 0)}
+                                                className="h-7 text-[10px] px-3 bg-zinc-700 hover:bg-zinc-600"
+                                            >
+                                                Reply
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 pt-2 mt-2 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button 
+                                        onClick={(e) => { e.stopPropagation(); setReplyingTo(comment.id); }}
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-6 px-2 text-[10px] text-zinc-400 hover:text-white hover:bg-white/5"
+                                    >
+                                        <Reply className="h-3 w-3 mr-1" /> Reply
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

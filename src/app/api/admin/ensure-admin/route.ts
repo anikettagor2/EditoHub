@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { auth, db } from '@/lib/firebaseAdmin';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
 
 export async function POST() {
     try {
@@ -10,31 +10,31 @@ export async function POST() {
 
         let userRecord;
         try {
-            userRecord = await auth.getUserByEmail(email);
+            userRecord = await adminAuth.getUserByEmail(email);
         } catch (error: any) {
             if (error.code !== 'auth/user-not-found') throw error;
         }
 
         if (userRecord) {
             // Update existing user with correct password
-            await auth.updateUser(userRecord.uid, {
+            await adminAuth.updateUser(userRecord.uid, {
                 password: password
             });
             // Ensure custom claim
-            await auth.setCustomUserClaims(userRecord.uid, { role: 'admin' });
+            await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'admin' });
         } else {
             // Create user
-            userRecord = await auth.createUser({
+            userRecord = await adminAuth.createUser({
                 email,
                 password,
                 displayName,
             });
             // Set custom claim
-            await auth.setCustomUserClaims(userRecord.uid, { role: 'admin' });
+            await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'admin' });
         }
 
         // Ensure Firestore document
-        await db.collection('users').doc(userRecord.uid).set({
+        await adminDb.collection('users').doc(userRecord.uid).set({
             uid: userRecord.uid,
             email,
             displayName,

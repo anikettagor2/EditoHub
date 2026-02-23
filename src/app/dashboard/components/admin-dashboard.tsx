@@ -114,6 +114,25 @@ export function AdminDashboard() {
     };
   }, [refreshKey]);
 
+  // Assignment Timer logic
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 10000); // Update every 10s
+    return () => clearInterval(interval);
+  }, []);
+
+  const getAssignmentStatusInfo = (project: Project) => {
+    if (project.assignmentStatus === 'pending' && project.assignmentExpiresAt) {
+        const timeLeft = Math.max(0, project.assignmentExpiresAt - now);
+        const mins = Math.floor(timeLeft / 60000);
+        const secs = Math.floor((timeLeft % 60000) / 1000);
+        const isExpired = timeLeft <= 0;
+        
+        return { isExpired, mins, secs, timeLeft };
+    }
+    return { isExpired: false, mins: 0, secs: 0, timeLeft: 0 };
+  };
+
   useEffect(() => {
     if(projects.length > 0 || users.length > 0) {
         setLoading(false);
@@ -348,11 +367,40 @@ export function AdminDashboard() {
                                    <td className="px-6 py-4 font-mono text-foreground">₹{project.totalCost}</td>
                                    <td className="px-6 py-4 text-xs">
                                         {project.assignedEditorId ? (
-                                            <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 flex items-center w-fit gap-1">
-                                                <CheckCircle2 className="w-3 h-3" /> Assigned
-                                            </span>
+                                            <div className="space-y-1">
+                                                <span className={cn(
+                                                    "px-2 py-0.5 rounded border flex items-center w-fit gap-1 font-medium",
+                                                    project.assignmentStatus === 'accepted' 
+                                                        ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
+                                                        : project.assignmentStatus === 'rejected'
+                                                        ? "bg-red-50 text-red-700 border-red-100"
+                                                        : "bg-amber-50 text-amber-700 border-amber-100"
+                                                )}>
+                                                    {project.assignmentStatus === 'accepted' && <CheckCircle2 className="w-3 h-3" />}
+                                                    {project.assignmentStatus === 'pending' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                                                    {project.assignmentStatus === 'rejected' && <Trash2 className="w-3 h-3" />}
+                                                    {(project.assignmentStatus || 'assigned').toUpperCase()}
+                                                </span>
+                                                
+                                                {project.assignmentStatus === 'pending' && (
+                                                    <div className="mt-1">
+                                                        {getAssignmentStatusInfo(project).isExpired ? (
+                                                            <div className="flex items-center gap-1.5 text-red-600 font-bold animate-pulse">
+                                                                <AlertCircle className="w-3.5 h-3.5" />
+                                                                EXPIRED - Reassign
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                                Expires in: <span className="font-mono text-foreground font-bold">{getAssignmentStatusInfo(project).mins}:{getAssignmentStatusInfo(project).secs.toString().padStart(2, '0')}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         ) : (
-                                            <span className="text-amber-600 italic">Unassigned</span>
+                                            <span className="text-amber-600 italic flex items-center gap-1">
+                                                <AlertCircle className="w-3 h-3" /> Unassigned
+                                            </span>
                                         )}
                                    </td>
                                    <td className="px-6 py-4 text-right">
@@ -477,16 +525,12 @@ export function AdminDashboard() {
                                                  placeholder="9876543210" 
                                              />
                                          </div>
-                                         <p className="text-[10px] text-muted-foreground italic">Skip if not needed for this role</p>
                                      </div>
                                      <div className="space-y-1">
                                          <Label>Role</Label>
                                          <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
                                              <option value="sales_executive">Sales Executive</option>
                                              <option value="project_manager">Project Manager</option>
-                                             <option value="admin">Admin</option>
-                                             <option value="manager">Manager</option>
-                                             <option value="editor">Editor</option>
                                          </select>
                                      </div>
                                      <Button className="w-full" disabled={isCreatingUser}>

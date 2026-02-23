@@ -7,7 +7,8 @@ import { TimelineComments } from "@/components/video-review/timeline-comments";
 import { GuestIdentityModal } from "@/components/video-review/guest-identity-modal";
 import { Comment, Revision, UserRole } from "@/types/schema";
 import { doc, collection, query, where, onSnapshot, setDoc, updateDoc, orderBy, arrayUnion } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
+import { db, storage } from "@/lib/firebase/config";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Share2, Download, MessageSquarePlus, DollarSign, Loader2, ShieldCheck, Film } from "lucide-react";
 import Link from "next/link";
@@ -164,12 +165,13 @@ export default function PublicReviewPage(props: { params: Promise<{ id: string; 
       playerRef.current?.play();
   };
 
-  const handleSaveComment = async (content: string) => {
+  const handleSaveComment = async (content: string, attachments?: string[]) => {
       if (!draftTime && draftTime !== 0) return;
       const newId = uuidv4(); 
       const userId = user?.uid || (guestInfo?.email ? `guest-${guestInfo.email}` : `guest-${Date.now()}`);
       const userName = user?.displayName || guestInfo?.name || "Guest";
       const userRole: UserRole = user?.role || 'guest';
+      const userAvatar = user?.photoURL || null;
 
       const newComment: Comment = {
           id: newId, 
@@ -178,12 +180,13 @@ export default function PublicReviewPage(props: { params: Promise<{ id: string; 
           userId: userId,
           userName: userName,
           userRole: userRole,
-          userAvatar: user?.photoURL || null,
+          userAvatar: userAvatar,
           content: content, 
           timestamp: draftTime!,
           createdAt: Date.now(),
           status: "open",
-          replies: []
+          replies: [],
+          attachments: attachments || []
       };
 
       setComments(prev => [...prev, newComment]);
@@ -201,6 +204,19 @@ export default function PublicReviewPage(props: { params: Promise<{ id: string; 
       }
   };
 
+  const handleUploadFile = async (file: File): Promise<string> => {
+      if (!params.id || !params.revisionId) throw new Error("Missing project info");
+      
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const storagePath = `comments/${params.id}/${params.revisionId}/${fileName}`;
+      const storageRef = ref(storage, storagePath);
+      
+      await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(storageRef);
+      return downloadUrl;
+  };
+
   const handleResolveComment = async (commentId: string) => {
       const originalComments = [...comments];
       const targetComment = comments.find(c => c.id === commentId);
@@ -214,7 +230,7 @@ export default function PublicReviewPage(props: { params: Promise<{ id: string; 
       }
   };
 
-  const handleReply = async (commentId: string, content: string) => {
+  const handleReply = async (commentId: string, content: string, attachments?: string[]) => {
       if (!user && !guestInfo) {
           setIsGuestModalOpen(true);
           return;
@@ -228,7 +244,8 @@ export default function PublicReviewPage(props: { params: Promise<{ id: string; 
           userName: userName,
           userRole: userRole,
           content,
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          attachments: attachments || []
       };
       setComments(prev => prev.map(c => {
           if (c.id === commentId) return { ...c, replies: [...(c.replies || []), newReply] };
@@ -381,8 +398,9 @@ export default function PublicReviewPage(props: { params: Promise<{ id: string; 
                  onSelectComment={handleSelectComment}
                  onResolveComment={handleResolveComment}
                  onReply={handleReply}
-                 onSaveComment={handleSaveComment}
-                 onCancelComment={handleCancelComment}
+                  onSaveComment={handleSaveComment}
+                  onCancelComment={handleCancelComment}
+                  onUploadFile={handleUploadFile}
               />
           </aside>
        </div>

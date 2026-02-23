@@ -1,7 +1,7 @@
 'use server';
 
-import { notifyClientOfStatusUpdate } from "@/lib/whatsapp";
-import { db } from "@/lib/firebaseAdmin";
+import { notifyClient } from "@/lib/whatsapp";
+import { adminDb } from "@/lib/firebase/admin";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -11,13 +11,14 @@ import { revalidatePath } from "next/cache";
 export async function handleRevisionUploaded(projectId: string) {
     try {
         // 1. Update project status to 'in_review'
-        await db.collection('projects').doc(projectId).update({
+        await adminDb.collection('projects').doc(projectId).update({
             status: 'in_review',
             updatedAt: Date.now()
         });
 
-        // 2. Notify client
-        await notifyClientOfStatusUpdate(projectId, 'in_review');
+        // 2. Notify client with review link
+        const reviewLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://editohub.com'}/dashboard/projects/${projectId}/review`;
+        await notifyClient(projectId, 'PROPOSAL_UPLOADED', { reviewLink });
 
         revalidatePath(`/dashboard/projects/${projectId}`);
         return { success: true };

@@ -36,6 +36,9 @@ import {
     DropdownMenuLabel 
 } from "@/components/ui/dropdown-menu";
 
+import { toast } from "sonner";
+import { respondToAssignment } from "@/app/actions/admin-actions";
+
 export function EditorDashboard() {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -45,6 +48,19 @@ export function EditorDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  // Timer logic for assignments
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleResponse = async (projectId: string, response: 'accepted' | 'rejected') => {
+      const res = await respondToAssignment(projectId, response);
+      if (res.success) toast.success(`Project ${response === 'accepted' ? 'Accepted! Production started.' : 'Declined.'}`);
+      else toast.error(res.error);
+  };
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -224,24 +240,65 @@ export function EditorDashboard() {
                                 const isUrgent = deadline ? (deadline.getTime() - Date.now() < 172800000) : false; // < 48h
 
                                 return (
-                                    <tr key={project.id} className="group hover:bg-muted/50 transition-colors">
+                                    <tr key={project.id} className={cn(
+                                        "group hover:bg-muted/50 transition-colors",
+                                        project.assignmentStatus === 'pending' && "bg-amber-50/30 border-l-4 border-l-amber-500"
+                                    )}>
                                         <td className="px-6 py-4 align-top">
-                                            <div className="flex flex-col gap-1">
-                                                <Link href={`/dashboard/projects/${project.id}`} className="font-semibold text-foreground hover:text-primary hover:underline transition-colors flex items-center gap-2 cursor-pointer">
-                                                    {project.name}
-                                                </Link>
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">ID: {project.id.slice(0,6)}</span>
-                                                    {isUrgent && project.status !== 'completed' && (
-                                                        <span className="text-red-600 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900 flex items-center gap-1 font-medium">
-                                                            <Clock className="w-3 h-3" /> Urgent
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
+                                             <div className="flex flex-col gap-1">
+                                                 <div className="flex items-center gap-2">
+                                                     <Link href={`/dashboard/projects/${project.id}`} className="font-semibold text-foreground hover:text-primary hover:underline transition-colors cursor-pointer">
+                                                         {project.name}
+                                                     </Link>
+                                                     {project.assignmentStatus === 'pending' && (
+                                                         <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-bold animate-pulse">NEW ASSIGNMENT</span>
+                                                     )}
+                                                 </div>
+                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                     <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">ID: {project.id.slice(0,6)}</span>
+                                                     {isUrgent && project.status !== 'completed' && project.assignmentStatus !== 'pending' && (
+                                                         <span className="text-red-600 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900 flex items-center gap-1 font-medium">
+                                                             <Clock className="w-3 h-3" /> Urgent
+                                                         </span>
+                                                     )}
+                                                 </div>
+                                             </div>
                                         </td>
                                         <td className="px-6 py-4 align-middle">
-                                            <StatusBadge status={project.status} />
+                                            {project.assignmentStatus === 'pending' ? (
+                                                <div className="flex flex-col gap-1.5">
+                                                    <div className="flex items-center gap-2 text-amber-600 font-bold text-xs">
+                                                        <Clock className="w-3.5 h-3.5" />
+                                                        {project.assignmentExpiresAt ? (
+                                                            Math.max(0, project.assignmentExpiresAt - now) > 0 ? (
+                                                                <span>
+                                                                    {Math.floor((project.assignmentExpiresAt - now)/60000)}:
+                                                                    {Math.floor(((project.assignmentExpiresAt - now)%60000)/1000).toString().padStart(2, '0')}
+                                                                </span>
+                                                            ) : "EXPIRED"
+                                                        ) : "10:00"}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Button 
+                                                            size="sm" 
+                                                            className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px]"
+                                                            onClick={() => handleResponse(project.id, 'accepted')}
+                                                        >
+                                                            Accept
+                                                        </Button>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="outline"
+                                                            className="h-7 px-3 border-red-200 text-red-600 hover:bg-red-50 text-[10px]"
+                                                            onClick={() => handleResponse(project.id, 'rejected')}
+                                                        >
+                                                            Decline
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <StatusBadge status={project.status} />
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 align-middle text-muted-foreground">
                                             {project.clientName}

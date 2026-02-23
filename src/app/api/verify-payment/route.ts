@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { db } from '@/lib/firebaseAdmin';
+import { adminDb } from '@/lib/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(request: Request) {
@@ -22,9 +22,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const secret = process.env.EDITOHUB_RAZORPAY_KEY_SECRET;
+        const secret = process.env.RAZORPAY_KEY_SECRET;
         if (!secret) {
-            console.error("EDITOHUB_RAZORPAY_KEY_SECRET is not set in environment variables");
+            console.error("RAZORPAY_KEY_SECRET is not set in environment variables");
             return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
         }
 
@@ -56,24 +56,15 @@ export async function POST(request: Request) {
         console.log("Updating project with:", updateData);
 
         // Perform Update using Admin SDK (Bypasses rules)
-        await db.collection('projects').doc(projectId).update(updateData);
-
-        // --- AUTOMATIC WHATSAPP NOTIFICATION ---
-        try {
-            const { notifyClientOfStatusUpdate } = await import('@/lib/whatsapp');
-            await notifyClientOfStatusUpdate(projectId, updateData.status);
-            console.log(`[WhatsApp] Auto-notified client for status: ${updateData.status}`);
-        } catch (waError) {
-            console.error("[WhatsApp] Failed to send auto-notification after payment:", waError);
-        }
+        await adminDb.collection('projects').doc(projectId).update(updateData);
 
         // --- AUTOMATIC INVOICE GENERATION ---
         try {
-            const projectSnap = await db.collection('projects').doc(projectId).get();
+            const projectSnap = await adminDb.collection('projects').doc(projectId).get();
             const projectData = projectSnap.data();
 
             if (projectData && projectData.clientId) {
-                const clientSnap = await db.collection('users').doc(projectData.clientId).get();
+                const clientSnap = await adminDb.collection('users').doc(projectData.clientId).get();
                 const clientData = clientSnap.data();
 
                 const invoiceNumber = `INV-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
@@ -107,7 +98,7 @@ export async function POST(request: Request) {
                     razorpayPaymentId: razorpay_payment_id
                 };
 
-                await db.collection('invoices').add(invoiceData);
+                await adminDb.collection('invoices').add(invoiceData);
                 console.log("Auto-generated invoice:", invoiceNumber);
             }
         } catch (invoiceError) {

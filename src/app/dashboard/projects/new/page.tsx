@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection } from "firebase/firestore";
-import { createProject } from "@/app/actions/project-actions";
+import { addDoc, collection, updateDoc, doc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/context/auth-context";
@@ -103,22 +102,24 @@ export default function NewProjectPage() {
                 footageLink, 
                 rawFiles: uploadedFileMetadata ? [uploadedFileMetadata] : [], 
                 status: 'pending_assignment', 
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
                 members: [user.uid],
                 ownerId: user.uid,
                 clientId: user.uid,
-                clientName: user.displayName || "Valued Client",
                 isPayLaterRequest: true
             };
 
-            const res = await createProject(projectData as any);
+            const projectRef = await addDoc(collection(db, "projects"), projectData);
             
-            if (res.success) {
-                toast.success("Project request submitted successfully!");
-                toast.info("A confirmation has been sent to your WhatsApp. Our team will review your request shortly.");
-                router.push("/dashboard");
-            } else {
-                throw new Error(res.error || "Failed to create project");
-            }
+            // 3. Trigger WhatsApp Notification
+            import("@/app/actions/admin-actions").then(actions => {
+                actions.handleProjectCreated(projectRef.id);
+            });
+
+            toast.success("Project request submitted successfully!");
+            toast.info("Our team will review your request and assign an editor shortly.");
+            router.push("/dashboard");
 
         } catch (error: any) {
             console.error("Error creating pay later project:", error);

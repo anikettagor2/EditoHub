@@ -1,8 +1,10 @@
 
 import { NextResponse } from 'next/server';
 import { razorpay, CURRENCY } from '@/lib/razorpay';
-import { db } from '@/lib/firebase/config'; // Client SDK for client-side operations
-// For server-only operations with elevated permissions, use '@/lib/firebaseAdmin'
+import { db } from '@/lib/firebase/config'; // Client SDK for now, but better to use Admin SDK in API routes if possible. 
+// Using Admin SDK for consistency in API routes if available, or just standard check.
+// Using Admin SDK for consistency in API routes if available, or just standard check.
+// import { adminAuth } from '@/lib/firebase/admin';
 
 export async function POST(request: Request) {
     try {

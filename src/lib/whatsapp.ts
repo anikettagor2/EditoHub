@@ -1,141 +1,154 @@
 
-const AISENSY_API_KEY = process.env.EDITOHUB_AISENSY_API_KEY;
+const AISENSY_API_KEY = process.env.AISENSY_API_KEY;
 const AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2";
 
-import { db } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebase/admin";
 import { Project, User } from "@/types/schema";
+
 
 /**
  * Sends a WhatsApp notification via AiSensy
- * @param phoneNumber 10-digit phone number
- * @param clientName Name of the client
- * @param projectName Name of the project
- * @param status New status of the project
  */
 export async function sendWhatsAppNotification(
     phoneNumber: string,
-    clientName: string,
-    projectName: string,
-    status: string
+    params: string[],
+    campaignName: string
 ) {
-    // Basic sanitization: remove all non-digits
-    const sanitized = phoneNumber.replace(/\D/g, '');
+    console.log(`[WhatsApp] Attempting send to ${phoneNumber} via campaign "${campaignName}"`);
 
-    // If it starts with 91 and has 12 digits, it's already full. 
-    // If it's 10 digits, prepend 91.
+    const sanitized = phoneNumber.replace(/\D/g, '');
     let finalPhone = sanitized;
     if (sanitized.length === 10) {
         finalPhone = `91${sanitized}`;
     } else if (sanitized.length === 12 && sanitized.startsWith('91')) {
         finalPhone = sanitized;
     } else {
-        console.warn(`[WhatsApp] Invalid phone format: ${phoneNumber}. Expected 10 digits (without 91) or 12 digits (with 91).`);
-        return { success: false, error: "Invalid phone format. Please provide a 10-digit number." };
+        console.warn(`[WhatsApp] Invalid phone format: ${phoneNumber}`);
+        return { success: false, error: "Invalid phone format" };
     }
 
     if (!AISENSY_API_KEY) {
-        console.error("[WhatsApp] AISENSY_API_KEY is missing in environment variables.");
+        console.error("[WhatsApp] AISENSY_API_KEY is missing");
         return { success: false, error: "Service configuration error" };
     }
 
-    // Map status to user-friendly labels if needed
-    const statusLabels: Record<string, string> = {
-        'active': 'In Production',
-        'in_review': 'Ready for Review',
-        'approved': 'Approved',
-        'completed': 'Completed',
-        'pending_assignment': 'Pending Assignment'
-    };
-
-    const displayStatus = statusLabels[status] || status;
-
     const payload = {
         apiKey: AISENSY_API_KEY,
-        campaignName: "editohub", // Matches your AiSensy dashboard
+        campaignName: campaignName,
         destination: finalPhone,
-        userName: clientName,
-        templateParams: [
-            clientName,
-            projectName,
-            displayStatus
-        ],
+        userName: finalPhone, // Added to fix 'Invalid userName format' error
+        templateParams: params,
         source: "API"
     };
 
-    let attempts = 0;
-    const maxAttempts = 3;
+    try {
+        const response = await fetch(AISENSY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-    while (attempts < maxAttempts) {
-        try {
-            attempts++;
-            console.log(`[WhatsApp] Attempt ${attempts}: Sending ${status} notification to ${finalPhone}...`);
-
-            const response = await fetch(AISENSY_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                console.error(`[WhatsApp] AiSensy API Error (Attempt ${attempts}):`, JSON.stringify(data, null, 2));
-                return { success: false, error: data.message || "AiSensy API error" };
-            }
-
-            console.log(`[WhatsApp] Notification accepted by AiSensy:`, JSON.stringify(data, null, 2));
-            return { success: true, data };
-
-        } catch (error: any) {
-            console.error(`[WhatsApp] Network Error (Attempt ${attempts}):`, error.message);
-
-            // If it's a network error (like ENOTFOUND), retry after a short delay
-            if (attempts < maxAttempts) {
-                const delay = attempts * 1000;
-                console.log(`[WhatsApp] Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            } else {
-                return { success: false, error: `Network failed after ${maxAttempts} attempts: ${error.message}` };
-            }
+        const data = await response.json();
+        if (!response.ok) {
+            console.error("[WhatsApp] AiSensy Error:", data);
+            return { success: false, error: data.message || "Failed to send WhatsApp" };
         }
+        console.log("[WhatsApp] Success:", data);
+        return { success: true, data };
+    } catch (error: any) {
+        console.error("[WhatsApp] Network Error:", error);
+        return { success: false, error: error.message };
     }
-
-    return { success: false, error: "Exceeded max retry attempts" };
 }
 
+export type WhatsAppTrigger =
+    | 'PROJECT_RECEIVED'      // Sent when client uploads project
+    | 'EDITOR_ASSIGNED'      // Sent when PM assigns editor
+    | 'EDITOR_ACCEPTED'      // Sent when editor accepts
+    | 'PROPOSAL_UPLOADED'    // Sent when editor uploads proposal
+    | 'PROJECT_COMPLETED';    // Sent when project is marked as completed
+
 /**
- * Higher level helper to notify a client based on projectId
+ * Higher level helper to notify a client based on project events
  */
-export async function notifyClientOfStatusUpdate(projectId: string, status: string) {
+export async function notifyClient(projectId: string, trigger: WhatsAppTrigger, extraData?: any) {
     try {
-        // 1. Fetch Project
-        const projectSnap = await db.collection('projects').doc(projectId).get();
+        const projectSnap = await adminDb.collection('projects').doc(projectId).get();
         if (!projectSnap.exists) return { success: false, error: "Project not found" };
         const project = projectSnap.data() as Project;
 
-        // 2. Fetch Client
-        if (!project.clientId) return { success: false, error: "No client assigned to project" };
-        const clientSnap = await db.collection('users').doc(project.clientId).get();
+        if (!project.clientId) return { success: false, error: "No client assigned" };
+        const clientSnap = await adminDb.collection('users').doc(project.clientId).get();
         if (!clientSnap.exists) return { success: false, error: "Client not found" };
         const client = clientSnap.data() as User;
 
-        if (!client.phoneNumber) {
-            console.warn(`[WhatsApp] Client ${client.displayName} has no phone number.`);
-            return { success: false, error: "Client has no phone number" };
+        if (!client.phoneNumber) return { success: false, error: "No phone number" };
+
+        let params: string[] = [];
+        let campaignName = "editohub";
+
+        switch (trigger) {
+            case 'PROJECT_RECEIVED':
+                params = [
+                    client.displayName || "Client",
+                    project.name,
+                    "We have received your request. We're currently finding the best editor for you."
+                ];
+                break;
+            case 'EDITOR_ASSIGNED':
+                params = [
+                    client.displayName || "Client",
+                    project.name,
+                    "A specialist editor has been assigned and is reviewing your requirements."
+                ];
+                break;
+            case 'EDITOR_ACCEPTED':
+                params = [
+                    client.displayName || "Client",
+                    project.name,
+                    "Production has officially started! We'll notify you once the first draft is ready."
+                ];
+                break;
+            case 'PROPOSAL_UPLOADED':
+                params = [
+                    client.displayName || "Client",
+                    project.name,
+                    `A new draft is ready for review! View it here: ${extraData?.reviewLink || 'Dashboard'}`
+                ];
+                break;
+            case 'PROJECT_COMPLETED':
+                params = [
+                    client.displayName || "Client",
+                    project.name,
+                    "Congratulations! Your project is now complete and all files are ready for final download. Thank you for choosing EditoHub!"
+                ];
+                break;
         }
 
-        // 3. Send Notification
-        return await sendWhatsAppNotification(
-            client.phoneNumber,
-            client.displayName || "Client",
-            project.name,
-            status
-        );
+        // Use the campaign name "editohub" if specifically requested or if custom campaigns aren't set up
+        // For now, using specialized names as per typical professional setup
+        return await sendWhatsAppNotification(client.phoneNumber, params, campaignName);
 
     } catch (error: any) {
         console.error("[WhatsApp] Helper Error:", error);
         return { success: false, error: error.message };
     }
+}
+
+/**
+ * @deprecated Use notifyClient instead
+ */
+export async function notifyClientOfStatusUpdate(projectId: string, status: string) {
+    // Keep for backward compatibility but redirect to notifyClient if it matches
+    const triggerMap: Record<string, WhatsAppTrigger> = {
+        'pending_assignment': 'PROJECT_RECEIVED',
+        'active': 'EDITOR_ACCEPTED',
+        'completed': 'PROJECT_COMPLETED',
+    };
+
+    if (triggerMap[status]) {
+        return notifyClient(projectId, triggerMap[status]);
+    }
+
+    return { success: true }; // Skip if no mapping
 }

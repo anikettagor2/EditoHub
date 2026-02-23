@@ -49,6 +49,8 @@ export interface Project {
     downloadUnlockRequested?: boolean; // true when a payLater client requests download unlock from PM
     downloadsUnlocked?: boolean;       // true when PM has explicitly approved downloads for this project
     isPayLaterRequest?: boolean;       // true for projects submitted via the Pay Later workflow
+    assignmentAt?: number;             // When the editor was assigned
+    assignmentExpiresAt?: number;      // When the assignment expires (10 min timer)
 }
 
 export type ProjectAssignmentStatus = 'pending' | 'accepted' | 'rejected';
@@ -94,6 +96,7 @@ export interface CommentReply {
     userRole: UserRole;
     content: string;
     createdAt: number;
+    attachments?: string[];
 }
 
 export interface GuestSession {

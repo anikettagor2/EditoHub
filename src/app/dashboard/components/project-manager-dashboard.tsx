@@ -24,7 +24,7 @@ import {
 import { db } from "@/lib/firebase/config";
 import { collection, query, orderBy, onSnapshot, updateDoc, doc, arrayUnion } from "firebase/firestore";
 import { Project, User } from "@/types/schema";
-import { assignEditor, togglePayLater } from "@/app/actions/admin-actions";
+import { togglePayLater } from "@/app/actions/admin-actions";
 import { unlockProjectDownloads } from "@/app/actions/project-actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -91,17 +91,18 @@ export function ProjectManagerDashboard() {
     const handleAssignEditor = async (editorId: string) => {
         if (!selectedProject) return;
         try {
-            const res = await assignEditor(selectedProject.id, editorId);
-            if (res.success) {
-                toast.success(`Project assigned & notification sent!`);
-                setIsAssignModalOpen(false);
-                setSelectedProject(null);
-            } else {
-                toast.error(res.error || "Failed to assign project");
-            }
+            await updateDoc(doc(db, "projects", selectedProject.id), {
+                 assignedEditorId: editorId,
+                 status: 'active', 
+                 members: arrayUnion(editorId), // Add to members allow-list
+                 updatedAt: Date.now()
+            });
+            toast.success(`Project assigned to editor!`);
+            setIsAssignModalOpen(false);
+            setSelectedProject(null);
         } catch (err) { 
             console.error(err);
-            toast.error("An error occurred"); 
+            toast.error("Failed to assign project"); 
         }
     };
 
