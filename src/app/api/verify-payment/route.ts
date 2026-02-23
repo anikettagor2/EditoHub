@@ -22,9 +22,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const secret = process.env.RAZORPAY_KEY_SECRET;
+        const secret = process.env.EDITOHUB_RAZORPAY_KEY_SECRET;
         if (!secret) {
-            console.error("RAZORPAY_KEY_SECRET is not set in environment variables");
+            console.error("EDITOHUB_RAZORPAY_KEY_SECRET is not set in environment variables");
             return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
         }
 

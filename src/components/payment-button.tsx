@@ -65,7 +65,7 @@ export function PaymentButton({ projectId, user, amount, description, prefill, o
 
             // 3. Open Razorpay
             const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
+                key: process.env.EDITOHUB_RAZORPAY_KEY_ID!,
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: "EditoHub Studio",

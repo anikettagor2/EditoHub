@@ -1,5 +1,5 @@
 
-const AISENSY_API_KEY = process.env.AISENSY_API_KEY;
+const AISENSY_API_KEY = process.env.EDITOHUB_AISENSY_API_KEY;
 const AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2";
 
 import { db } from "@/lib/firebaseAdmin";
