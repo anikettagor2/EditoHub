@@ -21,7 +21,11 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return hasRole(['admin']);
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     function isStaff() {
@@ -89,6 +93,11 @@ service cloud.firestore {
       allow read: if true;
       allow create: if true; 
       allow update: if isAuthenticated(); // Only registered users can update (resolve) for now
+    }
+
+    // 6. Settings Collection (Agency Branding, etc)
+    match /settings/{docId} {
+      allow read, write: if true;
     }
 
     // Default deny for anything else

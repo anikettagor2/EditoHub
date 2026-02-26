@@ -17,6 +17,18 @@ export interface User {
     createdBy?: string; // UID of sales exec or admin who created this user
     managedBy?: string; // UID of sales exec managing this client
     payLater?: boolean; // New feature: allows client to skip immediate payment
+    deletionRequested?: boolean; // When user requests account deletion, pending admin approval
+    deletionRequestedAt?: number; // Timestamp of deletion request
+
+    // Role-specific metrics
+    income?: number; // Total income for editor
+    rating?: number; // Rating for editor
+    portfolio?: { name: string; url: string; date: number }[]; // Showcase projects for editor
+    onboardingStatus?: 'pending' | 'approved' | 'rejected'; // For editors created by SE/PM
+    totalRevenueGenerated?: number; // For SE/PM
+    whatsappNumber?: string;
+    managedByPM?: string; // UID of PM managing this editor (for groups)
+    status?: 'active' | 'inactive';
 }
 
 export type ProjectStatus = 'active' | 'in_review' | 'approved' | 'completed' | 'archived' | 'pending_assignment';
@@ -51,6 +63,25 @@ export interface Project {
     isPayLaterRequest?: boolean;       // true for projects submitted via the Pay Later workflow
     assignmentAt?: number;             // When the editor was assigned
     assignmentExpiresAt?: number;      // When the assignment expires (10 min timer)
+
+    // Management links
+    assignedPMId?: string;             // Project Manager assigned to this project
+    assignedSEId?: string;             // Sales Executive who brought this client
+    editorPrice?: number;              // Price shared with the editor
+    editorDeclineReason?: string;      // Reason for editor declining project
+    editorRating?: number;             // Client rating for editor (1-5)
+    editorReview?: string;             // Client review for editor
+    autoPay?: boolean;                 // If true, PM has authorized automatic flow for this project
+    scripts?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[];
+
+    // Audit Log
+    logs?: {
+        event: string;
+        user: string;
+        userName: string;
+        timestamp: number;
+        details?: string;
+    }[];
 }
 
 export type ProjectAssignmentStatus = 'pending' | 'accepted' | 'rejected';

@@ -5,20 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Trash2, User, Mail, Shield } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
 export default function ProfilePage() {
-    const { user, deleteAccount } = useAuth();
+    const { user, requestAccountDeletion } = useAuth();
     const [isDeleting, setIsDeleting] = useState(false);
 
     const handleDelete = async () => {
-        if (!confirm("Are you sure you want to permanently delete your account? This action cannot be undone.")) return;
+        if (user?.deletionRequested) return;
+        if (!confirm("Are you sure you want to request account deletion? This will be reviewed by an administrator before final termination.")) return;
         
         setIsDeleting(true);
         try {
-            await deleteAccount();
-        } catch (error) {
+            await requestAccountDeletion();
+        } catch (error: any) {
             console.error(error);
-            alert("Failed to delete account. You may need to re-login recently to perform this sensitive action.");
+            alert(error.message || "Failed to request deletion.");
+        } finally {
             setIsDeleting(false);
         }
     };
@@ -43,7 +46,14 @@ export default function ProfilePage() {
                     
                     <div>
                         <h2 className="text-xl font-bold text-white">{user.displayName || "User"}</h2>
-                        <p className="text-zinc-400 text-sm">Member since {new Date(user.createdAt).toLocaleDateString()}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                            <p className="text-zinc-400 text-sm">Member since {new Date(user.createdAt).toLocaleDateString()}</p>
+                            {user.deletionRequested && (
+                                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 animate-pulse">
+                                    Deletion Pending Approval
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -82,35 +92,51 @@ export default function ProfilePage() {
                     </div>
                 </div>
 
-                <div className="h-px bg-white/10" />
+                {user.role !== 'admin' && (
+                    <>
+                        <div className="h-px bg-white/10" />
 
-                {/* Danger Zone */}
-                <div className="space-y-4 pt-2">
-                    <h3 className="text-red-400 text-sm font-semibold uppercase tracking-wider">Danger Zone</h3>
-                    <p className="text-xs text-zinc-500 leading-relaxed">
-                        Deleting your account will remove your personal data and revoke access to all projects. 
-                        This action is irreversible.
-                    </p>
-                    
-                    <Button 
-                        variant="destructive" 
-                        onClick={handleDelete}
-                        disabled={isDeleting}
-                        className="w-full bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20"
-                    >
-                        {isDeleting ? (
-                            <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Deleting...
-                            </>
-                        ) : (
-                            <>
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete Account Permanently
-                            </>
-                        )}
-                    </Button>
-                </div>
+                        {/* Danger Zone */}
+                        <div className="space-y-4 pt-2">
+                            <h3 className="text-red-400 text-sm font-semibold uppercase tracking-wider">Danger Zone</h3>
+                            <p className="text-xs text-zinc-500 leading-relaxed">
+                                {user.deletionRequested 
+                                    ? "Your account deletion request is currently under review by the administration. You will be notified once the protocol is finalized."
+                                    : "Deleting your account will remove your personal data and revoke access to all projects. This request requires administrative authorization."
+                                }
+                            </p>
+                            
+                            <Button 
+                                variant="destructive" 
+                                onClick={handleDelete}
+                                disabled={isDeleting || user.deletionRequested}
+                                className={cn(
+                                    "w-full transition-all duration-300",
+                                    user.deletionRequested 
+                                        ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/10 border-amber-500/20 cursor-default" 
+                                        : "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/20"
+                                )}
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Updating...
+                                    </>
+                                ) : user.deletionRequested ? (
+                                    <>
+                                        <Shield className="w-4 h-4 mr-2" />
+                                        Termination Request Active
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Request Account Termination
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </>
+                )}
 
             </div>
         </div>

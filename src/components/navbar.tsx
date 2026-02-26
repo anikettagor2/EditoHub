@@ -9,12 +9,14 @@ import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/lib/context/auth-context";
+import { useBranding } from "@/lib/context/branding-context";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { logoUrl } = useBranding();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -46,14 +48,21 @@ export function Navbar() {
           href="/"
           className="hover:opacity-80 transition-opacity"
         >
-          <div className="relative h-12 w-40">
-             <Image 
-                src="/logo.png" 
-                alt="EditoHub Logo" 
-                fill 
-                className="object-contain object-left"
-                priority
-             />
+          <div className="relative h-12 w-40 flex items-center rounded-xl overflow-hidden">
+             {logoUrl ? (
+               <Image 
+                  src={logoUrl} 
+                  alt="EditoHub Logo" 
+                  fill 
+                  className="object-contain object-left"
+                  priority
+               />
+             ) : (
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded bg-primary flex items-center justify-center font-bold text-black italic">E</div>
+                    <span className="text-xl font-heading font-black tracking-tighter">EDITO_HUB</span>
+                </div>
+             )}
           </div>
         </Link>
 

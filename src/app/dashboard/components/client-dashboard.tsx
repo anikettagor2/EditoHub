@@ -12,7 +12,7 @@ import {
     Filter,
     Calendar,
     Briefcase,
-    DollarSign,
+    IndianRupee,
     MoreHorizontal,
     FileText,
     Download,
@@ -24,7 +24,14 @@ import {
     AlertCircle,
     Clock,
     User as UserIcon,
-    RefreshCw
+    RefreshCw,
+    Activity,
+    Monitor,
+    Layers,
+    Play,
+    Terminal,
+    Zap,
+    Cpu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,9 +42,10 @@ import {
     DropdownMenuContent, 
     DropdownMenuItem, 
     DropdownMenuTrigger,
-    DropdownMenuSeparator,
+    DropdownMenuSeparator, 
     DropdownMenuLabel 
 } from "@/components/ui/dropdown-menu";
+import { motion, AnimatePresence } from "framer-motion";
 
 export function ClientDashboard() {
   const { user } = useAuth();
@@ -45,18 +53,6 @@ export function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setRefreshKey(k => k + 1);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      setLastUpdated(new Date());
-    }, 1000);
-  };
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -75,9 +71,8 @@ export function ClientDashboard() {
     });
 
     return () => unsubscribe();
-  }, [user, refreshKey]);
+  }, [user]);
 
-  // Derived State
   const filteredProjects = projects.filter(project => {
       if (statusFilter !== 'all' && project.status !== statusFilter) return false;
       if (searchQuery && !project.name.toLowerCase().includes(searchQuery.toLowerCase()) && !project.id.includes(searchQuery)) return false;
@@ -85,267 +80,280 @@ export function ClientDashboard() {
   });
 
   const activeCount = projects.filter(p => ['active', 'in_review'].includes(p.status)).length;
-  const pendingCount = projects.filter(p => p.status === 'pending_assignment').length;
   const totalSpent = projects.reduce((acc, curr) => acc + (curr.totalCost || 0), 0);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto p-6 md:p-8 bg-background min-h-screen">
-       {/* 1. Corporate Header */}
-       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-border">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">Production Dashboard</h1>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                    <span>{user?.displayName || 'Client'}</span>
-                    <span className="h-1 w-1 rounded-full bg-border" />
-                    <span>Reference ID: {user?.uid?.slice(0,8)}</span>
+    <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
+       {/* Header Section */}
+       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pb-8 border-b border-border">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-2"
+            >
+                <div className="flex items-center gap-2 mb-2">
+                    <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Customer Hub</span>
+                    </div>
                 </div>
-            </div>
-            <div className="flex items-center gap-3">
-                <button
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-all disabled:opacity-50 shadow-sm"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : `Updated ${lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}</span>
-                </button>
-                <Button variant="outline" size="sm" className="h-9 font-medium border-border shadow-sm bg-background hover:bg-muted text-muted-foreground">
-                    <Download className="mr-2 h-4 w-4" /> Export Report
-                </Button>
+                <h1 className="text-4xl md:text-5xl font-heading font-bold tracking-tight text-foreground leading-tight">My <span className="text-muted-foreground">Projects</span></h1>
+                <div className="flex items-center gap-6 pt-2">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <UserIcon className="h-3.5 w-3.5" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Welcome, {user?.displayName?.split(' ')[0]}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Account Active</span>
+                    </div>
+                </div>
+            </motion.div>
+            
+            <motion.div 
+               initial={{ opacity: 0, x: 20 }}
+               animate={{ opacity: 1, x: 0 }}
+               className="flex flex-wrap items-center gap-3"
+            >
                 <Link href="/dashboard/projects/new">
-                    <Button size="sm" className="h-9 font-medium bg-primary text-primary-foreground shadow-sm hover:bg-primary/90">
-                        <Plus className="mr-2 h-4 w-4" /> New Request
-                    </Button>
+                    <button className="h-10 px-6 rounded-lg bg-white text-black text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)] flex items-center gap-2.5">
+                        <Plus className="h-4 w-4" />
+                        New Project
+                    </button>
                 </Link>
-            </div>
+            </motion.div>
        </div>
 
-       {/* 2. Key Performance Indicators (KPIs) */}
-       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <MetricCard 
-                label="Active Requests" 
+       {/* Summary Cards */}
+       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <IndicatorCard 
+                label="Active Projects" 
                 value={activeCount} 
-                subtext="In production pipeline"
-                trend="+2 this week"
+                icon={<Activity className="h-4 w-4" />}
+                subtext="Work in progress"
+                trend="+2 this month"
                 trendUp={true}
             />
-            <MetricCard 
-                label="Total Spend (YTD)" 
-                value={`$${totalSpent.toLocaleString()}`} 
-                subtext="Budget utilization" 
-                trend="12% vs last month"
-                trendUp={true}
+            <IndicatorCard 
+                label="Total Investment" 
+                value={`₹${totalSpent.toLocaleString()}`} 
+                icon={<IndianRupee className="h-4 w-4" />}
+                subtext="Investment in video content"
             />
-            <MetricCard 
+            <IndicatorCard 
                 label="Pending Review" 
                 value={projects.filter(p => p.status === 'in_review').length} 
-                subtext="Requires your action"
+                icon={<Eye className="h-4 w-4" />}
+                subtext="Editor is waiting for your thoughts"
                 alert={projects.filter(p => p.status === 'in_review').length > 0}
             />
-             <MetricCard 
+             <IndicatorCard 
                 label="Total Projects" 
                 value={projects.length} 
-                subtext="Lifetime requests"
+                icon={<Layers className="h-4 w-4" />}
+                subtext="Project history"
             />
        </div>
 
-       {/* 3. Data Table Section */}
-       <div className="rounded-lg border border-border bg-card shadow-sm flex flex-col">
-            {/* Toolbar */}
-            <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-muted/30">
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                    <div className="relative w-full sm:w-72">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <Input 
-                            placeholder="Search by ID, Name or Reference..." 
-                            className="pl-9 h-9 text-sm bg-background border-border shadow-none focus-visible:ring-1 focus-visible:ring-primary transition-all"
+       {/* Main Content Area */}
+       <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="enterprise-card bg-muted/30 backdrop-blur-sm overflow-hidden"
+       >
+            <div className="p-6 border-b border-border/50 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full">
+                    <div className="relative w-full sm:w-80">
+                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors" />
+                         <input 
+                            type="text" 
+                            placeholder="Search projects..." 
+                            className="h-10 w-full rounded-lg border border-border bg-muted/50 pl-11 pr-4 text-sm text-foreground focus:bg-background focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+                         />
                     </div>
+                    
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-9 border-dashed border-border bg-background shadow-none font-normal text-muted-foreground hover:text-foreground">
-                                <Filter className="mr-2 h-3.5 w-3.5" />
-                                {statusFilter === 'all' ? 'Filter Status' : statusFilter.replace('_', ' ')}
-                            </Button>
+                            <button className="h-10 px-5 rounded-lg bg-muted border border-border text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all flex items-center gap-2.5">
+                                <Filter className="h-3.5 w-3.5" />
+                                {statusFilter === 'all' ? 'All Status' : statusFilter.replace('_', ' ').toUpperCase()}
+                                <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
+                            </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-[180px]">
-                            <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setStatusFilter('all')}>All Projects</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('active')}>In Progress</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('in_review')}>In Review</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('completed')}>Completed</DropdownMenuItem>
+                        <DropdownMenuContent align="start" className="w-56 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
+                            <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 py-2">Filter Status</DropdownMenuLabel>
+                            <DropdownMenuSeparator className="my-1 bg-border" />
+                            <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('all')}>All Projects</DropdownMenuItem>
+                            <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('active')}>Active</DropdownMenuItem>
+                            <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('in_review')}>In Review</DropdownMenuItem>
+                            <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('completed')}>Completed</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 500); }}>
-                        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                    </Button>
-                </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
-                        <tr>
-                            <th className="px-6 py-3 w-[300px]">Project Details</th>
-                            <th className="px-6 py-3 w-[150px]">Status</th>
-                            <th className="px-6 py-3 w-[150px]">Assigned To</th>
-                            <th className="px-6 py-3 w-[150px]">Timeline</th>
-                            <th className="px-6 py-3 w-[120px] text-right">Value</th>
-                            <th className="px-6 py-3 w-[80px]"></th>
+            <div className="overflow-x-auto overflow-y-hidden">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="bg-muted/30">
+                            <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project</th>
+                            <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
+                            <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Due Date</th>
+                            <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-right">Value</th>
+                            <th className="px-6 py-4 border-b border-border w-[80px]"></th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-border">
-                        {loading ? (
-                            <tr>
-                                <td colSpan={6} className="px-6 py-16 text-center text-muted-foreground">
-                                    Loading data...
-                                </td>
-                            </tr>
-                        ) : filteredProjects.length === 0 ? (
-                            <tr>
-                                <td colSpan={6} className="px-6 py-16 text-center text-muted-foreground">
-                                    <div className="flex flex-col items-center justify-center gap-2">
-                                        <Briefcase className="h-8 w-8 opacity-20" />
-                                        <p className="font-medium text-foreground">No projects found</p>
-                                        <p className="text-xs">Adjust your search or create a new request.</p>
+                    <tbody className="divide-y divide-white/5">
+                         <AnimatePresence mode="wait">
+                         {loading ? (
+                            <tr key="loading">
+                                <td colSpan={5} className="px-6 py-24 text-center">
+                                    <div className="flex flex-col items-center gap-4">
+                                        <RefreshCw className="h-6 w-6 text-primary animate-spin" />
+                                        <p className="text-xs font-medium text-zinc-500 animate-pulse">Updating your projects...</p>
                                     </div>
                                 </td>
                             </tr>
-                        ) : (
-                            filteredProjects.map((project) => (
-                                <tr key={project.id} className="group hover:bg-muted/50 transition-colors">
-                                    <td className="px-6 py-4 align-top">
-                                        <div className="flex flex-col gap-1">
-                                            <Link href={`/dashboard/projects/${project.id}`} className="font-semibold text-foreground hover:text-primary hover:underline transition-colors flex items-center gap-2 cursor-pointer">
+                         ) : filteredProjects.length === 0 ? (
+                            <tr key="empty">
+                                <td colSpan={5} className="px-6 py-24 text-center">
+                                    <div className="flex flex-col items-center gap-4 opacity-40">
+                                        <Layers className="h-12 w-12 text-muted-foreground" />
+                                        <p className="text-sm font-medium text-muted-foreground">You haven't started any projects yet.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                         ) : (
+                            filteredProjects.map((project, idx) => (
+                                <motion.tr 
+                                    key={project.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    className="group hover:bg-muted/10 transition-all duration-200"
+                                >
+                                    <td className="px-6 py-6 transition-colors">
+                                        <div className="flex flex-col">
+                                            <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-bold text-foreground hover:text-primary transition-colors tracking-tight leading-tight">
                                                 {project.name}
                                             </Link>
-                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded border border-border">ID: {project.id.slice(0,6)}</span>
-                                                <span>•</span>
-                                                <span className="capitalize">{project.videoType || 'Video'}</span>
-                                                {project.isPayLaterRequest && (
-                                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1 rounded uppercase font-bold tracking-tighter">Pay Later</span>
-                                                )}
-                                            </div>
+                                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-1 opacity-60">ID: {project.id.slice(0,8)}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 align-middle">
-                                        <StatusBadge status={project.status} />
+                                    <td className="px-6 py-6 transition-colors">
+                                        <StatusIndicator status={project.status} />
                                     </td>
-                                    <td className="px-6 py-4 align-middle">
-                                        {project.assignedEditorId ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-6 w-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[10px] font-bold ring-1 ring-border">
-                                                    ED
-                                                </div>
-                                                <span className="text-sm font-medium text-foreground">Assigned</span>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-muted-foreground italic flex items-center gap-1.5">
-                                                <AlertCircle className="h-3.5 w-3.5" /> Unassigned
+                                    <td className="px-6 py-6 transition-colors">
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                            <Clock className="h-3.5 w-3.5" />
+                                            <span className="text-[11px] font-bold uppercase tracking-tight">
+                                                {project.deadline ? new Date(project.deadline).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : "Not Set"}
                                             </span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 align-middle">
-                                        <div className="flex flex-col text-xs">
-                                            {/* @ts-ignore */}
-                                            <span className="text-foreground font-medium">{project.deadline ? new Date(project.deadline).toLocaleDateString() : "No Deadline"}</span>
-                                            {/* @ts-ignore */}
-                                            <span className="text-muted-foreground">Created: {new Date(project.createdAt).toLocaleDateString()}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 align-middle text-right font-mono text-sm text-foreground font-medium">
-                                        ${project.totalCost?.toLocaleString() || "0.00"}
+                                    <td className="px-6 py-6 text-right transition-colors">
+                                        <span className="text-sm font-black text-foreground tracking-tighter tabular-nums">₹{project.totalCost?.toLocaleString() || '0'}</span>
                                     </td>
-                                    <td className="px-6 py-4 align-middle text-right">
+                                    <td className="px-6 py-6 text-right transition-colors">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                                <button className="h-8 w-8 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all active:scale-90">
                                                     <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
+                                                </button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem asChild>
-                                                    <Link href={`/dashboard/projects/${project.id}`} className="cursor-pointer">
-                                                        <Eye className="mr-2 h-4 w-4" /> View Details
+                                            <DropdownMenuContent align="end" className="w-52 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
+                                                <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 py-2">Options</DropdownMenuLabel>
+                                                <DropdownMenuSeparator className="my-1 bg-border" />
+                                                <DropdownMenuItem asChild className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg">
+                                                    <Link href={`/dashboard/projects/${project.id}`} className="flex items-center gap-3 w-full">
+                                                        <Eye className="h-4 w-4" /> <span>View Details</span>
                                                     </Link>
                                                 </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-muted-foreground" disabled>
-                                                    <FileText className="mr-2 h-4 w-4" /> Download Invoice
+                                                <DropdownMenuItem className="p-2.5 text-xs text-muted-foreground cursor-not-allowed rounded-lg">
+                                                    <FileText className="h-4 w-4" /> <span>Download Invoice (Coming Soon)</span>
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </td>
-                                </tr>
+                                </motion.tr>
                             ))
-                        )}
+                         )}
+                         </AnimatePresence>
                     </tbody>
                 </table>
             </div>
-            
-            {/* Footer Pagination (Placeholder) */}
-            <div className="border-t border-border p-4 bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
-                <span>Showing {filteredProjects.length} records</span>
+
+            <div className="p-6 border-t border-border bg-muted/30 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                    Showing {filteredProjects.length} projects
+                </span>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>Previous</Button>
-                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>Next</Button>
+                    <button className="h-9 px-4 rounded-lg border border-border bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground hover:bg-muted/80 disabled:opacity-30 transition-all active:scale-95" disabled>Previous</button>
+                    <button className="h-9 px-4 rounded-lg border border-border bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground hover:bg-muted/80 disabled:opacity-30 transition-all active:scale-95" disabled>Next</button>
                 </div>
             </div>
-       </div>
+       </motion.div>
     </div>
   );
 }
 
-// Sub-components
-function MetricCard({ label, value, subtext, trend, trendUp, alert }: any) {
+function IndicatorCard({ label, value, subtext, trend, trendUp, alert, icon }: any) {
     return (
-        <div className={cn(
-            "bg-card border border-border rounded-lg p-5 flex flex-col justify-between shadow-sm transition-all hover:border-muted-foreground/30",
-            alert && "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/10"
-        )}>
-            <div className="flex justify-between items-start mb-2">
-                <span className="text-sm font-medium text-muted-foreground">{label}</span>
-                {alert && <AlertCircle className="h-4 w-4 text-amber-500" />}
+        <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className={cn(
+                "group relative enterprise-card p-6 md:p-8 transition-all duration-300",
+                alert && "after:absolute after:inset-0 after:rounded-xl after:ring-1 after:ring-primary/40 after:animate-pulse"
+            )}
+        >
+            <div className="flex justify-between items-start mb-6">
+                <div className="h-10 w-10 bg-muted border border-border rounded-lg flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:border-primary/30 transition-all duration-300">
+                    {icon}
+                </div>
+                {alert && <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />}
             </div>
-            <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold tracking-tight text-foreground">{value}</span>
+            
+            <div className="space-y-1.5">
+                <span className="text-[11px] uppercase font-bold tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">{label}</span>
+                <div className="flex items-end gap-3">
+                    <span className="text-3xl font-black tracking-tight text-foreground font-heading tabular-nums">{value}</span>
+                </div>
+                
+                <div className="flex items-center gap-3 pt-4 border-t border-border mt-4">
+                    {trend && (
+                        <span className={cn(
+                            "flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest", 
+                            trendUp ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-muted text-muted-foreground border border-border"
+                        )}>
+                            {trend}
+                        </span>
+                    )}
+                    <span className="text-muted-foreground/60 text-[10px] font-bold uppercase tracking-wider">{subtext}</span>
+                </div>
             </div>
-            <div className="flex items-center gap-2 mt-1">
-                 {trend && (
-                    <span className={cn("text-xs font-medium flex items-center gap-0.5", trendUp ? "text-emerald-600" : "text-muted-foreground")}>
-                        {trendUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                        {trend}
-                    </span>
-                 )}
-                 <span className="text-xs text-muted-foreground">{subtext}</span>
-            </div>
-        </div>
+        </motion.div>
     );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusIndicator({ status }: { status: string }) {
     const config: any = {
-        active: { label: "In Production", className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800" },
-        in_review: { label: "Review Needed", className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800" },
-        pending_assignment: { label: "Pending", className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800" },
-        approved: { label: "Approved", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800" },
-        completed: { label: "Completed", className: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
+        active: { label: "Being Edited", color: "text-blue-400", bg: "bg-blue-400/5", border: "border-blue-400/20" },
+        in_review: { label: "Ready for Review", color: "text-purple-400", bg: "bg-purple-400/5", border: "border-purple-400/20" },
+        pending_assignment: { label: "Finding an Editor", color: "text-amber-400", bg: "bg-amber-400/5", border: "border-amber-400/20" },
+        approved: { label: "Approved", color: "text-emerald-400", bg: "bg-emerald-400/5", border: "border-emerald-400/20" },
+        completed: { label: "Archived", color: "text-zinc-500", bg: "bg-zinc-500/5", border: "border-zinc-500/20" },
     };
-    
-    const style = config[status] || config.completed;
-
+    const s = config[status] || config.completed;
     return (
-        <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border", style.className)}>
-            {style.label}
+        <span className={cn(
+            "inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-sm transition-all", 
+            s.bg, s.color, s.border
+        )}>
+            <div className={cn("w-1 h-1 rounded-full bg-current", status === 'active' && "animate-pulse shadow-[0_0_5px_currentColor]")} />
+            {s.label}
         </span>
     );
 }

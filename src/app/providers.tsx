@@ -2,6 +2,7 @@
 
 import { AuthProvider } from "@/lib/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
+import { BrandingProvider } from "@/lib/context/branding-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <AuthProvider>
-        {children}
+        <BrandingProvider>
+          {children}
+        </BrandingProvider>
       </AuthProvider>
     </ThemeProvider>
   );

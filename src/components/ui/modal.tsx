@@ -11,9 +11,10 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   className?: string;
+  maxWidth?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children, className }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, className, maxWidth = "max-w-lg" }: ModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -33,15 +34,16 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className={cn(
-              "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-zinc-900 shadow-2xl p-6",
+              "fixed left-1/2 top-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-popover shadow-2xl p-6",
+              maxWidth,
               className
             )}
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">{title}</h2>
+              <h2 className="text-xl font-semibold text-foreground">{title}</h2>
               <button
                 onClick={onClose}
-                className="rounded-full p-2 text-zinc-400 hover:bg-white/5 hover:text-white transition-colors"
+                className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>

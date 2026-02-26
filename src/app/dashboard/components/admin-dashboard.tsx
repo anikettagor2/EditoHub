@@ -5,10 +5,7 @@ import {
     collection, 
     query, 
     orderBy, 
-    updateDoc, 
-    doc,
-    arrayUnion,
-    onSnapshot
+    onSnapshot 
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Project, User } from "@/types/schema";
@@ -20,19 +17,41 @@ import {
     Trash2, 
     UserPlus, 
     AlertCircle, 
-    DollarSign,
     RefreshCw,
     Edit,
-    FileVideo,
     MoreHorizontal,
     ArrowUpRight,
     ArrowDownLeft,
     CheckCircle2,
-    Shield
+    ChevronDown,
+    Plus,
+    Calendar,
+    Briefcase,
+    Shield,
+    IndianRupee,
+    Copy,
+    User as UserIcon,
+    Terminal,
+    Zap,
+    Activity,
+    Cpu,
+    Database,
+    Globe,
+    Layers,
+    Monitor,
+    LayoutDashboard,
+    Mail,
+    Star,
+    MonitorPlay,
+    ExternalLink,
+    LayoutGrid,
+    TrendingUp,
+    FolderOpen
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button"; 
@@ -44,25 +63,36 @@ import {
     DropdownMenuContent, 
     DropdownMenuItem, 
     DropdownMenuTrigger,
-    DropdownMenuSeparator
+    DropdownMenuSeparator, 
+    DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
 
 import { useSearchParams } from "next/navigation";
-import { assignEditor, updateProject, togglePayLater, deleteProject, deleteUser } from "@/app/actions/admin-actions";
+import { useAuth } from "@/lib/context/auth-context";
+import { assignEditor, updateProject, togglePayLater, deleteProject, deleteUser, toggleUserStatus, rejectDeletionRequest, verifyEditor } from "@/app/actions/admin-actions";
 
 export function AdminDashboard() {
+  const { user: currentUser } = useAuth();
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get('tab') as 'overview' | 'projects' | 'users' | 'team') || 'overview';
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'users' | 'team'>(initialTab);
+  const initialTab = (searchParams.get('tab') as 'overview' | 'projects' | 'users' | 'team' | 'terminations' | 'requests') || 'overview';
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'users' | 'team' | 'terminations' | 'requests'>(initialTab);
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Modals
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignEditorPrice, setAssignEditorPrice] = useState<string>("");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+
+  // User Detail Modal State
+  const [isUserDetailModalOpen, setIsUserDetailModalOpen] = useState(false);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<User | null>(null);
+
+  // Project Details/Audit Modal
+  const [isProjectDetailModalOpen, setIsProjectDetailModalOpen] = useState(false);
+  const [inspectProject, setInspectProject] = useState<Project | null>(null);
 
   // User Creation State
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -79,19 +109,6 @@ export function AdminDashboard() {
     pendingAssignment: 0,
     totalUsers: 0
   });
-
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setRefreshKey(k => k + 1);
-    setTimeout(() => {
-      setIsRefreshing(false);
-      setLastUpdated(new Date());
-    }, 1000);
-  };
 
   useEffect(() => {
     setLoading(true);
@@ -112,26 +129,7 @@ export function AdminDashboard() {
         unsubProjects();
         unsubUsers();
     };
-  }, [refreshKey]);
-
-  // Assignment Timer logic
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 10000); // Update every 10s
-    return () => clearInterval(interval);
   }, []);
-
-  const getAssignmentStatusInfo = (project: Project) => {
-    if (project.assignmentStatus === 'pending' && project.assignmentExpiresAt) {
-        const timeLeft = Math.max(0, project.assignmentExpiresAt - now);
-        const mins = Math.floor(timeLeft / 60000);
-        const secs = Math.floor((timeLeft % 60000) / 1000);
-        const isExpired = timeLeft <= 0;
-        
-        return { isExpired, mins, secs, timeLeft };
-    }
-    return { isExpired: false, mins: 0, secs: 0, timeLeft: 0 };
-  };
 
   useEffect(() => {
     if(projects.length > 0 || users.length > 0) {
@@ -167,7 +165,7 @@ export function AdminDashboard() {
               throw new Error(data.error || "Failed");
           }
 
-           toast.success(`${newUser.role} created successfully!`);
+           toast.success(`Account created: ${newUser.role}`);
            setNewUser({ name: '', email: '', password: '', role: 'sales_executive', phoneNumber: '' });
        } catch (err: any) {
           toast.error(err.message);
@@ -177,30 +175,46 @@ export function AdminDashboard() {
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    if(!confirm("Are you sure?")) return;
+    if(!confirm("Proceed with permanent deletion of this project?")) return;
     const result = await deleteProject(projectId);
-    if (result.success) toast.success("Project deleted");
-    else toast.error("Failed");
+    if (result.success) toast.success("Project purged.");
+    else toast.error("Purge failed.");
   };
 
   const handleDeleteUser = async (uid: string) => {
-    if(!confirm("Are you sure?")) return;
+    if (uid === currentUser?.uid) {
+        toast.error("You cannot delete your own admin account.");
+        return;
+    }
+    if(!confirm("Are you sure you want to delete this user?")) return;
     const result = await deleteUser(uid);
-    if (result.success) toast.success("User deleted");
-    else toast.error("Failed: " + result.error);
+    if (result.success) toast.success("User deleted successfully.");
+    else toast.error("Failed to delete user.");
+  };
+
+  const handleRejectDeletion = async (uid: string) => {
+      const res = await rejectDeletionRequest(uid);
+      if (res.success) toast.success("Termination request overridden.");
+      else toast.error("Override failed.");
   };
 
    const handleAssignEditor = async (editorId: string) => {
     if (!selectedProject) return;
+    if (!assignEditorPrice) {
+        toast.error("Please enter a revenue share amount for the editor.");
+        return;
+    }
+    const price = Number(assignEditorPrice);
     try {
-        const res = await assignEditor(selectedProject.id, editorId);
+        const res = await assignEditor(selectedProject.id, editorId, price);
         if (res.success) {
-            toast.success("Editor assigned & notification sent");
+            toast.success("Editor assigned successfully.");
             setIsAssignModalOpen(false);
+            setAssignEditorPrice("");
         } else {
-            toast.error(res.error || "Failed");
+            toast.error(res.error || "Assignment failed.");
         }
-    } catch (err) { toast.error("Failed"); }
+    } catch (err) { toast.error("Assignment failed."); }
   };
 
    const handleUpdateProject = async () => {
@@ -211,468 +225,1231 @@ export function AdminDashboard() {
               status: editForm.status
           });
           if (res.success) {
-              toast.success("Project updated successfully");
+              toast.success("Status updated.");
               setIsEditModalOpen(false);
           } else {
-              toast.error(res.error || "Failed");
+              toast.error(res.error || "Something went wrong.");
           }
-      } catch (err) { toast.error("Failed"); }
+      } catch (err) { toast.error("Something went wrong."); }
   };
 
+  const handleVerifyEditor = async (uid: string) => {
+      const res = await verifyEditor(uid);
+      if (res.success) toast.success("Editor protocol authorized. Welcome to the team.");
+      else toast.error("Verification protocol failed.");
+  };
+
+  const handleToggleUserStatus = async (uid: string, disabled: boolean) => {
+      const res = await toggleUserStatus(uid, disabled);
+      if (res.success) toast.success(disabled ? "Access suspended" : "Access restored");
+      else toast.error("Status error");
+  }
+
+  const filteredProjects = projects.filter(p => 
+      !searchQuery || 
+      p.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      p.clientName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      p.id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredUsers = users.filter(u => {
+      const q = searchQuery.toLowerCase();
+      return !q || 
+             u.displayName?.toLowerCase().includes(q) || 
+             u.email?.toLowerCase().includes(q) || 
+             u.role?.toLowerCase().includes(q);
+  });
+
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto p-6 md:p-8 bg-background min-h-screen">
-       {/* 1. Header */}
-       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-border">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">Admin Console</h1>
-                <p className="text-sm text-muted-foreground mt-1">System Overview & Management</p>
-            </div>
-            <div className="flex items-center gap-3">
-                <button
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-all disabled:opacity-50 shadow-sm"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : `Updated ${lastUpdated.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}</span>
-                </button>
-                <div className="flex bg-muted p-1 border border-border rounded-lg">
-                     {['overview', 'projects', 'users', 'team'].map(tab => (
-                         <button
+    <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
+       
+       {/* Dashboard Header */}
+       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pb-8 border-b border-white/10">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-2"
+            >
+                <div className="flex items-center gap-2 mb-2">
+                    <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Management Hub</span>
+                    </div>
+                    <div className="flex items-center gap-2 ml-2">
+                         <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Live Updates</span>
+                    </div>
+                </div>
+                <h1 className="text-4xl md:text-5xl font-heading font-bold tracking-tight text-foreground leading-tight">Admin <span className="text-muted-foreground">Dashboard</span></h1>
+                <div className="flex items-center gap-6 pt-2">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <Shield className="h-3.5 w-3.5" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Administrator</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Data Updated</span>
+                    </div>
+                </div>
+            </motion.div>
+            
+            <motion.div 
+               initial={{ opacity: 0, x: 20 }}
+               animate={{ opacity: 1, x: 0 }}
+               className="flex flex-wrap items-center gap-3"
+            >
+                <div className="flex bg-muted/50 border border-border rounded-lg p-1">
+                    {['overview', 'projects', 'users', 'team', 'terminations', 'requests'].map(tab => (
+                        <button
                             key={tab}
                             onClick={() => setActiveTab(tab as any)}
                             className={cn(
-                                "px-4 py-1.5 text-xs font-semibold rounded-md capitalize transition-all",
-                                activeTab === tab ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                                "px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all",
+                                activeTab === tab 
+                                    ? "bg-background text-foreground shadow-sm" 
+                                    : "text-muted-foreground hover:text-foreground"
                             )}
-                         >
-                            {tab === 'team' ? 'Team' : tab}
-                         </button>
-                     ))}
+                        >
+                            {tab}
+                        </button>
+                    ))}
                 </div>
-            </div>
+            </motion.div>
        </div>
 
-       {/* 2. KPIs */}
-       {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <MetricCard 
-                    label="Total Revenue" 
-                    value={`₹${stats.revenue.toLocaleString()}`} 
-                    trend="+12.5%" 
-                    trendUp={true}
-                    subtext="Gross volume"
-                />
-                <MetricCard 
-                    label="Active Projects" 
-                    value={stats.activeProjects} 
-                    trend="+4 new"
-                    trendUp={true}
-                    subtext="In pipeline"
-                />
-                <MetricCard 
-                    label="Pending Assignment" 
-                    value={stats.pendingAssignment} 
-                    alert={stats.pendingAssignment > 0}
-                    subtext="Requires action"
-                />
-                <MetricCard 
-                    label="Total Users" 
-                    value={stats.totalUsers} 
-                    subtext="Registered accounts"
-                />
-            </div>
-        )}
+       {/* Statistics Grid */}
+       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <IndicatorCard 
+                label="Total Revenue" 
+                value={`₹${stats.revenue.toLocaleString()}`} 
+                trend="+15.2%" 
+                trendUp={true}
+                icon={<IndianRupee className="h-4 w-4" />}
+                subtext="Total earnings to date"
+            />
+            <IndicatorCard 
+                label="Active Projects" 
+                value={stats.activeProjects} 
+                icon={<Cpu className="h-4 w-4" />}
+                subtext="Currently being edited"
+            />
+            <IndicatorCard 
+                label="New Requests" 
+                value={stats.pendingAssignment} 
+                alert={stats.pendingAssignment > 0}
+                icon={<Database className="h-4 w-4" />}
+                subtext="Waiting for an editor"
+            />
+            <IndicatorCard 
+                label="Total Users" 
+                value={stats.totalUsers} 
+                icon={<Users className="h-4 w-4" />}
+                subtext="Clients, editors, and team"
+            />
+       </div>
 
-       {/* 3. Content Area */}
-       <div className="rounded-lg border border-border bg-card shadow-sm flex flex-col min-h-[500px]">
-            {/* Toolbar if needed */}
-            {activeTab === 'projects' && (
-                <div className="p-4 border-b border-border flex justify-between bg-muted/30">
-                    <div className="relative w-72">
-                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                         <Input 
-                            placeholder="Search projects..." 
-                            className="pl-9 h-9 bg-background" 
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+       {/* Main Content Area */}
+       <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="enterprise-card bg-muted backdrop-blur-sm overflow-hidden"
+       >
+            {/* Toolbar */}
+            <div className="p-6 border-b border-white/5 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 w-full lg:w-auto">
+                    {(activeTab === 'projects' || activeTab === 'overview' || activeTab === 'users') && (
+                        <div className="relative w-full sm:w-80">
+                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors" />
+                             <input 
+                                type="text" 
+                                placeholder={`Global search: ${activeTab}...`} 
+                                className="h-10 w-full rounded-lg border border-border bg-muted/30 pl-11 pr-4 text-xs font-medium text-foreground focus:bg-background focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                             />
+                        </div>
+                    )}
+                    
+                    <div className="hidden lg:flex items-center gap-2">
+                         <LayoutDashboard className="h-3.5 w-3.5 text-zinc-600" />
+                         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Viewing: {activeTab.replace('_', ' ')}</span>
                     </div>
-                    <Button variant="outline" size="sm" className="h-9"><Filter className="mr-2 h-4 w-4" /> Filter</Button>
                 </div>
-            )}
+
+                <div className="flex items-center gap-3">
+                    {activeTab === 'users' && (
+                         <div className="flex bg-muted/50 border border-border rounded-lg p-1">
+                            {['all', 'admin', 'editor', 'client'].map(r => (
+                                <button
+                                    key={r}
+                                    onClick={() => setSearchQuery(r === 'all' ? '' : r)}
+                                    className={cn(
+                                        "px-3 py-1 text-[9px] font-bold uppercase tracking-widest rounded transition-all",
+                                        (searchQuery === r || (r === 'all' && searchQuery === '')) 
+                                            ? "bg-background text-foreground shadow-sm" 
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <DropdownMenu>
+                         <DropdownMenuTrigger asChild>
+                             <button className="h-10 px-4 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] font-bold uppercase tracking-widest text-zinc-400 hover:text-white transition-all flex items-center gap-2">
+                                 <Filter className="h-3.5 w-3.5" />
+                                 Export Data
+                                 <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
+                             </button>
+                         </DropdownMenuTrigger>
+                         <DropdownMenuContent align="end" className="w-52 bg-[#161920] border-white/10 p-1.5 rounded-xl shadow-2xl">
+                             <DropdownMenuLabel className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest px-3 py-2">Download Options</DropdownMenuLabel>
+                             <DropdownMenuSeparator className="my-1 bg-white/5" />
+                             <DropdownMenuItem className="p-2.5 text-xs text-zinc-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer rounded-lg">Export as JSON</DropdownMenuItem>
+                             <DropdownMenuItem className="p-2.5 text-xs text-zinc-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer rounded-lg">Export as CSV</DropdownMenuItem>
+                         </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            </div>
 
             <div className="overflow-x-auto">
-                {/* OVERVIEW TABLE */}
+                <AnimatePresence mode="wait">
+                
                 {activeTab === 'overview' && (
-                    <table className="w-full text-sm text-left">
-                         <thead className="bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
-                            <tr>
-                                <th className="px-6 py-3">Recent Activity</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3">Date</th>
-                                <th className="px-6 py-3 text-right">Action</th>
+                    <motion.table 
+                        key="overview"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="w-full text-left"
+                    >
+                         <thead>
+                            <tr className="bg-muted/30">
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project Name</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Last Updated</th>
+                                <th className="px-6 py-4 border-b border-border w-[80px]"></th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border">
-                            {projects.slice(0, 8).map(project => (
-                                <tr key={project.id} className="hover:bg-muted/50">
-                                    <td className="px-6 py-4">
-                                        <div className="font-medium">{project.name}</div>
-                                        <div className="text-xs text-muted-foreground">ID: {project.id.slice(0,6)}</div>
+                        <tbody className="divide-y divide-white/5">
+                            {projects.slice(0, 10).map((project, idx) => (
+                                <motion.tr 
+                                    key={project.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    className="hover:bg-white/[0.02] transition-colors group"
+                                >
+                                    <td className="px-6 py-5">
+                                        <div className="text-sm font-bold text-foreground tracking-tight">{project.name}</div>
+                                        <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">ID: {project.id.slice(0,12)}</div>
                                     </td>
-                                    <td className="px-6 py-4"><StatusBadge status={project.status} /></td>
-                                    <td className="px-6 py-4 text-muted-foreground text-xs">
-                                        {/* @ts-ignore */}
-                                        {new Date(project.updatedAt).toLocaleDateString()}
+                                    <td className="px-6 py-5"><StatusIndicator status={project.status} /></td>
+                                    <td className="px-6 py-5 text-zinc-400 text-[11px] font-medium uppercase tracking-tight" suppressHydrationWarning>
+                                        {new Date(project.updatedAt).toLocaleDateString()} — {new Date(project.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => { setSelectedProject(project); setIsEditModalOpen(true); }}>
-                                            <Edit className="h-4 w-4 text-muted-foreground" />
-                                        </Button>
+                                    <td className="px-6 py-5 text-right">
+                                        <button 
+                                            onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }}
+                                            className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-white/[0.05] text-zinc-500 hover:text-white transition-all active:scale-[0.98]"
+                                        >
+                                            <Edit className="h-3.5 w-3.5" />
+                                        </button>
                                     </td>
-                                </tr>
+                                </motion.tr>
                             ))}
                         </tbody>
-                    </table>
+                    </motion.table>
                 )}
 
-                {/* PROJECTS TABLE */}
                 {activeTab === 'projects' && (
-                     <table className="w-full text-sm text-left">
-                        <thead className="bg-muted/50 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
-                           <tr>
-                               <th className="px-6 py-3">Project</th>
-                               <th className="px-6 py-3">Client</th>
-                               <th className="px-6 py-3">Status</th>
-                               <th className="px-6 py-3">Value</th>
-                               <th className="px-6 py-3">Editor</th>
-                               <th className="px-6 py-3 text-right">Actions</th>
+                     <motion.table 
+                        key="projects"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="w-full text-left"
+                     >
+                        <thead>
+                           <tr className="bg-muted/30">
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project Name</th>
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Client Name</th>
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor</th>
+                               <th className="px-6 py-4 border-b border-border w-[80px]"></th>
                            </tr>
                        </thead>
-                       <tbody className="divide-y divide-border">
-                           {projects.filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase())).map(project => (
-                               <tr key={project.id} className="hover:bg-muted/50 group">
-                                   <td className="px-6 py-4 font-medium">
-                                       {project.name}
-                                       <div className="text-xs text-muted-foreground font-normal mt-0.5 flex items-center gap-2">
-                                           ID: {project.id.slice(0,6)}
-                                           {(project as any).isPayLaterRequest && (
-                                               <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1 rounded uppercase font-bold tracking-tighter">Pay Later</span>
-                                           )}
-                                       </div>
-                                   </td>
-                                   <td className="px-6 py-4 text-muted-foreground">{project.clientName}</td>
-                                   <td className="px-6 py-4"><StatusBadge status={project.status} /></td>
-                                   <td className="px-6 py-4 font-mono text-foreground">₹{project.totalCost}</td>
-                                   <td className="px-6 py-4 text-xs">
+                       <tbody className="divide-y divide-white/5">
+                           {filteredProjects.map((project, idx) => (
+                               <motion.tr 
+                                    key={project.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    className="hover:bg-white/[0.02] transition-colors group"
+                               >
+                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
+                                        <div className="text-base font-bold text-foreground tracking-tight leading-tight">{project.name}</div>
+                                         <div className="flex items-center gap-2 mt-1">
+                                             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">ID: {project.id.slice(0,12)}</span>
+                                             {(project as any).isPayLaterRequest && (
+                                                <span className="text-[8px] bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-widest">Deferred Pay</span>
+                                             )}
+                                         </div>
+                                    </td>
+                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
+                                         <div className="flex items-center gap-2">
+                                             <div className="h-6 w-6 rounded bg-muted border border-border flex items-center justify-center text-[10px] text-muted-foreground font-bold uppercase">{project.clientName?.[0]}</div>
+                                             <span className="text-xs text-foreground font-bold truncate max-w-[100px]">{project.clientName}</span>
+                                         </div>
+                                    </td>
+                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border"><StatusIndicator status={project.status} /></td>
+                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border text-lg font-bold text-foreground tracking-tighter tabular-nums">₹{project.totalCost?.toLocaleString()}</td>
+                                   <td className="px-6 py-6">
                                         {project.assignedEditorId ? (
-                                            <div className="space-y-1">
+                                            <div className="flex flex-col gap-1.5">
                                                 <span className={cn(
-                                                    "px-2 py-0.5 rounded border flex items-center w-fit gap-1 font-medium",
-                                                    project.assignmentStatus === 'accepted' 
-                                                        ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
-                                                        : project.assignmentStatus === 'rejected'
-                                                        ? "bg-red-50 text-red-700 border-red-100"
-                                                        : "bg-amber-50 text-amber-700 border-amber-100"
+                                                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border w-fit transition-all",
+                                                    project.assignmentStatus === 'accepted' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]" :
+                                                    project.assignmentStatus === 'rejected' ? "bg-red-500/10 text-red-500 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]" :
+                                                    "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
                                                 )}>
-                                                    {project.assignmentStatus === 'accepted' && <CheckCircle2 className="w-3 h-3" />}
-                                                    {project.assignmentStatus === 'pending' && <RefreshCw className="w-3 h-3 animate-spin" />}
-                                                    {project.assignmentStatus === 'rejected' && <Trash2 className="w-3 h-3" />}
-                                                    {(project.assignmentStatus || 'assigned').toUpperCase()}
+                                                    <div className={cn("w-1 h-1 rounded-full bg-current", project.assignmentStatus === 'pending' && "animate-pulse")} />
+                                                    {project.assignmentStatus || 'AUTHORIZED'}
                                                 </span>
-                                                
-                                                {project.assignmentStatus === 'pending' && (
-                                                    <div className="mt-1">
-                                                        {getAssignmentStatusInfo(project).isExpired ? (
-                                                            <div className="flex items-center gap-1.5 text-red-600 font-bold animate-pulse">
-                                                                <AlertCircle className="w-3.5 h-3.5" />
-                                                                EXPIRED - Reassign
-                                                            </div>
-                                                        ) : (
-                                                            <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                                                Expires in: <span className="font-mono text-foreground font-bold">{getAssignmentStatusInfo(project).mins}:{getAssignmentStatusInfo(project).secs.toString().padStart(2, '0')}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                {project.assignmentStatus === 'rejected' && project.editorDeclineReason && (
+                                                    <span className="text-[9px] font-medium text-red-400/80 italic max-w-[120px] truncate" title={project.editorDeclineReason}>
+                                                        “{project.editorDeclineReason}”
+                                                    </span>
                                                 )}
                                             </div>
                                         ) : (
-                                            <span className="text-amber-600 italic flex items-center gap-1">
-                                                <AlertCircle className="w-3 h-3" /> Unassigned
-                                            </span>
+                                            <button 
+                                                onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}
+                                                className="text-amber-500/70 hover:text-amber-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 transition-all group-hover:scale-105"
+                                            >
+                                                <AlertCircle className="w-3.5 h-3.5" /> NOT ASSIGNED
+                                            </button>
                                         )}
                                    </td>
-                                   <td className="px-6 py-4 text-right">
+                                   <td className="px-6 py-6 text-right">
                                        <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                <button className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-white/[0.05] text-zinc-500 hover:text-white transition-all active:scale-[0.98]"><MoreHorizontal className="h-3.5 w-3.5" /></button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }}>
-                                                    <Edit className="mr-2 h-4 w-4" /> Edit Details
+                                             <DropdownMenuContent align="end" className="w-52 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
+                                                <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }}>
+                                                    <Edit className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Edit Project
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}>
-                                                    <UserPlus className="mr-2 h-4 w-4" /> Assign Editor
+                                                <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}>
+                                                    <UserPlus className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Assign Editor
                                                 </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="text-red-600">
-                                                    <Trash2 className="mr-2 h-4 w-4" /> Delete Project
+                                                <DropdownMenuSeparator className="my-1 bg-border" />
+                                                 <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setInspectProject(project); setIsProjectDetailModalOpen(true); }}>
+                                                    <Search className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Inspect History
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator className="my-1 bg-border" />
+                                                <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="p-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer rounded-lg">
+                                                    <Trash2 className="mr-2.5 h-3.5 w-3.5" /> Delete Project
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                        </DropdownMenu>
                                    </td>
-                               </tr>
+                               </motion.tr>
                            ))}
                        </tbody>
-                   </table>
+                     </motion.table>
                 )}
 
-                {/* USERS TABLE */}
                 {activeTab === 'users' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-border">
-                        {/* Clients Column */}
-                        <div>
-                            <div className="px-6 py-3 bg-muted/50 border-b border-border font-semibold text-xs uppercase text-muted-foreground">Clients</div>
-                            <div className="divide-y divide-border">
-                                {users.filter(u => u.role === 'client').map(u => (
-                                    <div key={u.uid} className="px-6 py-4 flex items-center justify-between hover:bg-muted/50">
+                    <motion.table 
+                        key="users"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="w-full text-left"
+                    >
+                         <thead>
+                            <tr className="bg-muted/30">
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">User</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Email Address</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">User Role</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Access Key</th>
+                                <th className="px-6 py-4 border-b border-border w-[80px]"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {filteredUsers.map((u, idx) => (
+                                <motion.tr 
+                                    key={u.uid}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    className={cn("group hover:bg-white/[0.02] transition-colors", (u as any).status === 'inactive' && "opacity-40 grayscale")}
+                                >
+                                    <td className="px-6 py-4 cursor-pointer group/profile" onClick={() => { setSelectedUserDetail(u); setIsUserDetailModalOpen(true); }}>
                                         <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8 border border-border">
-                                                <AvatarFallback>{u.displayName?.[0]}</AvatarFallback>
+                                            <Avatar className="h-8 w-8 border border-border rounded-md bg-muted/50 group-hover/profile:border-primary/50 transition-all">
+                                                <AvatarFallback className="text-muted-foreground font-bold text-xs uppercase group-hover/profile:text-primary">{u.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
                                             <div>
-                                                <div className="font-medium text-sm text-foreground">{u.displayName}</div>
-                                                <div className="text-xs text-muted-foreground">{u.email}</div>
-                                                <div className="text-[10px] text-muted-foreground mt-0.5 max-w-[150px] truncate" title={u.uid}>ID: {u.uid}</div>
+                                                <div className="text-sm font-bold text-foreground tracking-tight leading-tight group-hover/profile:text-primary transition-colors">{u.displayName}</div>
+                                                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">UID: {u.uid.slice(0,8)}</div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button 
-                                                variant={u.payLater ? "default" : "outline"} 
-                                                size="sm" 
-                                                className={cn("text-xs h-7", u.payLater && "bg-emerald-600 hover:bg-emerald-700")}
-                                                onClick={async () => {
-                                                    const res = await togglePayLater(u.uid, !u.payLater);
-                                                    if(res.success) toast.success(`Pay Later ${!u.payLater ? 'enabled' : 'disabled'} for ${u.displayName}`);
-                                                    else toast.error("Failed to update");
-                                                }}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-sm text-zinc-200 font-medium tracking-tight truncate max-w-[150px]">{u.email}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={cn(
+                                            "inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border w-fit",
+                                            u.role === 'admin' ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                                            u.role === 'client' ? "bg-blue-500/10 text-blue-500 border-blue-500/20" :
+                                            u.role === 'editor' ? "bg-primary/10 text-primary border-primary/20" :
+                                            "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                        )}>
+                                            {u.role?.replace('_', ' ') || 'UNLINKED'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {u.initialPassword ? (
+                                            <div className="flex items-center gap-2 group/copy cursor-pointer w-fit" onClick={() => { navigator.clipboard.writeText(u.initialPassword!); toast.success("Access key copied"); }}>
+                                                <span className="font-mono text-xs text-zinc-100 bg-white/[0.05] px-2.5 py-1 rounded border border-white/10 group-hover/copy:border-primary/50 group-hover/copy:text-white transition-all shadow-sm">{u.initialPassword}</span>
+                                                <Copy className="h-3.5 w-3.5 text-zinc-400 opacity-0 group-hover/copy:opacity-100 transition-opacity" />
+                                            </div>
+                                        ) : (
+                                            <span className="text-muted-foreground/40 text-[9px] font-bold uppercase tracking-widest">ENCRYPTED</span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button 
+                                                className={cn(
+                                                    "h-8 px-3 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all border",
+                                                    (u as any).status === 'inactive' 
+                                                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-lg hover:bg-emerald-500/20" 
+                                                        : "bg-muted/50 text-muted-foreground border-border hover:text-foreground hover:border-muted-foreground"
+                                                )}
+                                                onClick={() => handleToggleUserStatus(u.uid, (u as any).status !== 'inactive')}
                                             >
-                                                {u.payLater ? "Pay Later: ON" : "Pay Later: OFF"}
-                                            </Button>
-                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                                {(u as any).status === 'inactive' ? "Restore" : "Lock"}
+                                            </button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-white/[0.05] text-zinc-600 hover:text-white transition-all active:scale-[0.98]"><MoreHorizontal className="h-3.5 w-3.5" /></button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-52 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
+                                                    {u.role === 'client' && (
+                                                        <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={async () => {
+                                                            const res = await togglePayLater(u.uid, !u.payLater);
+                                                            if(res.success) toast.success(`Payment protocol adjusted`);
+                                                        }}>
+                                                            <IndianRupee className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> {u.payLater ? "Lock Credit" : "Unlink Credit"}
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => handleToggleUserStatus(u.uid, (u as any).status !== 'inactive')}>
+                                                        <Shield className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> {(u as any).status === 'inactive' ? "Restore Integrity" : "Suspend Auth"}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator className="my-1 bg-border" />
+                                                    <DropdownMenuItem onClick={() => handleDeleteUser(u.uid)} className="p-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer rounded-lg">
+                                                        <Trash2 className="mr-2.5 h-3.5 w-3.5" /> Revoke Access
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        {/* Editors Column */}
-                        <div>
-                             <div className="px-6 py-3 bg-muted/50 border-b border-border font-semibold text-xs uppercase text-muted-foreground">Editors</div>
-                             <div className="divide-y divide-border">
-                                {users.filter(u => u.role === 'editor').map(u => (
-                                    <div key={u.uid} className="px-6 py-4 flex items-center justify-between hover:bg-muted/50">
-                                        <div className="flex items-center gap-3">
-                                             <Avatar className="h-8 w-8 border border-border">
-                                                <AvatarFallback className="bg-indigo-50 text-indigo-600">{u.displayName?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <div className="font-medium text-sm text-foreground">{u.displayName}</div>
-                                                <div className="text-xs text-muted-foreground">{u.email}</div>
-                                            </div>
-                                        </div>
-                                         <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+                                    </td>
+                                </motion.tr>
+                            ))}
+                        </tbody>
+                    </motion.table>
                 )}
                 
-                {/* TEAM TAB (Creation) */}
                 {activeTab === 'team' && (
-                    <div className="p-8">
-                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                             <div className="lg:col-span-1 border border-border rounded-lg p-6 bg-background space-y-4 shadow-sm">
-                                 <h3 className="font-semibold flex items-center gap-2">
-                                     <UserPlus className="h-5 w-5 text-primary" /> Create Internal User
+                    <motion.div 
+                        key="team"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="p-8"
+                    >
+                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                             <div className="lg:col-span-5 bg-white/[0.02] border border-white/10 p-8 rounded-2xl relative overflow-hidden group/form">
+                                 <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none group-hover/form:opacity-10 transition-opacity">
+                                     <UserPlus className="h-24 w-24 text-primary blur-xl" />
+                                 </div>
+                                 <h3 className="text-[11px] font-bold text-zinc-200 flex items-center gap-2.5 mb-8 uppercase tracking-widest">
+                                     <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                                        <Zap className="h-3.5 w-3.5 text-primary" />
+                                     </div>
+                                     Add Team Member
                                  </h3>
-                                 <form onSubmit={handleCreateUser} className="space-y-4">
-                                     <div className="space-y-1">
-                                         <Label>Full Name</Label>
-                                         <Input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} required className="bg-background" placeholder="e.g. John Doe" />
+                                 <form onSubmit={handleCreateUser} className="space-y-6 relative z-10">
+                                     <div className="space-y-2">
+                                         <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Full Name</Label>
+                                         <input 
+                                            value={newUser.name} 
+                                            onChange={e => setNewUser({...newUser, name: e.target.value})} 
+                                            required 
+                                            className="w-full h-11 px-4 rounded-lg border border-white/10 bg-white/[0.02] text-sm text-white focus:border-primary/50 focus:outline-none transition-all placeholder:text-zinc-700 font-medium"
+                                            placeholder="John Doe" 
+                                        />
                                      </div>
-                                     <div className="space-y-1">
-                                         <Label>Email</Label>
-                                         <Input value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} required className="bg-background" type="email" placeholder="john@company.com" />
+                                     <div className="space-y-2">
+                                         <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Email Address</Label>
+                                         <input 
+                                            value={newUser.email} 
+                                            onChange={e => setNewUser({...newUser, email: e.target.value})} 
+                                            required 
+                                            className="w-full h-11 px-4 rounded-lg border border-white/10 bg-white/[0.02] text-sm text-white focus:border-primary/50 focus:outline-none transition-all placeholder:text-zinc-700 font-medium"
+                                            type="email" 
+                                            placeholder="example@email.com" 
+                                        />
                                      </div>
-                                     <div className="space-y-1">
-                                         <Label>Password</Label>
-                                         <Input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required className="bg-background" type="text" minLength={6} placeholder="Initial password" />
+                                     <div className="space-y-2">
+                                         <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Password</Label>
+                                         <input 
+                                            value={newUser.password} 
+                                            onChange={e => setNewUser({...newUser, password: e.target.value})} 
+                                            required 
+                                            className="w-full h-11 px-4 rounded-lg border border-white/10 bg-white/[0.02] text-sm text-white focus:border-primary/50 focus:outline-none transition-all placeholder:text-zinc-700 font-mono"
+                                            type="text" 
+                                            minLength={6} 
+                                            placeholder="Enter password" 
+                                        />
                                      </div>
-                                     <div className="space-y-1">
-                                         <Label>Phone Number (Optional)</Label>
-                                         <div className="flex gap-2">
-                                             <div className="flex items-center justify-center px-3 bg-muted border border-border rounded-lg text-xs font-bold text-muted-foreground">+91</div>
-                                             <Input 
-                                                 value={newUser.phoneNumber} 
-                                                 onChange={e => setNewUser({...newUser, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10)})} 
-                                                 className="bg-background" 
-                                                 placeholder="9876543210" 
-                                             />
-                                         </div>
+                                     <div className="space-y-2">
+                                         <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">WhatsApp Number</Label>
+                                         <input 
+                                            value={newUser.phoneNumber} 
+                                            onChange={e => setNewUser({...newUser, phoneNumber: e.target.value})} 
+                                            required 
+                                            className="w-full h-11 px-4 rounded-lg border border-white/10 bg-white/[0.02] text-sm text-white focus:border-primary/50 focus:outline-none transition-all placeholder:text-zinc-700 font-medium"
+                                            type="tel" 
+                                            placeholder="+91 00000 00000" 
+                                        />
                                      </div>
-                                     <div className="space-y-1">
-                                         <Label>Role</Label>
-                                         <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
-                                             <option value="sales_executive">Sales Executive</option>
-                                             <option value="project_manager">Project Manager</option>
+                                     <div className="space-y-2">
+                                         <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Department</Label>
+                                         <select 
+                                            className="w-full h-11 px-4 rounded-lg border border-white/10 bg-white/[0.02] text-sm text-white focus:border-primary/50 focus:outline-none transition-all appearance-none cursor-pointer font-medium" 
+                                            value={newUser.role} 
+                                            onChange={e => setNewUser({...newUser, role: e.target.value})}
+                                        >
+                                             <option value="sales_executive" className="bg-[#0F1115]">Sales Executive</option>
+                                             <option value="project_manager" className="bg-[#0F1115]">Project Manager</option>
                                          </select>
                                      </div>
-                                     <Button className="w-full" disabled={isCreatingUser}>
-                                         {isCreatingUser ? "Creating..." : "Create Account"}
-                                     </Button>
+                                     <button 
+                                        type="submit"
+                                        className="w-full h-12 bg-white text-black text-[11px] font-bold uppercase tracking-widest rounded-lg shadow-xl hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-2"
+                                        disabled={isCreatingUser}
+                                     >
+                                         {isCreatingUser ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                                         {isCreatingUser ? "CREATING..." : "ADD MEMBER"}
+                                     </button>
                                  </form>
                              </div>
                              
-                             <div className="lg:col-span-2 space-y-6">
-                                 <div className="border border-border rounded-lg overflow-hidden">
-                                    <div className="bg-muted/50 px-6 py-3 border-b border-border font-semibold text-xs text-muted-foreground uppercase">Sales Executives</div>
-                                    <div className="divide-y divide-border bg-background">
+                             <div className="lg:col-span-7 space-y-10">
+                                 <div className="bg-white/[0.01] border border-white/10 overflow-hidden rounded-2xl">
+                                    <div className="bg-white/[0.03] px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Department: Sales Executive</span>
+                                        <span className="text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-0.5 rounded">Active</span>
+                                    </div>
+                                    <div className="divide-y divide-white/5">
                                         {users.filter(u => u.role === 'sales_executive').map(u => (
-                                            <div key={u.uid} className="px-6 py-4 flex justify-between items-center group">
-                                                 <div>
-                                                     <div className="font-medium text-sm">{u.displayName}</div>
-                                                     <div className="text-xs text-muted-foreground">{u.email}</div>
+                                            <div key={u.uid} className="px-6 py-4 flex justify-between items-center hover:bg-white/[0.02] transition-colors group">
+                                                 <div className="flex items-center gap-4">
+                                                     <div className="h-10 w-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)] flex items-center justify-center text-emerald-500 font-bold text-xs uppercase group-hover:scale-110 transition-transform">{u.displayName?.[0]}</div>
+                                                     <div>
+                                                         <div className="text-sm font-bold text-white tracking-tight leading-tight">{u.displayName}</div>
+                                                         <div className="text-xs text-zinc-300 font-semibold tracking-tight truncate max-w-[180px]">{u.email}</div>
+                                                     </div>
                                                  </div>
-                                                 <div className="flex items-center gap-2">
-                                                     {u.initialPassword && <span className="text-xs font-mono bg-muted px-2 py-1 rounded select-all">PW: {u.initialPassword}</span>}
-                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                 <div className="flex items-center gap-3">
+                                                     {u.initialPassword && <span className="text-xs font-mono font-bold bg-white/10 text-white px-2.5 py-1 rounded border border-white/20 shadow-md">KEY: {u.initialPassword}</span>}
+                                                     <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-zinc-800 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUser(u.uid)}>
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
                                                  </div>
                                             </div>
                                         ))}
-                                        {users.filter(u => u.role === 'sales_executive').length === 0 && (
-                                            <div className="px-6 py-4 text-sm text-muted-foreground text-center">No sales executives found.</div>
-                                        )}
                                     </div>
                                  </div>
 
-                                 <div className="border border-border rounded-lg overflow-hidden">
-                                    <div className="bg-muted/50 px-6 py-3 border-b border-border font-semibold text-xs text-muted-foreground uppercase">Project Managers</div>
-                                    <div className="divide-y divide-border bg-background">
+                                 <div className="bg-white/[0.01] border border-white/10 overflow-hidden rounded-2xl">
+                                    <div className="bg-white/[0.03] px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Department: Project Manager</span>
+                                        <span className="text-[9px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20 px-2 py-0.5 rounded">Active</span>
+                                    </div>
+                                    <div className="divide-y divide-white/5">
                                         {users.filter(u => u.role === 'project_manager').map(u => (
-                                            <div key={u.uid} className="px-6 py-4 flex justify-between items-center group">
-                                                 <div>
-                                                     <div className="font-medium text-sm">{u.displayName}</div>
-                                                     <div className="text-xs text-muted-foreground">{u.email}</div>
+                                            <div key={u.uid} className="px-6 py-4 flex justify-between items-center hover:bg-white/[0.02] transition-colors group">
+                                                 <div className="flex items-center gap-4">
+                                                      <div className="h-10 w-10 rounded-lg bg-blue-500/10 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)] flex items-center justify-center text-blue-500 font-bold text-xs uppercase group-hover:scale-110 transition-transform">{u.displayName?.[0]}</div>
+                                                     <div>
+                                                         <div className="text-sm font-bold text-white tracking-tight leading-tight">{u.displayName}</div>
+                                                         <div className="text-xs text-zinc-300 font-semibold tracking-tight truncate max-w-[180px]">{u.email}</div>
+                                                     </div>
                                                  </div>
-                                                 <div className="flex items-center gap-2">
-                                                     {u.initialPassword && <span className="text-xs font-mono bg-muted px-2 py-1 rounded select-all">PW: {u.initialPassword}</span>}
-                                                     <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600" onClick={() => handleDeleteUser(u.uid)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                 <div className="flex items-center gap-3">
+                                                     {u.initialPassword && <span className="text-xs font-mono font-bold bg-white/10 text-white px-2.5 py-1 rounded border border-white/20 shadow-md">KEY: {u.initialPassword}</span>}
+                                                     <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-zinc-800 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUser(u.uid)}>
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
                                                  </div>
                                             </div>
                                         ))}
-                                        {users.filter(u => u.role === 'project_manager').length === 0 && (
-                                            <div className="px-6 py-4 text-sm text-muted-foreground text-center">No project managers found.</div>
-                                        )}
                                     </div>
                                  </div>
                              </div>
                          </div>
-                    </div>
+                    </motion.div>
                 )}
+                
+                {activeTab === 'terminations' && (
+                    <motion.div 
+                        key="terminations"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="p-8"
+                    >
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                                <Trash2 className="h-5 w-5 text-red-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground">Pending Terminations</h3>
+                                <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Pending Deletions</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {users.filter(u => (u as any).deletionRequested).length === 0 ? (
+                                <div className="col-span-full py-20 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-3xl">
+                                    <Shield className="h-10 w-10 text-muted-foreground opacity-20 mb-4" />
+                                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest text-center">No pending deletion requests<br/><span className="text-[10px] opacity-50">Everything looks good</span></p>
+                                </div>
+                            ) : (
+                                users.filter(u => (u as any).deletionRequested).map(u => (
+                                    <motion.div 
+                                        key={u.uid}
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="bg-muted/50 border border-red-500/10 rounded-2xl p-6 space-y-6 hover:border-red-500/30 transition-all relative overflow-hidden group"
+                                    >
+                                        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                                            <AlertCircle className="h-12 w-12 text-red-500" />
+                                        </div>
+
+                                        <div className="flex items-center gap-4">
+                                            <Avatar className="h-12 w-12 border border-red-500/20 rounded-xl bg-red-500/5">
+                                                <AvatarFallback className="text-red-500 font-bold text-sm uppercase">{u.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="text-base font-bold text-foreground tracking-tight leading-tight">{u.displayName}</div>
+                                                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">{u.role} — UID: {u.uid.slice(0,8)}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Requested On</div>
+                                            <div className="text-xs font-mono text-foreground bg-background/50 p-2 rounded border border-border">
+                                                {(u as any).deletionRequestedAt ? new Date((u as any).deletionRequestedAt).toLocaleString() : 'AUTH_RECOVERY_REQUIRED'}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 pt-2">
+                                            <button 
+                                                onClick={() => handleDeleteUser(u.uid)}
+                                                className="flex-1 h-10 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all"
+                                            >
+                                                Confirm Deletion
+                                            </button>
+                                            <button 
+                                                onClick={() => handleRejectDeletion(u.uid)}
+                                                className="flex-1 h-10 bg-muted border border-border hover:border-primary/50 text-muted-foreground hover:text-foreground text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all"
+                                            >
+                                                Cancel Deletion Request
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                ))
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+
+                {activeTab === 'requests' && (
+                    <motion.div 
+                        key="requests"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="p-8"
+                    >
+                         <div className="flex items-center gap-3 mb-8">
+                            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
+                                <UserPlus className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground">Editor Onboarding</h3>
+                                <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Pending Verification</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {users.filter(u => u.role === 'editor' && u.onboardingStatus === 'pending').length === 0 ? (
+                                <div className="col-span-full py-20 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-3xl">
+                                    <CheckCircle2 className="h-10 w-10 text-muted-foreground opacity-20 mb-4" />
+                                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest text-center">Protocol Synchronized<br/><span className="text-[10px] opacity-50">No pending editor requests</span></p>
+                                </div>
+                            ) : (
+                                users.filter(u => u.role === 'editor' && u.onboardingStatus === 'pending').map(u => (
+                                    <motion.div 
+                                        key={u.uid}
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="bg-muted/50 border border-border rounded-2xl p-6 space-y-6 hover:border-primary/30 transition-all relative overflow-hidden group"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <Avatar className="h-12 w-12 border border-border rounded-xl bg-muted">
+                                                <AvatarFallback className="text-muted-foreground font-bold text-sm uppercase">{u.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="text-base font-bold text-foreground tracking-tight leading-tight">{u.displayName}</div>
+                                                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">Editor Request — {new Date(u.createdAt).toLocaleDateString()}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Contact Protocol</div>
+                                                <div className="text-xs font-medium text-foreground">{u.email}</div>
+                                                <div className="text-xs font-mono text-primary">{u.whatsappNumber || 'NO_PH_DATA'}</div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Credentials & Portfolio</div>
+                                                {u.portfolio && u.portfolio.length > 0 ? (
+                                                    <a 
+                                                        href={u.portfolio[0].url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-primary/50 group/link transition-all"
+                                                    >
+                                                        <span className="text-[10px] font-bold text-zinc-300 uppercase truncate max-w-[150px]">{u.portfolio[0].name}</span>
+                                                        <ExternalLink className="h-3 w-3 text-zinc-500 group-hover/link:text-primary transition-colors" />
+                                                    </a>
+                                                ) : (
+                                                    <div className="p-3 text-center border border-dashed border-white/5 rounded-xl text-[9px] font-bold text-zinc-600 uppercase">No Portfolio Data</div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 pt-2">
+                                            <button 
+                                                onClick={() => handleVerifyEditor(u.uid)}
+                                                className="flex-1 h-11 bg-primary text-black text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(var(--primary),0.2)]"
+                                            >
+                                                Authorize Entry
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteUser(u.uid)}
+                                                className="h-11 px-4 bg-muted border border-border hover:bg-red-500/10 hover:border-red-500 hover:text-red-500 text-muted-foreground rounded-xl transition-all"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                ))
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+                </AnimatePresence>
             </div>
-       </div>
+
+            <div className="p-6 border-t border-border bg-muted/30 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                    Operational Scope: {activeTab === 'users' ? filteredUsers.length : filteredProjects.length} units indexed
+                </span>
+                <div className="flex items-center gap-2">
+                    <button className="h-9 px-4 rounded-lg border border-border bg-muted/50 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground hover:bg-muted disabled:opacity-30 transition-all active:scale-[0.98]" disabled>Back</button>
+                    <button className="h-9 px-4 rounded-lg border border-border bg-muted/50 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground hover:bg-muted disabled:opacity-30 transition-all active:scale-[0.98]" disabled>Next</button>
+                </div>
+            </div>
+       </motion.div>
 
        {/* Modals */}
-       <Modal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} title="Assign Editor">
-             <div className="space-y-2 mt-4 max-h-[300px] overflow-y-auto">
-                 {users.filter(u => u.role === 'editor').map(ed => (
-                     <button key={ed.uid} onClick={() => handleAssignEditor(ed.uid)} className="w-full flex items-center gap-3 p-3 rounded-md hover:bg-muted transition-colors text-left border border-transparent hover:border-border">
-                         <Avatar className="h-8 w-8">
-                             <AvatarFallback className="text-xs">{ed.displayName?.[0]}</AvatarFallback>
-                         </Avatar>
-                         <div>
-                             <div className="text-sm font-medium">{ed.displayName}</div>
-                             <div className="text-xs text-muted-foreground">{ed.email}</div>
+       <Modal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} title="Assign an Editor">
+             <div className="space-y-4 mb-4">
+                 <div className="space-y-1.5">
+                     <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Editor Revenue Share (₹)</label>
+                     <input 
+                         type="number"
+                         value={assignEditorPrice}
+                         onChange={(e) => setAssignEditorPrice(e.target.value)}
+                         placeholder="e.g. 5000"
+                         className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white focus:outline-none focus:border-primary/50 transition-colors"
+                     />
+                 </div>
+             </div>
+             <div className="space-y-3 mt-6 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                 {users.filter(u => u.role === 'editor' && u.onboardingStatus === 'approved').map(ed => {
+                     const currentActiveCount = projects.filter(p => p.assignedEditorId === ed.uid && !['completed', 'approved'].includes(p.status)).length;
+                     const isFull = currentActiveCount >= 5;
+                     
+                     return (
+                     <button 
+                        key={ed.uid} 
+                        disabled={isFull}
+                        onClick={() => handleAssignEditor(ed.uid)} 
+                        className={cn(
+                            "w-full flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/10 hover:bg-white/[0.05] hover:border-primary/40 transition-all group/ed",
+                            isFull && "opacity-30 grayscale pointer-events-none"
+                        )}
+                    >
+                         <div className="flex items-center gap-4 text-left">
+                             <Avatar className="h-10 w-10 border border-white/10 rounded-lg bg-white/[0.03]">
+                                 <AvatarFallback className="text-primary font-bold text-xs uppercase">{ed.displayName?.[0]}</AvatarFallback>
+                             </Avatar>
+                             <div>
+                                 <div className="text-sm font-bold text-white group-hover/ed:text-primary transition-colors">{ed.displayName}</div>
+                                 <div className="text-xs text-zinc-300 font-semibold mt-0.5 truncate max-w-[180px]">{ed.email}</div>
+                                 <div className="flex items-center gap-2 mt-2">
+                                     <div className="h-1 w-16 bg-white/5 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary" style={{ width: `${(currentActiveCount/5)*100}%` }} />
+                                     </div>
+                                     <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-500">{currentActiveCount} / 5 Active Projects</span>
+                                 </div>
+                             </div>
+                         </div>
+                         <div className="flex flex-col items-end">
+                             {isFull ? (
+                                 <span className="text-[8px] font-bold uppercase tracking-widest bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded">Fully Booked</span>
+                             ) : (
+                                <div className="h-8 w-8 rounded-lg bg-white/[0.03] border border-white/10 flex items-center justify-center group-hover/ed:bg-primary/20 group-hover/ed:border-primary/50 transition-all">
+                                    <ArrowUpRight className="h-3.5 w-3.5 text-zinc-600 group-hover/ed:text-primary" />
+                                </div>
+                             )}
                          </div>
                      </button>
-                 ))}
+                     );
+                  })}
              </div>
        </Modal>
 
-       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Update Project">
-             <div className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                     <Label>Project Value (₹)</Label>
-                     <Input type="number" value={editForm.totalCost} onChange={e => setEditForm({...editForm, totalCost: Number(e.target.value)})} />
-                  </div>
-                  <div className="space-y-2">
-                     <Label>Project Status</Label>
-                     <select className="w-full h-10 px-3 rounded-md border border-input bg-background" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})}>
-                          <option value="pending_assignment">Pending Assignment</option>
-                          <option value="active">Active</option>
-                          <option value="in_review">In Review</option>
-                          <option value="approved">Approved</option>
-                          <option value="completed">Completed</option>
+       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Project Details">
+             <div className="space-y-6 mt-8">
+                 <div className="space-y-2">
+                     <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Project Price (₹)</Label>
+                     <input 
+                        className="w-full h-12 bg-white/[0.02] border border-white/10 rounded-lg px-4 text-white focus:outline-none focus:border-primary/50 transition-all font-bold text-lg tabular-nums"
+                        type="number"
+                        value={editForm.totalCost}
+                        onChange={e => setEditForm({...editForm, totalCost: Number(e.target.value)})}
+                    />
+                 </div>
+                 <div className="space-y-2">
+                     <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Project Status</Label>
+                     <select 
+                        className="w-full h-12 bg-white/[0.02] border border-white/10 rounded-lg px-4 text-white focus:outline-none focus:border-primary/50 transition-all appearance-none cursor-pointer font-bold uppercase text-xs tracking-widest"
+                        value={editForm.status}
+                        onChange={e => setEditForm({...editForm, status: e.target.value})}
+                    >
+                         <option value="pending_assignment" className="bg-[#0F1115]">QUEUE: AWAITING_EDITOR</option>
+                         <option value="active" className="bg-[#0F1115]">STATE: PRODUCTION_IN_PROGRESS</option>
+                         <option value="in_review" className="bg-[#0F1115]">STATE: QA_REVIEW_CYCLE</option>
+                         <option value="approved" className="bg-[#0F1115]">STATE: DELIVERABLE_AUTHORIZED</option>
+                         <option value="completed" className="bg-[#0F1115]">STATE: ARCHIVE_FULFILLED</option>
                      </select>
-                  </div>
-                  <Button onClick={handleUpdateProject} className="w-full mt-2">Save Changes</Button>
+                 </div>
+                 
+                 <div className="pt-4 flex gap-3">
+                     <button 
+                        className="flex-1 h-12 bg-white text-black font-bold uppercase text-[11px] tracking-widest rounded-lg hover:bg-zinc-200 transition-all active:scale-[0.98]"
+                        onClick={handleUpdateProject}
+                    >
+                         Save Changes
+                     </button>
+                     <button 
+                        className="h-12 px-6 bg-white/[0.03] border border-white/10 text-zinc-500 hover:text-white transition-all rounded-lg text-[11px] font-bold uppercase tracking-widest"
+                        onClick={() => setIsEditModalOpen(false)}
+                    >
+                         Abort
+                     </button>
+                 </div>
              </div>
        </Modal>
+
+        {/* User Details Modal */}
+        <Modal 
+            isOpen={isUserDetailModalOpen} 
+            onClose={() => setIsUserDetailModalOpen(false)} 
+            title="User Profile Details"
+            maxWidth="max-w-3xl"
+        >
+            {selectedUserDetail && (
+                <div className="mt-8 space-y-8 max-h-[70vh] overflow-y-auto pr-4 custom-scrollbar">
+                    {/* Profile Header */}
+                    <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+                         <div className="relative">
+                            <div className="h-32 w-32 relative rounded-[2rem] overflow-hidden border-4 border-white/5 bg-white/[0.02] shadow-2xl">
+                                {selectedUserDetail.photoURL ? (
+                                    <Image 
+                                        src={selectedUserDetail.photoURL} 
+                                        alt={selectedUserDetail.displayName || ""} 
+                                        fill 
+                                        className="object-cover"
+                                    />
+                                ) : (
+                                    <div className="h-full w-full flex items-center justify-center bg-primary/10 text-primary text-4xl font-heading font-black">
+                                        {selectedUserDetail.displayName?.[0] || "U"}
+                                    </div>
+                                )}
+                            </div>
+                         </div>
+
+                         <div className="flex-1 text-center md:text-left space-y-3">
+                            <div>
+                                <h2 className="text-3xl font-heading font-black tracking-tight text-white">{selectedUserDetail.displayName}</h2>
+                                <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.2em] mt-1">User ID: {selectedUserDetail.uid}</p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                                <span className={cn(
+                                    "px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border transition-all",
+                                    selectedUserDetail.role === 'admin' ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                                    selectedUserDetail.role === 'client' ? "bg-blue-500/10 text-blue-500 border-blue-500/20" :
+                                    "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                )}>
+                                    {selectedUserDetail.role?.replace('_', ' ')}
+                                </span>
+                                <span className={cn(
+                                    "px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border transition-all",
+                                    (selectedUserDetail as any).status !== 'inactive' 
+                                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" 
+                                        : "bg-red-500/10 text-red-500 border-red-500/20"
+                                )}>
+                                    Status: {(selectedUserDetail as any).status?.toUpperCase() || 'ACTIVE'}
+                                </span>
+                            </div>
+                         </div>
+                    </div>
+
+                    {/* Contact & Auth Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                                <Mail className="h-3 w-3 text-primary" /> Contact Details
+                            </h4>
+                            <div className="enterprise-card p-6 bg-white/[0.01] border-white/5 space-y-4">
+                                <div className="space-y-1.5">
+                                    <Label className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest ml-1">Email</Label>
+                                    <div className="p-3 bg-white/[0.03] border border-white/10 rounded-lg text-sm font-medium text-white flex items-center justify-between group/email">
+                                        <span className="truncate">{selectedUserDetail.email}</span>
+                                        <button onClick={() => { navigator.clipboard.writeText(selectedUserDetail.email!); toast.success("Copied"); }} className="opacity-0 group-hover/email:opacity-100 transition-opacity">
+                                            <Copy className="h-3 w-3 text-zinc-600 hover:text-white" />
+                                        </button>
+                                    </div>
+                                </div>
+                                {selectedUserDetail.phoneNumber && (
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest ml-1">Phone</Label>
+                                        <div className="p-3 bg-white/[0.03] border border-white/10 rounded-lg text-sm text-white">
+                                            {selectedUserDetail.phoneNumber}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {selectedUserDetail.initialPassword && (
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                                    <Shield className="h-3 w-3 text-primary" /> System Access
+                                </h4>
+                                <div className="enterprise-card p-6 bg-white/[0.01] border-white/5">
+                                    <Label className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest ml-1">Default Key</Label>
+                                    <div className="p-3 bg-white/[0.03] border border-white/10 rounded-lg text-sm font-mono text-primary flex items-center justify-between group/key mt-1.5">
+                                        <span>{selectedUserDetail.initialPassword}</span>
+                                        <button onClick={() => { navigator.clipboard.writeText(selectedUserDetail!.initialPassword!); toast.success("Copied"); }} className="opacity-0 group-hover/key:opacity-100 transition-opacity">
+                                            <Copy className="h-3 w-3 text-zinc-600 hover:text-white" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Role Metrics */}
+                    <div className="pt-6 border-t border-white/5">
+                        {selectedUserDetail.role === 'editor' && (
+                            <div className="space-y-8">
+                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                                    <Star className="h-3 w-3 text-primary" /> Performance metrics
+                                </h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center">
+                                        <div className="text-xl font-black text-white">{projects.filter(p => p.assignedEditorId === selectedUserDetail.uid && p.status === 'completed').length}</div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Completed</div>
+                                    </div>
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center">
+                                        <div className="text-xl font-black text-primary">₹{(selectedUserDetail.income || projects.filter(p => p.assignedEditorId === selectedUserDetail.uid).reduce((acc, p) => acc + (p.editorPrice || 0), 0)).toLocaleString()}</div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Earnings</div>
+                                    </div>
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center">
+                                        <div className="text-xl font-black text-white">{projects.filter(p => p.assignedEditorId === selectedUserDetail.uid && !['completed', 'approved', 'archived'].includes(p.status)).length}</div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Active</div>
+                                    </div>
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center">
+                                        <div className="text-xl font-black text-amber-500">{selectedUserDetail.rating || 'N/A'}</div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Rating</div>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <Label className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                        <FolderOpen className="h-3 w-3 text-primary" /> Recent Production
+                                    </Label>
+                                    <div className="bg-white/[0.01] border border-white/10 rounded-2xl divide-y divide-white/5 overflow-hidden">
+                                        {projects.filter(p => p.assignedEditorId === selectedUserDetail.uid).length === 0 ? (
+                                            <div className="p-8 text-center text-zinc-600 text-[10px] font-bold uppercase tracking-widest">No projects found</div>
+                                        ) : (
+                                            projects.filter(p => p.assignedEditorId === selectedUserDetail.uid).slice(0, 5).map(p => (
+                                                <div key={p.id} className="p-4 flex items-center justify-between">
+                                                    <div>
+                                                        <div className="text-sm font-bold text-white tracking-tight">{p.name}</div>
+                                                        <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">{p.status.replace('_', ' ')}</div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-xs font-black text-zinc-300">₹{(p.editorPrice || 0).toLocaleString()}</div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedUserDetail.role === 'project_manager' && (
+                            <div className="space-y-8">
+                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                                    <LayoutGrid className="h-3 w-3 text-primary" /> Operations Managed
+                                </h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center">
+                                        <div className="text-xl font-black text-white">{projects.filter(p => p.assignedPMId === selectedUserDetail.uid).length}</div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Projects</div>
+                                    </div>
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center col-span-2">
+                                        <div className="text-xl font-black text-emerald-500">₹{projects.filter(p => p.assignedPMId === selectedUserDetail.uid).reduce((acc, p) => acc + (p.totalCost || 0), 0).toLocaleString()}</div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Volume Managed</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedUserDetail.role === 'sales_executive' && (
+                            <div className="space-y-8">
+                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                                    <TrendingUp className="h-3 w-3 text-primary" /> Acquisition Metrics
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center">
+                                        <div className="text-2xl font-black text-white">{users.filter(u => u.role === 'client' && (u.managedBy === selectedUserDetail.uid || u.createdBy === selectedUserDetail.uid)).length}</div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Clients Generated</div>
+                                    </div>
+                                    <div className="enterprise-card p-4 bg-white/[0.01] border-white/5 text-center">
+                                        <div className="text-2xl font-black text-emerald-500">
+                                            ₹{projects.filter(p => users.some(u => u.uid === p.clientId && (u.managedBy === selectedUserDetail.uid || u.createdBy === selectedUserDetail.uid))).reduce((acc, p) => acc + (p.amountPaid || 0), 0).toLocaleString()}
+                                        </div>
+                                        <div className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest mt-1">Attributed Revenue</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pt-8 flex flex-col sm:flex-row gap-4">
+                        <button 
+                            onClick={() => { handleToggleUserStatus(selectedUserDetail.uid, (selectedUserDetail as any).status !== 'inactive'); setIsUserDetailModalOpen(false); }}
+                            className={cn(
+                                "flex-1 h-12 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border flex items-center justify-center gap-2",
+                                (selectedUserDetail as any).status === 'inactive' 
+                                    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" 
+                                    : "bg-white/[0.02] text-zinc-400 border-white/10 hover:text-white"
+                            )}
+                        >
+                            <Shield className="h-4 w-4" />
+                            {(selectedUserDetail as any).status === 'inactive' ? "Reactivate" : "Suspend"}
+                        </button>
+                        <button 
+                            onClick={() => { handleDeleteUser(selectedUserDetail.uid); setIsUserDetailModalOpen(false); }}
+                            className="flex-1 h-12 bg-red-500 text-white font-bold uppercase text-[10px] tracking-widest rounded-xl hover:bg-red-600 transition-all flex items-center justify-center gap-2"
+                        >
+                            <Trash2 className="h-4 w-4" /> Delete Account
+                        </button>
+                    </div>
+                </div>
+            )}
+        </Modal>
+
+        {/* Project Audit Inspector */}
+        <Modal 
+            isOpen={isProjectDetailModalOpen} 
+            onClose={() => setIsProjectDetailModalOpen(false)} 
+            title={`Project status dashboard for Admin: ${inspectProject?.name}`}
+            maxWidth="max-w-4xl"
+        >
+            {inspectProject && (
+                <div className="mt-8 space-y-10 max-h-[75vh] overflow-y-auto pr-4 custom-scrollbar">
+                    {/* Header Spec */}
+                    <div className="flex flex-col gap-6">
+                        <div className="flex items-center gap-4 border-b border-white/5 pb-6">
+                            <div className="h-12 w-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                                <MonitorPlay className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h4 className="text-xl font-bold text-white tracking-tight">{inspectProject.name}</h4>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Management Overview // Ref: {inspectProject.id}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2.5 group hover:border-primary/20 transition-all">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Total Price</span>
+                                <div className="text-2xl font-black text-white tabular-nums tracking-tight">₹{inspectProject.totalCost?.toLocaleString()}</div>
+                            </div>
+                            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2.5 group hover:border-emerald-500/20 transition-all">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editor Share</span>
+                                <div className="text-2xl font-black text-emerald-500 tabular-nums tracking-tight">₹{inspectProject.editorPrice?.toLocaleString() || '0'}</div>
+                            </div>
+                            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2.5 group transition-all">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">AutoPay</span>
+                                <div className={cn("text-sm font-black uppercase tracking-widest", inspectProject.autoPay ? "text-primary drop-shadow-[0_0_8px_rgba(99,102,241,0.4)]" : "text-zinc-600")}>
+                                    {inspectProject.autoPay ? 'Authorized' : 'Disabled'}
+                                </div>
+                            </div>
+                            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2.5 group transition-all">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Assigned PM</span>
+                                <div className="text-[13px] font-bold text-zinc-300 truncate tracking-tight group-hover:text-white transition-colors">
+                                    {users.find(u => u.uid === inspectProject.assignedPMId)?.displayName || 'Unassigned'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {inspectProject.assignmentStatus === 'rejected' && inspectProject.editorDeclineReason && (
+                            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 space-y-2 mt-4">
+                                <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                                    <AlertCircle className="h-4 w-4 text-red-400" /> Editor Decline Reason
+                                </div>
+                                <p className="text-xs text-red-400/90 font-medium italic">“{inspectProject.editorDeclineReason}”</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Timeline Data */}
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-2.5">
+                            <Activity className="h-4 w-4 text-primary" />
+                            <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Project Event History</h5>
+                        </div>
+
+                        <div className="relative space-y-8 pl-8 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-white/5">
+                            {inspectProject.logs && inspectProject.logs.length > 0 ? (
+                                [...inspectProject.logs].reverse().map((log, i) => (
+                                    <div key={i} className="relative group">
+                                        <div className="absolute -left-[25px] top-1.5 h-2.5 w-2.5 rounded-full bg-zinc-800 border border-zinc-700 group-hover:bg-primary group-hover:border-primary transition-all z-10" />
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-black text-white uppercase tracking-widest">{log.event.replace('_', ' ')}</span>
+                                                <span className="text-[9px] font-bold text-zinc-600 tabular-nums">{new Date(log.timestamp).toLocaleString()}</span>
+                                            </div>
+                                            <p className="text-xs text-zinc-400 font-medium leading-relaxed">{log.details}</p>
+                                            <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-600 uppercase tracking-widest pt-1">
+                                                <span>Performed By:</span>
+                                                <span className="text-zinc-500">{log.userName}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="py-12 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl opacity-30 gap-4">
+                                    <Database className="h-8 w-8 text-zinc-600" />
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">No activity history available</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </Modal>
     </div>
   );
 }
 
-// Consistent components
-function MetricCard({ label, value, subtext, trend, trendUp, alert }: any) {
+function IndicatorCard({ label, value, subtext, trend, trendUp, alert, icon }: any) {
     return (
-        <div className={cn(
-            "bg-card border border-border rounded-lg p-5 flex flex-col justify-between shadow-sm transition-all hover:border-muted-foreground/30",
-            alert && "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/10"
-        )}>
-            <div className="flex justify-between items-start mb-2">
-                <span className="text-sm font-medium text-muted-foreground">{label}</span>
-                {alert && <AlertCircle className="h-4 w-4 text-amber-500" />}
+        <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className={cn(
+                "group relative enterprise-card p-6 md:p-8 transition-all duration-300",
+                alert && "after:absolute after:inset-0 after:rounded-xl after:ring-1 after:ring-primary/40 after:animate-pulse"
+            )}
+        >
+            <div className="flex justify-between items-start mb-6">
+                <div className="h-10 w-10 bg-white/[0.03] border border-white/10 rounded-lg flex items-center justify-center text-zinc-400 group-hover:text-primary group-hover:border-primary/30 transition-all duration-300">
+                    {icon}
+                </div>
+                {alert && <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />}
             </div>
-            <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold tracking-tight text-foreground">{value}</span>
+            
+            <div className="space-y-1.5">
+                <span className="text-[11px] uppercase font-bold tracking-widest text-zinc-500 group-hover:text-zinc-400 transition-colors">{label}</span>
+                <div className="flex items-end gap-3">
+                    <span className="text-3xl font-black tracking-tight text-white font-heading tabular-nums">{value}</span>
+                </div>
+                
+                <div className="flex items-center gap-3 pt-4 border-t border-white/5 mt-4">
+                    {trend && (
+                        <span className={cn(
+                            "flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest", 
+                            trendUp ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-white/5 text-zinc-500 border border-white/5"
+                        )}>
+                            {trend}
+                        </span>
+                    )}
+                    <span className="text-zinc-600 text-[10px] font-bold uppercase tracking-wider">{subtext}</span>
+                </div>
             </div>
-            <div className="flex items-center gap-2 mt-1">
-                 {trend && (
-                    <span className={cn("text-xs font-medium flex items-center gap-0.5", trendUp ? "text-emerald-600" : "text-muted-foreground")}>
-                        {trendUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                        {trend}
-                    </span>
-                 )}
-                 <span className="text-xs text-muted-foreground">{subtext}</span>
-            </div>
-        </div>
+        </motion.div>
     );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusIndicator({ status }: { status: string }) {
     const config: any = {
-        active: { label: "In Production", className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800" },
-        in_review: { label: "Review Needed", className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800" },
-        pending_assignment: { label: "Pending", className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800" },
-        approved: { label: "Approved", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800" },
-        completed: { label: "Completed", className: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
+        active: { label: "Editing", color: "text-blue-400", bg: "bg-blue-400/5", border: "border-blue-400/20" },
+        in_review: { label: "Review", color: "text-purple-400", bg: "bg-purple-400/5", border: "border-purple-400/20" },
+        pending_assignment: { label: "Waiting", color: "text-amber-400", bg: "bg-amber-400/5", border: "border-amber-400/20" },
+        approved: { label: "Approved", color: "text-emerald-400", bg: "bg-emerald-400/5", border: "border-emerald-400/20" },
+        completed: { label: "Completed", color: "text-zinc-500", bg: "bg-zinc-500/5", border: "border-zinc-500/20" },
     };
-    
-    const style = config[status] || config.completed;
-
+    const s = config[status] || config.completed;
     return (
-        <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border", style.className)}>
-            {style.label}
+        <span className={cn(
+            "inline-flex items-center gap-2 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border transition-all", 
+            s.bg, s.color, s.border
+        )}>
+            <div className={cn("w-1 h-1 rounded-full bg-current", status === 'active' && "animate-pulse shadow-[0_0_5px_currentColor]")} />
+            {s.label}
         </span>
     );
 }

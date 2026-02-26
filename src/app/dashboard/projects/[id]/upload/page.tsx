@@ -10,10 +10,11 @@ import { Revision } from "@/types/schema";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea"; 
-import { Loader2, ArrowLeft, UploadCloud, FileVideo } from "lucide-react";
+import { Loader2, ArrowLeft, UploadCloud, FileVideo, Zap, ShieldCheck, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { handleRevisionUploaded } from "@/app/actions/notification-actions";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function UploadRevisionPage() {
     const params = useParams();
@@ -36,8 +37,7 @@ export default function UploadRevisionPage() {
         e.preventDefault();
         if (!file || !user || typeof id !== 'string') return;
 
-        // validation
-        if (file.size > 2 * 1024 * 1024 * 1024) { // 2GB limit
+        if (file.size > 2 * 1024 * 1024 * 1024) {
              alert("File is too large. Max size is 2GB.");
              return;
         }
@@ -46,7 +46,6 @@ export default function UploadRevisionPage() {
         setProgress(0);
 
         try {
-            // 1. Get latest version number
             const q = query(
                 collection(db, "revisions"),
                 where("projectId", "==", id),
@@ -60,7 +59,6 @@ export default function UploadRevisionPage() {
                 nextVersion = latest.version + 1;
             }
 
-            // 2. Upload File to Storage (Resumable Upload)
             const storageRef = ref(storage, `projects/${id}/v${nextVersion}_${file.name}`);
             const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -72,14 +70,8 @@ export default function UploadRevisionPage() {
                 (error: StorageError) => {
                     console.error("Upload failed:", error);
                     setIsUploading(false);
-                    if (error.code === 'storage/unauthorized') {
-                         alert("Permission denied. content-type or size might be an issue, or you are not logged in.");
-                    } else {
-                         alert(`Upload failed: ${error.message || "Network Error"}`);
-                    }
                 }, 
                 async () => {
-                    // 3. Upload Complete - Get URL & Create Doc
                     try {
                         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
@@ -94,17 +86,13 @@ export default function UploadRevisionPage() {
                         };
             
                         await addDoc(collection(db, "revisions"), newRevision);
-                        
-                        // 4. Trigger Notification & Update Status
                         await handleRevisionUploaded(id);
                         
                         setIsUploading(false);
-                        // Redirect
                         router.push(`/dashboard/projects/${id}`);
                     } catch (dbError) {
                          console.error("Error saving revision:", dbError);
                          setIsUploading(false);
-                         alert("Upload finished but failed to save record. Contact support.");
                     }
                 }
             );
@@ -112,100 +100,140 @@ export default function UploadRevisionPage() {
         } catch (error: any) {
             console.error("Error starting upload:", error);
             setIsUploading(false);
-            alert(`Failed to start upload: ${error.message}`);
         }
     };
 
     return (
-        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-            <div className="w-full max-w-xl space-y-6">
+        <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center p-6">
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-2xl space-y-10"
+            >
                  <Link 
                     href={`/dashboard/projects/${id}`} 
-                    className="inline-flex items-center text-sm text-muted-foreground hover:text-white mb-6 transition-colors"
+                    className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-zinc-600 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all"
                 >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    <ArrowLeft className="h-3.5 w-3.5" />
                     Back to Project
                 </Link>
 
-                <div>
-                    <h1 className="text-3xl font-bold">Upload New Version</h1>
-                    <p className="text-muted-foreground mt-2">
-                        Upload the latest video file for client review.
+                <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                        <div className="px-2.5 py-0.5 rounded-lg bg-primary/10 border border-primary/20">
+                            <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">New Version</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-700 font-black uppercase tracking-[0.2em]">Secure Upload</span>
+                    </div>
+                    <h1 className="premium-header text-4xl text-white">Upload New <span className="text-zinc-500">Draft</span></h1>
+                    <p className="text-[13px] text-zinc-500 font-medium max-w-md">
+                        Upload the latest version of the video for your client to review.
                     </p>
                 </div>
 
-                <form onSubmit={handleUpload} className="space-y-6 rounded-2xl border border-white/10 bg-zinc-900/50 p-8 backdrop-blur-sm">
-                    
-                    {/* Drag & Drop Area (simplified as styled input) */}
-                    <div className="space-y-2">
-                        <Label>Video File</Label>
+                <form onSubmit={handleUpload} className="glass-panel rounded-[3rem] p-12 border-white/[0.1] relative overflow-hidden space-y-12 shadow-2xl">
+                    <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
+                        <Zap className="h-32 w-32 text-primary blur-3xl" />
+                    </div>
+
+                    {/* Drag & Drop Area */}
+                    <div className="space-y-6 relative z-10">
+                        <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-zinc-400 ml-1">Master Video File</Label>
                         <div className={cn(
-                            "relative border-2 border-dashed border-white/10 rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all hover:border-primary/50 hover:bg-zinc-900/80 cursor-pointer",
-                            file ? "border-primary bg-primary/5" : ""
+                            "group relative border-2 border-dashed border-white/10 rounded-[2.5rem] bg-black/40 hover:bg-black/60 hover:border-primary/50 transition-all duration-700 min-h-[280px] flex flex-col items-center justify-center text-center cursor-pointer p-10 shadow-inner",
+                            file ? "border-primary/60 bg-primary/[0.04]" : ""
                         )}>
                             <input 
                                 type="file" 
                                 accept="video/*"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                                 onChange={handleFileChange}
                                 required
                             />
-                            {file ? (
-                                <div className="space-y-2">
-                                    <FileVideo className="h-10 w-10 text-primary mx-auto" />
-                                    <p className="font-medium text-white">{file.name}</p>
-                                    <p className="text-xs text-muted-foreground">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    <UploadCloud className="h-10 w-10 text-muted-foreground mx-auto" />
-                                    <p className="font-medium text-white">Click or Drag video here</p>
-                                    <p className="text-xs text-muted-foreground">MP4, MOV, WebM up to 2GB</p>
-                                </div>
-                            )}
+                            <AnimatePresence mode="wait">
+                                {file ? (
+                                    <motion.div 
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="space-y-6"
+                                    >
+                                        <div className="h-20 w-20 bg-primary/20 rounded-3xl flex items-center justify-center mx-auto border border-primary/30 shadow-[0_0_40px_rgba(var(--primary),0.3)] rotate-3 group-hover:rotate-0 transition-transform duration-500">
+                                            <FileVideo className="h-10 w-10 text-primary" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p className="text-lg font-black text-white truncate px-6 leading-none tracking-tight">{file.name}</p>
+                                            <p className="text-[11px] font-black text-emerald-500 uppercase tracking-widest">{(file.size / (1024 * 1024)).toFixed(2)} MB — PROTOCOL_READY</p>
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        <div className="h-20 w-20 bg-white/[0.03] rounded-3xl flex items-center justify-center mx-auto border border-white/[0.08] group-hover:scale-110 group-hover:text-primary group-hover:border-primary/40 transition-all duration-500 shadow-lg">
+                                            <UploadCloud className="h-10 w-10 text-zinc-600 group-hover:text-primary transition-colors" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p className="text-base font-black text-zinc-400 group-hover:text-zinc-200 transition-colors">INITIATE_HANDOVER_PROTOCOL</p>
+                                            <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em]">MP4_MOV_WEBM // LIMIT_2GB</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="description">Version Notes</Label>
+                    <div className="space-y-6 relative z-10">
+                        <Label htmlFor="description" className="text-[11px] font-black uppercase tracking-[0.3em] text-zinc-400 ml-1">Operational Notes</Label>
                         <Textarea 
                             id="description" 
-                            placeholder="What changed in this version?"
-                            className="bg-black/40 border-white/10 text-white"
+                            placeholder="Specify revisions, technical adjustments, or focus points for this version..."
+                            className="bg-black/40 border-white/10 focus:border-primary/50 focus:bg-black/60 transition-all duration-700 rounded-[2rem] font-bold text-white placeholder:text-zinc-700 text-base leading-relaxed p-8 min-h-[180px] shadow-inner"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                         />
                     </div>
 
                     {isUploading && (
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>Uploading...</span>
-                                <span>{Math.round(progress)}%</span>
+                        <div className="space-y-3 relative z-10">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest animate-pulse">Uploading...</span>
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">{Math.round(progress)}%</span>
                             </div>
-                            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full bg-primary transition-all duration-300 ease-out"
-                                    style={{ width: `${progress}%` }}
+                            <div className="h-2 w-full bg-white/[0.02] rounded-full overflow-hidden border border-white/[0.05]">
+                                <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${progress}%` }}
+                                    className="h-full bg-primary shadow-[0_0_20px_rgba(var(--primary),0.8)] transition-all duration-300 ease-out"
                                 />
                             </div>
                         </div>
                     )}
 
-                    <Button 
-                        type="submit" 
-                        disabled={!file || isUploading}
-                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-6 text-lg shadow-[0_0_20px_rgba(99,102,241,0.2)]"
-                    >
-                        {isUploading ? (
-                             <>
-                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                Processing Upload...
-                            </>
-                        ) : "Upload Version"}
-                    </Button>
+                    <div className="relative z-10 pt-4">
+                        <button 
+                            type="submit" 
+                            disabled={!file || isUploading}
+                            className="w-full h-16 rounded-2xl bg-white text-black text-[12px] font-black uppercase tracking-[0.2em] hover:bg-zinc-200 transition-all flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(255,255,255,0.1)] active:scale-[0.98] disabled:opacity-30 disabled:pointer-events-none group"
+                        >
+                            {isUploading ? (
+                                <>
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                    Sending...
+                                </>
+                            ) : (
+                                <>
+                                    Start Upload
+                                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                                </>
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Security Badge */}
+                    <div className="flex items-center justify-center gap-3 pt-6 border-t border-white/[0.03]">
+                        <ShieldCheck className="h-3.5 w-3.5 text-zinc-700" />
+                        <span className="text-[9px] font-black text-zinc-700 uppercase tracking-[0.3em]">Secure Transfer Active</span>
+                    </div>
                 </form>
-            </div>
+            </motion.div>
         </div>
     );
 }

@@ -5,7 +5,7 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin';
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { email, password, displayName, createdBy, customRates, allowedFormats, phoneNumber } = body;
+        const { email, password, displayName, createdBy, customRates, allowedFormats, phoneNumber, payLaterEligible } = body;
 
         if (!email || !password || !displayName) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -32,7 +32,8 @@ export async function POST(request: Request) {
             managedBy: createdBy || null,
             initialPassword: password, // Store for Sales Exec to view/share
             customRates: customRates || null,
-            allowedFormats: allowedFormats || null
+            allowedFormats: allowedFormats || null,
+            payLater: payLaterEligible || false
         });
 
         // 3. Set Custom Claim (optional but good for Security Rules)

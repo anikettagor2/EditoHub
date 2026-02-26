@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addDoc, collection, updateDoc, doc } from "firebase/firestore";
+import { addDoc, collection } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/context/auth-context";
@@ -10,28 +10,44 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";  
-import { Loader2, Clapperboard, MonitorPlay, Smartphone, Palette, Megaphone, UploadCloud, X, FileVideo, DollarSign } from "lucide-react";
+import { 
+    Loader2, 
+    Clapperboard, 
+    MonitorPlay, 
+    Smartphone, 
+    Palette, 
+    Megaphone, 
+    UploadCloud, 
+    X, 
+    FileVideo, 
+    IndianRupee,
+    ChevronRight,
+    Zap,
+    ShieldCheck,
+    Globe,
+    Terminal,
+    Cpu,
+    Database,
+    Monitor,
+    Layers,
+    Activity,
+    CheckCircle2,
+    Info,
+    RefreshCw
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 
 const VIDEO_TYPES = [
     { id: "Short Videos", label: "Short Video", icon: Clapperboard, price: 500, desc: "Reels, TikToks, Shorts" },
     { id: "Long Videos", label: "Long Form", icon: MonitorPlay, price: 1000, desc: "YouTube, Explainers" },
-    { id: "Reels", label: "Reels Pro", icon: Smartphone, price: 500, desc: "High-end Social Content" },
-    { id: "Graphics Videos", label: "Motion gfx", icon: Palette, price: 1500, desc: "Animations, Intros" },
-    { id: "Ads/UGC Videos", label: "Ads / UGC", icon: Megaphone, price: 2000, desc: "Performance Marketing" }
+    { id: "Reels", label: "Reels Pro", icon: Smartphone, price: 500, desc: "High-end Content" },
+    { id: "Graphics Videos", label: "Motion GFX", icon: Palette, price: 1500, desc: "Animations, Intros" },
+    { id: "Ads/UGC Videos", label: "Performance", icon: Megaphone, price: 2000, desc: "Ads & UGC" }
 ];
 
-// Helper for loading script
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
+import { handleProjectCreated } from "@/app/actions/admin-actions";
 
 export default function NewProjectPage() {
     const router = useRouter();
@@ -43,8 +59,10 @@ export default function NewProjectPage() {
     const [description, setDescription] = useState("");
     const [videoType, setVideoType] = useState("Short Videos");
     const [footageLink, setFootageLink] = useState("");
-    const [rawFile, setRawFile] = useState<File | null>(null);
-    const [uploadProgress, setUploadProgress] = useState(0);
+    const [deadline, setDeadline] = useState("");
+    const [rawFiles, setRawFiles] = useState<File[]>([]);
+    const [scriptFiles, setScriptFiles] = useState<File[]>([]);
+    const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
     
     // UI State
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,39 +73,49 @@ export default function NewProjectPage() {
         ? user.customRates[selectedType.id] 
         : selectedType.price;
 
-    const handlePayLater = async () => {
+    const handleSubmitProject = async (isPaid: boolean) => {
         if (!user) return;
         setIsSubmitting(true);
 
         try {
-            // 1. Upload File (if any)
-            let uploadedFileMetadata = null;
-            if (rawFile) {
-                const storageRef = ref(storage, `raw_footage/${user.uid}/${Date.now()}_${rawFile.name}`);
-                const uploadTask = uploadBytesResumable(storageRef, rawFile);
+            // 1. Upload All Files
+            const uploadedRawFiles: any[] = [];
+            const uploadedScripts: any[] = [];
 
-                await new Promise<void>((resolve, reject) => {
+            const uploadFile = async (file: File, path: string) => {
+                const storageRef = ref(storage, `${path}/${user.uid}/${Date.now()}_${file.name}`);
+                const uploadTask = uploadBytesResumable(storageRef, file);
+
+                return new Promise<any>((resolve, reject) => {
                     uploadTask.on('state_changed', 
                         (snapshot) => {
                             const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                            setUploadProgress(progress);
+                            setUploadProgress(prev => ({ ...prev, [file.name]: progress }));
                         }, 
                         (error) => reject(error), 
-                        () => resolve()
+                        async () => {
+                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                            resolve({
+                                name: file.name,
+                                url: downloadURL,
+                                size: file.size,
+                                type: file.type,
+                                uploadedAt: Date.now()
+                            });
+                        }
                     );
                 });
+            };
 
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                uploadedFileMetadata = {
-                    name: rawFile.name,
-                    url: downloadURL,
-                    size: rawFile.size,
-                    type: rawFile.type,
-                    uploadedAt: Date.now()
-                };
+            for (const file of rawFiles) {
+                uploadedRawFiles.push(await uploadFile(file, 'raw_footage'));
             }
 
-            // 2. Create Project with Pay Later Status
+            for (const file of scriptFiles) {
+                uploadedScripts.push(await uploadFile(file, 'scripts'));
+            }
+
+            // 2. Create Project
             const projectData = {
                 name,
                 brand,
@@ -96,96 +124,161 @@ export default function NewProjectPage() {
                 duration: 0, 
                 budget: estimatedCost,
                 totalCost: estimatedCost,
-                amountPaid: 0, 
-                paymentStatus: 'pay_later',
-                deadline: null, 
+                amountPaid: isPaid ? estimatedCost : 0, 
+                paymentStatus: isPaid ? 'paid' : 'pay_later',
+                deadline: deadline || null,
                 footageLink, 
-                rawFiles: uploadedFileMetadata ? [uploadedFileMetadata] : [], 
+                rawFiles: uploadedRawFiles,
+                scripts: uploadedScripts,
+                assignedPMId: user.managedByPM || null,
+                assignedSEId: user.managedBy || user.createdBy || null,
                 status: 'pending_assignment', 
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
                 members: [user.uid],
                 ownerId: user.uid,
                 clientId: user.uid,
-                isPayLaterRequest: true
+                isPayLaterRequest: !isPaid,
+                clientName: user.displayName || 'Anonymous Client'
             };
 
             const projectRef = await addDoc(collection(db, "projects"), projectData);
             
-            // 3. Trigger WhatsApp Notification
-            import("@/app/actions/admin-actions").then(actions => {
-                actions.handleProjectCreated(projectRef.id);
-            });
+            // 3. Trigger Server-side workflows (Auto PM assignment, WhatsApp, etc)
+            await handleProjectCreated(projectRef.id);
 
-            toast.success("Project request submitted successfully!");
-            toast.info("Our team will review your request and assign an editor shortly.");
+            toast.success("Project created successfully!");
             router.push("/dashboard");
 
         } catch (error: any) {
-            console.error("Error creating pay later project:", error);
-            toast.error("Failed: " + error.message);
+            console.error("Error creating project:", error);
+            toast.error("Something went wrong: " + error.message);
             setIsSubmitting(false);
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        // e.preventDefault();
-        toast.info("Standard payment is currently unavailable. Please use the 'Pay Later' option.");
+    const handleFakePayment = () => {
+        toast.info("Mock payment gateway invoked. Authorized.");
+        handleSubmitProject(true);
     };
 
     return (
-        <div className="h-[calc(100vh-4rem)] p-4 md:p-6 overflow-hidden flex flex-col gap-6">
-            <header className="flex-none">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-                    New Project Request
-                </h1>
-                <p className="text-sm text-zinc-400">
-                    Define your project requirements and get started.
-                </p>
-            </header>
-
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
-                {/* LEFT: Main Details (Scrollable if needed, but intended to fit) */}
-                <div className="lg:col-span-7 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar">
-                    
-                    {/* 1. Project Info Card */}
-                    <div className="bg-card/50 border border-border rounded-xl p-5 backdrop-blur-sm">
-                        <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-4 block">Project Details</Label>
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Project Name</Label>
-                                <Input 
-                                    placeholder="e.g. Summer Launch" 
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    className="h-9 bg-background/50 border-white/5 focus:border-primary/50 transition-colors"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs">Brand Name</Label>
-                                <Input 
-                                    placeholder="e.g. Nike" 
-                                    value={brand}
-                                    onChange={e => setBrand(e.target.value)}
-                                    className="h-9 bg-background/50 border-white/5 focus:border-primary/50 transition-colors"
-                                />
-                            </div>
+        <div className="max-w-[1400px] mx-auto min-h-[calc(100vh-8rem)] flex flex-col gap-8 pb-10">
+            {/* Header Layer */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 shrink-0 pb-4 border-b border-white/10">
+                 <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="space-y-1.5"
+                >
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Step 1</span>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-xs">Instructions & Vision</Label>
-                            <Textarea 
-                                placeholder="Describe the editing style, pacing, and specific requirements..."
-                                value={description}
-                                onChange={e => setDescription(e.target.value)}
-                                className="min-h-[100px] resize-none bg-background/50 border-white/5 focus:border-primary/50 transition-colors text-sm"
-                            />
+                        <div className="flex items-center gap-2 ml-2">
+                             <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Project Details</span>
                         </div>
                     </div>
+                    <h1 className="text-4xl font-heading font-bold tracking-tight text-white leading-tight">Start <span className="text-zinc-500">New Project</span></h1>
+                    <div className="flex items-center gap-6 pt-1">
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <Terminal className="h-3.5 w-3.5" />
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-300">Project Setup</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <Globe className="h-3.5 w-3.5" />
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-300">Priority: High</span>
+                        </div>
+                    </div>
+                </motion.div>
 
-                    {/* 2. Style Selection Card */}
-                    <div className="bg-card/50 border border-border rounded-xl p-5 backdrop-blur-sm flex-1">
-                        <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-4 block">Select Format</Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+                <div className="hidden lg:flex items-center gap-6 p-4 rounded-xl bg-white/[0.02] border border-white/10">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest leading-none">System Status</span>
+                        <span className="text-sm font-bold text-emerald-500 mt-1.5 leading-none">Optimized</span>
+                    </div>
+                    <div className="w-px h-6 bg-white/10" />
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest leading-none">Editor Availability</span>
+                        <span className="text-sm font-bold text-white mt-1.5 leading-none">100% Online</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Application Main Layout */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+                {/* Information Ingestion (Left) */}
+                <div className="lg:col-span-8 flex flex-col gap-6">
+                    
+                    <motion.div 
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                        className="enterprise-card bg-[#161920]/40 backdrop-blur-sm p-6 space-y-6"
+                    >
+                        <div className="flex items-center gap-2.5 border-b border-white/5 pb-4">
+                            <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                                <Zap className="h-4 w-4 text-primary" />
+                            </div>
+                            <h3 className="text-[11px] font-bold text-zinc-200 uppercase tracking-widest">Project Info</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Project Name</Label>
+                                <Input 
+                                    placeholder="e.g. Genesis V1 Campaign" 
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                    className="h-11 bg-white/[0.02] border-white/10 focus:border-primary/50 focus:bg-white/[0.04] transition-all rounded-lg font-medium text-white placeholder:text-zinc-700 text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Client / Brand</Label>
+                                <Input 
+                                    placeholder="e.g. Nike Global" 
+                                    value={brand}
+                                    onChange={e => setBrand(e.target.value)}
+                                    className="h-11 bg-white/[0.02] border-white/10 focus:border-primary/50 focus:bg-white/[0.04] transition-all rounded-lg font-medium text-white placeholder:text-zinc-700 text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Target Deadline</Label>
+                                <Input 
+                                    type="date"
+                                    value={deadline}
+                                    onChange={e => setDeadline(e.target.value)}
+                                    className="h-11 bg-white/[0.02] border-white/10 focus:border-primary/50 focus:bg-white/[0.04] transition-all rounded-lg font-medium text-white placeholder:text-zinc-700 text-sm"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Instructions</Label>
+                            <Textarea 
+                                placeholder="Describe the video you want us to create. Include any specific style, music, or pacing preferences..."
+                                value={description}
+                                onChange={e => setDescription(e.target.value)}
+                                className="min-h-[120px] resize-none bg-white/[0.02] border-white/10 focus:border-primary/50 focus:bg-white/[0.04] transition-all rounded-lg font-medium text-white placeholder:text-zinc-700 text-sm leading-relaxed"
+                            />
+                        </div>
+                    </motion.div>
+
+                    <motion.div 
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="enterprise-card bg-[#161920]/40 backdrop-blur-sm p-6"
+                    >
+                         <div className="flex items-center gap-2.5 border-b border-white/5 pb-4 mb-6">
+                            <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                                <MonitorPlay className="h-4 w-4 text-primary" />
+                            </div>
+                            <h3 className="text-[11px] font-bold text-zinc-200 uppercase tracking-widest">Video Type Selection</h3>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                              {VIDEO_TYPES.map((type) => {
                                 const Icon = type.icon;
                                 const isSelected = videoType === type.id;
@@ -198,137 +291,214 @@ export default function NewProjectPage() {
                                         type="button"
                                         onClick={() => setVideoType(type.id)}
                                         className={cn(
-                                            "flex flex-col gap-2 p-3 rounded-lg border text-left transition-all",
+                                            "group flex flex-col items-center gap-3 p-4 rounded-xl border transition-all relative overflow-hidden",
                                             isSelected 
-                                                ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(var(--primary),0.15)]" 
-                                                : "bg-background/30 border-white/5 hover:bg-white/5"
+                                                ? "bg-primary border-primary shadow-[0_0_20px_rgba(var(--primary),0.2)]" 
+                                                : "bg-white/[0.02] border-white/10 hover:bg-white/[0.05] hover:border-white/20"
                                         )}
                                     >
-                                        <div className="flex justify-between items-start w-full">
-                                            <Icon className={cn("w-4 h-4", isSelected ? "text-primary" : "text-muted-foreground")} />
-                                            <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", 
-                                                isSelected ? "bg-primary text-primary-foreground" : "bg-white/10 text-muted-foreground"
-                                            )}>
-                                                ₹{finalPrice}
-                                            </span>
+                                        <div className={cn(
+                                            "h-9 w-9 rounded-lg flex items-center justify-center transition-all",
+                                            isSelected ? "bg-white text-black" : "bg-white/5 text-zinc-500 group-hover:text-primary"
+                                        )}>
+                                            <Icon className="h-4.5 w-4.5" />
                                         </div>
-                                        <div>
-                                            <div className={cn("font-medium text-xs", isSelected ? "text-foreground" : "text-zinc-400")}>{type.label}</div>
-                                            <div className="text-[10px] text-muted-foreground line-clamp-1">{type.desc}</div>
+                                        
+                                        <div className="text-center space-y-1">
+                                            <div className={cn("text-[10px] font-bold uppercase tracking-widest leading-none", isSelected ? "text-white" : "text-zinc-500 group-hover:text-zinc-300")}>
+                                                {type.label}
+                                            </div>
+                                            <div className={cn("font-bold text-[9px] tabular-nums leading-none", isSelected ? "text-white/70" : "text-zinc-700")}>
+                                                ₹{finalPrice}
+                                            </div>
                                         </div>
                                     </button>
                                 );
                             })}
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
 
-                {/* RIGHT: Assets & Actions (Fixed height) */}
-                <div className="lg:col-span-5 flex flex-col gap-4 h-full">
+                {/* Asset Ingestion & Commitment (Right) */}
+                <div className="lg:col-span-4 flex flex-col gap-6 relative">
+                    <div className="lg:sticky lg:top-6 flex flex-col gap-6">
                     
-                    {/* 3. Upload Area */}
-                    <div className="bg-card/50 border border-border rounded-xl p-5 backdrop-blur-sm flex-1 flex flex-col min-h-[200px]">
-                         <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-4 block">Assets</Label>
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="enterprise-card bg-[#161920]/40 backdrop-blur-sm p-6 flex flex-col min-h-[280px]"
+                    >
+                         <div className="flex items-center gap-2.5 border-b border-white/5 pb-4 mb-6">
+                            <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                                <UploadCloud className="h-4 w-4 text-primary" />
+                            </div>
+                            <h3 className="text-[11px] font-bold text-zinc-200 uppercase tracking-widest">Upload Files</h3>
+                        </div>
                          
-                         <div className="flex-1 border-2 border-dashed border-white/10 rounded-lg bg-background/20 hover:bg-background/40 transition-colors relative group flex flex-col items-center justify-center p-6 text-center">
-                            <input 
-                                type="file" 
-                                accept="video/*,image/*,.zip,.rar"
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                onChange={(e) => {
-                                    if (e.target.files && e.target.files[0]) setRawFile(e.target.files[0]);
-                                }}
-                            />
-                            
-                            {rawFile ? (
-                                <div className="space-y-3 z-20 w-full">
-                                    <div className="w-12 h-12 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto">
-                                        <FileVideo className="w-6 h-6" />
-                                    </div>
-                                    <div className="text-sm font-medium pr-6 truncate">{rawFile.name}</div>
-                                    <div className="text-xs text-muted-foreground">{(rawFile.size / (1024 * 1024)).toFixed(2)} MB</div>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="absolute top-2 right-2 h-6 w-6 text-zinc-500 hover:text-red-500 z-30"
-                                        onClick={(e) => { e.preventDefault(); setRawFile(null); }}
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    <div className="w-12 h-12 bg-white/5 text-zinc-400 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
-                                        <UploadCloud className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-zinc-300">Drag files here or click</p>
-                                        <p className="text-xs text-zinc-500 mt-1">MP4, MOV, ZIP up to 2GB</p>
+                         <div className="space-y-6">
+                            <div className="space-y-3">
+                                <Label className="text-[9px] font-bold uppercase text-zinc-600 tracking-widest ml-1">Raw Footage</Label>
+                                <div className="border border-dashed border-white/10 rounded-xl bg-white/[0.01] hover:bg-white/[0.03] hover:border-primary/50 transition-all relative group p-4 min-h-[100px] flex flex-col items-center justify-center text-center cursor-pointer">
+                                    <input 
+                                        type="file" 
+                                        multiple
+                                        accept="video/*,image/*,.zip,.rar"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                            if (e.target.files) setRawFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                        }}
+                                    />
+                                    <div className="space-y-1">
+                                        <div className="w-8 h-8 bg-white/[0.03] text-zinc-700 rounded-lg flex items-center justify-center mx-auto group-hover:scale-105 group-hover:text-primary transition-all">
+                                            <UploadCloud className="w-4 h-4" />
+                                        </div>
+                                        <p className="text-[10px] font-bold text-zinc-500">Upload Video Files</p>
                                     </div>
                                 </div>
-                            )}
+                                <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1 custom-scrollbar">
+                                    {rawFiles.map((file, i) => (
+                                        <div key={i} className="flex flex-col p-3 bg-white/[0.02] border border-white/5 rounded-lg gap-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center shrink-0">
+                                                        <FileVideo className="h-3 w-3 text-primary" />
+                                                    </div>
+                                                    <span className="text-[10px] font-medium text-zinc-300 truncate">{file.name}</span>
+                                                </div>
+                                                <button disabled={isSubmitting} onClick={() => setRawFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-zinc-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                            {uploadProgress[file.name] !== undefined && (
+                                                <div className="space-y-1.5 mt-1">
+                                                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-zinc-300">
+                                                        <span>{Math.round(uploadProgress[file.name])}% UPLOADED</span>
+                                                    </div>
+                                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-primary transition-all duration-300 ease-out" 
+                                                            style={{ width: `${uploadProgress[file.name]}%` }} 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
 
-                             {uploadProgress > 0 && uploadProgress < 100 && (
-                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary/20">
-                                    <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                            <div className="space-y-3">
+                                <Label className="text-[9px] font-bold uppercase text-zinc-600 tracking-widest ml-1">Scripts & Docs</Label>
+                                <div className="border border-dashed border-white/10 rounded-xl bg-white/[0.01] hover:bg-white/[0.03] hover:border-primary/50 transition-all relative group p-4 min-h-[100px] flex flex-col items-center justify-center text-center cursor-pointer">
+                                    <input 
+                                        type="file" 
+                                        multiple
+                                        accept=".pdf,.doc,.docx,.txt,.rtf"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                            if (e.target.files) setScriptFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                        }}
+                                    />
+                                    <div className="space-y-1">
+                                        <div className="w-8 h-8 bg-white/[0.03] text-zinc-700 rounded-lg flex items-center justify-center mx-auto group-hover:scale-105 group-hover:text-primary transition-all">
+                                            <UploadCloud className="w-4 h-4" />
+                                        </div>
+                                        <p className="text-[10px] font-bold text-zinc-500">Upload Scripts</p>
+                                    </div>
                                 </div>
-                            )}
+                                <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1 custom-scrollbar">
+                                    {scriptFiles.map((file, i) => (
+                                        <div key={i} className="flex flex-col p-3 bg-white/[0.02] border border-white/5 rounded-lg gap-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    <div className="h-6 w-6 rounded bg-blue-500/10 flex items-center justify-center shrink-0">
+                                                        <Monitor className="h-3 w-3 text-blue-500" />
+                                                    </div>
+                                                    <span className="text-[10px] font-medium text-zinc-300 truncate">{file.name}</span>
+                                                </div>
+                                                <button disabled={isSubmitting} onClick={() => setScriptFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-zinc-600 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                            {uploadProgress[file.name] !== undefined && (
+                                                <div className="space-y-1.5 mt-1">
+                                                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-zinc-300">
+                                                        <span>{Math.round(uploadProgress[file.name])}% UPLOADED</span>
+                                                    </div>
+                                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-blue-500 transition-all duration-300 ease-out" 
+                                                            style={{ width: `${uploadProgress[file.name]}%` }} 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                          </div>
 
-                         <div className="mt-4">
-                             <Label className="text-xs mb-1.5 block">Or paste a link</Label>
+                         <div className="mt-6 space-y-2">
+                             <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 ml-1">External Data Port (URL)</Label>
                              <Input 
-                                placeholder="Google Drive / Dropbox link..." 
+                                placeholder="G-Drive, Dropbox, WeTransfer link..." 
                                 value={footageLink}
                                 onChange={e => setFootageLink(e.target.value)}
-                                className="h-8 text-xs bg-background/50 border-white/5"
+                                className="h-9 text-[11px] bg-white/[0.01] border-white/10 rounded-lg pl-3 focus:border-primary/50 focus:bg-white/[0.03] transition-all"
                             />
                          </div>
-                    </div>
+                    </motion.div>
 
-                    {/* 4. Checkout summary */}
-                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-5 backdrop-blur-sm">
-                        <div className="flex justify-between items-center mb-4">
-                            <div>
-                                <div className="text-sm font-medium text-zinc-300">Total Estimate</div>
-                                <div className="text-2xl font-bold text-white">₹{estimatedCost.toLocaleString()}</div>
+                    <motion.div 
+                         initial={{ opacity: 0, scale: 0.98 }}
+                         animate={{ opacity: 1, scale: 1 }}
+                         transition={{ delay: 0.4 }}
+                         className="enterprise-card bg-[#161920]/40 backdrop-blur-sm p-6 relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 blur-[40px] rounded-full pointer-events-none" />
+
+                        <div className="flex justify-between items-center mb-8">
+                            <div className="space-y-1">
+                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Project Price</div>
+                                <div className="text-3xl font-black text-white tracking-tighter tabular-nums font-heading">₹{estimatedCost.toLocaleString()}</div>
                             </div>
-                            <div className="text-right">
-                                <div className="text-xs text-zinc-500">Advance (50%)</div>
-                                <div className="text-lg font-bold text-primary">₹{Math.round(estimatedCost * 0.5).toLocaleString()}</div>
+                            <div className="text-right space-y-1">
+                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Advance Payment</div>
+                                <div className="text-xl font-black text-primary tracking-tight tabular-nums">₹{Math.round(estimatedCost * 0.5).toLocaleString()}</div>
                             </div>
                         </div>
                         
-                        <div className="flex flex-col gap-2">
-                             <Button 
-                                onClick={handleSubmit}
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={handleFakePayment}
                                 disabled={isSubmitting || !name || !description}
-                                variant="outline"
-                                className="w-full h-12 border-zinc-800 text-zinc-500 hover:bg-transparent cursor-not-allowed"
+                                className="w-full h-12 bg-primary text-primary-foreground text-[11px] font-bold uppercase tracking-widest rounded-lg shadow-xl hover:bg-primary/90 transition-all active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-2"
                             >
-                                < DollarSign className="h-4 w-4 mr-2" />
-                                Proceed to Payment (Disabled)
-                            </Button>
+                                {isSubmitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+                                {isSubmitting ? "PROCESSING..." : `PAY ₹${estimatedCost} NOW`}
+                            </button>
 
-                            <Button 
-                                onClick={handlePayLater}
-                                disabled={isSubmitting || !name || !description}
-                                className="w-full bg-primary hover:bg-primary/90 h-12 text-md font-semibold shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--primary),0.5)] transition-all"
-                            >
-                                {isSubmitting ? (
-                                    <span className="flex items-center gap-2">
-                                        <Loader2 className="animate-spin" /> Submitting...
-                                    </span>
-                                ) : (
-                                    "Pay Later & Request Project"
-                                )}
-                            </Button>
+                            {user?.payLater && (
+                                <button 
+                                    onClick={() => handleSubmitProject(false)}
+                                    disabled={isSubmitting || !name || !description}
+                                    className="w-full bg-white/[0.03] border border-white/10 hover:bg-white/[0.05] h-12 rounded-lg text-zinc-300 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-20 disabled:pointer-events-none"
+                                >
+                                    <ShieldCheck className="h-3.5 w-3.5" />
+                                    USE DEFERRED PAYMENT (PAY LATER)
+                                </button>
+                            )}
                         </div>
-                        <p className="text-[10px] text-center text-zinc-500 mt-3">
-                            Direct request will be reviewed by our team. Payment required after draft approval.
-                        </p>
+                        <div className="flex items-center gap-2 mt-6 justify-center">
+                            <ShieldCheck className="h-3 w-3 text-zinc-700" />
+                            <p className="text-[9px] text-zinc-700 font-bold uppercase tracking-widest">
+                                Standard Secure Setup Active
+                            </p>
+                        </div>
+                    </motion.div>
                     </div>
-
                 </div>
             </div>
         </div>

@@ -59,8 +59,8 @@ export function InvoiceRenderer({ invoice }: InvoiceRendererProps) {
                         <tr key={index} className="border-b border-zinc-100 last:border-0">
                             <td className="py-4 text-zinc-700 font-medium">{item.description}</td>
                             <td className="py-4 text-right text-zinc-500">{item.quantity}</td>
-                            <td className="py-4 text-right text-zinc-500">${item.rate.toLocaleString()}</td>
-                            <td className="py-4 text-right text-zinc-900 font-bold">${item.amount.toLocaleString()}</td>
+                            <td className="py-4 text-right text-zinc-500">₹{item.rate.toLocaleString()}</td>
+                            <td className="py-4 text-right text-zinc-900 font-bold">₹{item.amount.toLocaleString()}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -71,17 +71,17 @@ export function InvoiceRenderer({ invoice }: InvoiceRendererProps) {
                 <div className="w-1/2 md:w-1/3 space-y-3">
                     <div className="flex justify-between text-zinc-500">
                         <span>Subtotal</span>
-                        <span>${invoice.subtotal.toLocaleString()}</span>
+                        <span>₹{invoice.subtotal.toLocaleString()}</span>
                     </div>
                     {invoice.tax && invoice.tax > 0 && (
                         <div className="flex justify-between text-zinc-500">
                             <span>Tax</span>
-                            <span>${((invoice.subtotal * invoice.tax) / 100).toLocaleString()}</span>
+                            <span>₹{((invoice.subtotal * invoice.tax) / 100).toLocaleString()}</span>
                         </div>
                     )}
                     <div className="flex justify-between text-xl font-bold text-zinc-900 border-t-2 border-zinc-100 pt-3">
                         <span>Total Due</span>
-                        <span>${invoice.total.toLocaleString()}</span>
+                        <span>₹{invoice.total.toLocaleString()}</span>
                     </div>
                 </div>
             </div>

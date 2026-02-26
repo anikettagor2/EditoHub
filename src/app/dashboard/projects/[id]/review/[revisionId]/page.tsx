@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useRef, useState, use } from "react";
@@ -8,20 +7,32 @@ import { TimelineComments } from "@/components/video-review/timeline-comments";
 import { GuestIdentityModal } from "@/components/video-review/guest-identity-modal";
 import { Comment, Revision, UserRole } from "@/types/schema";
 import { doc, collection, query, where, onSnapshot, setDoc, updateDoc, orderBy, arrayUnion } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
+import { db, storage } from "@/lib/firebase/config";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Share2, Download, MessageSquarePlus, DollarSign, Loader2, ShieldCheck } from "lucide-react";
+import { 
+    ChevronLeft, 
+    Share2, 
+    Download, 
+    MessageSquarePlus, 
+    IndianRupee, 
+    Loader2, 
+    ShieldCheck,
+    PanelRightClose,
+    PanelRightOpen,
+    Eye,
+    Zap,
+    Maximize2,
+    Activity
+} from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/context/auth-context";
 import { v4 as uuidv4 } from 'uuid';
 import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
-import { PaymentButton } from "@/components/payment-button";
 import { toast } from "sonner";
 import { registerDownload, requestDownloadUnlock } from "@/app/actions/project-actions";
-
-// Mock Data Source - In production this comes from Firestore
-const MOCK_VIDEO_URL = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function ReviewPage(props: { params: Promise<{ id: string; revisionId: string }> }) {
   const params = use(props.params); 
@@ -41,24 +52,23 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
 
   // Real Data State
   const [revision, setRevision] = useState<Revision | null>(null);
-  const [project, setProject] = useState<any>(null); // Store full project
+  const [project, setProject] = useState<any>(null); 
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
 
-  // 1. Real-time Revision & Project Details
+  const waitingForGuest = useRef(false);
+
   useEffect(() => {
     if (!params.id || !params.revisionId) return;
 
-    // Listen to Revision
     const unsubRev = onSnapshot(doc(db, "revisions", params.revisionId), (snap) => {
       if (snap.exists()) {
         setRevision({ id: snap.id, ...snap.data() } as Revision);
       }
     });
 
-    // Listen to Project
     const unsubProj = onSnapshot(doc(db, "projects", params.id), (snap) => {
       if (snap.exists()) {
         setProject({ id: snap.id, ...snap.data() });
@@ -71,15 +81,11 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
     };
   }, [params.id, params.revisionId]);
 
-
   const handleDownloadAttempt = () => {
-      // Logic: If user is client AND not fully paid, block execution
       const isClient = user?.role === 'client' || user?.uid === project?.ownerId;
-      
       if (isClient && project?.paymentStatus !== 'full_paid') {
           setIsUnlockModalOpen(true);
       } else {
-          // Proceed to download
           if (revision?.videoUrl) {
               window.open(revision.videoUrl, '_blank');
           }
@@ -92,26 +98,25 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
       try {
           const res = await requestDownloadUnlock(params.id, user.uid);
           if (res.success) {
-              toast.success("Request sent to project manager!");
+              toast.success("Request sent! We'll look into it.");
               setIsUnlockModalOpen(false);
           } else {
               toast.error(res.error || "Failed to send request");
           }
       } catch (err) {
-          toast.error("An error occurred");
+          toast.error("An error occurred.");
       } finally {
           setIsRequesting(false);
       }
   };
 
-  // 2. Real-time Comments Sync
   useEffect(() => {
     if (!params.revisionId) return;
 
     const q = query(
         collection(db, "comments"),
         where("revisionId", "==", params.revisionId),
-        orderBy("timestamp", "asc") // Order by video time
+        orderBy("timestamp", "asc")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -126,17 +131,6 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
     return () => unsubscribe();
   }, [params.revisionId]);
 
-  // Auto-Cleanup Effect for Expired Downloads
-  useEffect(() => {
-      if (revision && (revision.downloadCount || 0) >= 3 && revision.status !== 'archived') {
-          // Trigger cleanup silently
-          registerDownload(params.id, params.revisionId).then((res) => {
-             console.log("Expired revision cleanup:", res);
-          });
-      }
-  }, [revision, params.id, params.revisionId]);
-
-  // Draft State
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [draftTime, setDraftTime] = useState<number | null>(null);
 
@@ -144,20 +138,27 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
       if (typeof window === "undefined") return;
       const publicLink = `${window.location.origin}/review/${params.id}/${params.revisionId}`;
       navigator.clipboard.writeText(publicLink);
-      toast.success("Review link copied to clipboard!", {
-          description: "Anyone with this link can view and comment (after providing their name)."
+      toast.success("Link copied!");
+  };
+
+  const handleUploadFile = async (file: File): Promise<string> => {
+      if (!user) {
+          toast.error("Please log in to upload images.");
+          throw new Error("Unauthorized");
+      }
+      const storageRef = ref(storage, `comments/${params.id}/${Date.now()}_${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      
+      return new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', null, reject, async () => {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+          });
       });
   };
 
-  // ... (keep useEffects)
-
-  const handleTimeUpdate = (time: number) => {
-     setCurrentTime(time);
-  };
-
-  const handleSeek = (time: number) => {
-     playerRef.current?.seekTo(time);
-  };
+  const handleTimeUpdate = (time: number) => setCurrentTime(time);
+  const handleSeek = (time: number) => playerRef.current?.seekTo(time);
 
   const handleSelectComment = (comment: Comment) => {
      setActiveCommentId(comment.id);
@@ -168,15 +169,12 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
   const handleGuestIdentify = (name: string, email: string) => {
       setGuestInfo({ name, email });
       setIsGuestModalOpen(false);
-      // Resume adding comment if that was the intent
       if (waitingForGuest.current) {
           setIsAddingComment(true);
           setDraftTime(currentTime);
           waitingForGuest.current = false;
       }
   };
-
-  const waitingForGuest = useRef(false);
 
   const handleAddCommentStart = () => {
       if (!user && !guestInfo) {
@@ -185,24 +183,15 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           setIsGuestModalOpen(true);
           return;
       }
-      
       playerRef.current?.pause();
       setDraftTime(currentTime);
       setIsAddingComment(true);
-      setIsSidebarOpen(true); // Ensure sidebar is open to show input
+      setIsSidebarOpen(true);
   };
 
-  const handleCancelComment = () => {
-      setIsAddingComment(false);
-      setDraftTime(null);
-      playerRef.current?.play();
-  };
-
-  const handleSaveComment = async (content: string) => {
+  const handleSaveComment = async (content: string, attachments?: string[]) => {
       if (!draftTime && draftTime !== 0) return;
-
       const newId = uuidv4(); 
-      
       const userId = user?.uid || (guestInfo?.email ? `guest-${guestInfo.email}` : `guest-${Date.now()}`);
       const userName = user?.displayName || guestInfo?.name || "Guest";
       const userRole: UserRole = user?.role || 'guest';
@@ -217,12 +206,12 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           userAvatar: user?.photoURL || null,
           content: content, 
           timestamp: draftTime!,
+          attachments: attachments || [],
           createdAt: Date.now(),
           status: "open",
           replies: []
       };
 
-      // Optimistic Update
       setComments(prev => [...prev, newComment]);
       setIsAddingComment(false);
       setDraftTime(null);
@@ -232,155 +221,152 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           const { id, ...data } = newComment;
           await setDoc(doc(db, "comments", newId), data);
       } catch (err) {
-          console.error("Failed to add comment:", err);
           setComments(prev => prev.filter(c => c.id !== newId));
-          alert("Failed to save comment. Please try again.");
+          toast.error("Couldn't add your comment. Please try again.");
       }
   };
 
   const handleResolveComment = async (commentId: string) => {
-      // Optimistic
-      const originalComments = [...comments];
       const targetComment = comments.find(c => c.id === commentId);
       if (!targetComment) return;
-
       const newStatus = targetComment.status === 'open' ? 'resolved' : 'open';
-      
-      setComments(prev => prev.map(c => 
-          c.id === commentId ? { ...c, status: newStatus } : c
-      ));
-
+      setComments(prev => prev.map(c => c.id === commentId ? { ...c, status: newStatus } : c));
       try {
-          await updateDoc(doc(db, "comments", commentId), {
-              status: newStatus
-          });
+          await updateDoc(doc(db, "comments", commentId), { status: newStatus });
       } catch (err) {
-          console.error("Failed to update status:", err);
-          setComments(originalComments);
+          toast.error("Couldn't update the status.");
       }
   };
 
-  const handleReply = async (commentId: string, content: string) => {
+  const handleReply = async (commentId: string, content: string, attachments?: string[]) => {
       if (!user && !guestInfo) {
           setIsGuestModalOpen(true);
           return;
       }
-      
       const userId = user?.uid || (guestInfo?.email ? `guest-${guestInfo.email}` : `guest-${Date.now()}`);
       const userName = user?.displayName || guestInfo?.name || "Guest";
       const userRole: UserRole = user?.role || 'guest';
-
-      const newReply = {
-          id: uuidv4(),
-          userId: userId,
-          userName: userName,
-          userRole: userRole,
-          content,
-          createdAt: Date.now()
+      const newReply = { 
+          id: uuidv4(), 
+          userId, 
+          userName, 
+          userRole, 
+          content, 
+          attachments: attachments || [],
+          createdAt: Date.now() 
       };
 
-      // Optimistic
-      setComments(prev => prev.map(c => {
-          if (c.id === commentId) {
-              return { ...c, replies: [...(c.replies || []), newReply] };
-          }
-          return c;
-      }));
-
+      setComments(prev => prev.map(c => c.id === commentId ? { ...c, replies: [...(c.replies || []), newReply] } : c));
       try {
-          await updateDoc(doc(db, "comments", commentId), {
-              replies: arrayUnion(newReply)
-          });
+          await updateDoc(doc(db, "comments", commentId), { replies: arrayUnion(newReply) });
       } catch (err) {
-          console.error("Failed to reply:", err);
+          toast.error("Failed to add reply.");
       }
   };
 
-  if(!revision && !loading) return <div className="text-white p-10">Revision not found</div>;
+  const handleCancelComment = () => {
+      setIsAddingComment(false);
+      setDraftTime(null);
+  };
+
+  if(!revision && !loading) return <div className="text-white p-10 font-heading">We couldn't find this version.</div>;
 
   const isClientUser = user?.role === "client" || user?.uid === project?.ownerId;
   const showPaymentLock = isClientUser && project?.paymentStatus !== "full_paid";
 
   return (
-    <div className="flex h-screen flex-col bg-black text-white overflow-hidden">
-       {/* Top Bar for Review Page */}
-       <header className="flex h-16 items-center justify-between border-b border-white/10 px-4 bg-zinc-900/50 backdrop-blur">
-          {/* ... (header content same as before) */}
-          <div className="flex items-center gap-4">
-             <Link href={`/dashboard/projects/${params.id}`} className="p-2 hover:bg-white/10 rounded-full transition">
-                <ChevronLeft className="h-5 w-5" />
+    <div className="flex h-screen flex-col bg-[#050505] text-white overflow-hidden mesh-grid">
+       {/* Header */}
+       <header className="flex h-16 items-center justify-between border-b border-white/[0.03] px-6 bg-[#050505]/60 backdrop-blur-2xl z-20 shrink-0">
+          <div className="flex items-center gap-6">
+             <Link href={`/dashboard/projects/${params.id}`} className="group h-10 w-10 flex items-center justify-center rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all">
+                <ChevronLeft className="h-5 w-5 text-zinc-600 group-hover:text-white transition-colors" />
              </Link>
+             <div className="h-6 w-px bg-white/[0.05]" />
              <div>
-                <h1 className="text-sm font-bold text-white">{project?.name || "Loading..."}</h1>
-                <div className="flex items-center gap-2 text-xs text-zinc-400">
-                   <span className="bg-primary/20 text-primary px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider">V{revision?.version || '?'}</span>
-                   <span suppressHydrationWarning>Uploaded {revision ? new Date(revision.createdAt).toLocaleDateString() : '...'}</span>
+                <div className="flex items-center gap-3">
+                    <h1 className="font-heading font-bold text-sm tracking-tight text-white">{project?.name || "Loading..."}</h1>
+                    <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20">
+                       <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Version {revision?.version || '?'}</span>
+                    </div>
                 </div>
+                <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">
+                   Project File <span className="text-zinc-700">/</span> Video Review
+                </p>
              </div>
           </div>
 
-          <div className="flex items-center gap-3">
-                <Button 
+          <div className="flex items-center gap-4">
+              {/* Video Specs */}
+              <div className="hidden lg:flex items-center gap-4 px-4 py-2 rounded-xl bg-white/[0.02] border border-white/[0.05] mr-4">
+                  <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Quality</span>
+                      <span className="text-[11px] font-bold text-zinc-300">4K Resolution</span>
+                  </div>
+                  <div className="w-px h-6 bg-white/[0.05]" />
+                  <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Format</span>
+                      <span className="text-[11px] font-bold text-zinc-300">Horizontal</span>
+                  </div>
+              </div>
+
+              <button 
                 onClick={async () => {
                    if (!showPaymentLock) {
-                       // Handle Paid Download with Limits
                        try {
                            const res = await registerDownload(params.id, params.revisionId);
                            if (!res.success) {
                                toast.error(res.error || "Download limit reached");
                                return;
                            }
-                           
-                           // Update local state to reflect new count
-                           if (revision) {
-                               setRevision({ ...revision, downloadCount: (revision.downloadCount || 0) + 1 });
-                           }
-
-                           // Proceed to download
-                           if (res.downloadUrl) {
-                               // Use the signed URL which forces download
-                               window.location.href = res.downloadUrl;
-                           } else if (revision?.videoUrl) {
-                               window.open(revision.videoUrl, '_blank');
-                           }
+                           if (revision) setRevision({ ...revision, downloadCount: (revision.downloadCount || 0) + 1 });
+                           if (res.downloadUrl) window.location.href = res.downloadUrl;
+                           else if (revision?.videoUrl) window.open(revision.videoUrl, '_blank');
                        } catch (e) {
-                           toast.error("Failed to process download");
+                           toast.error("Download failed.");
                        }
                    } else {
-                       // Handle Payment Lock
                        handleDownloadAttempt();
                    }
                 }}
-                size="sm" 
-                variant="outline" 
                 disabled={!showPaymentLock && (revision?.downloadCount || 0) >= 3}
                 className={cn(
-                    "h-8 gap-2 bg-transparent border-zinc-700 hover:text-white transition-colors",
-                    !showPaymentLock ? "text-zinc-300" : "text-amber-500 border-amber-500/50 hover:bg-amber-500/10"
+                    "h-10 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 active:scale-95 border",
+                    !showPaymentLock 
+                        ? "bg-white/[0.02] border-white/[0.05] text-zinc-500 hover:text-white hover:bg-white/[0.05]" 
+                        : "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]"
                 )}
               >
-                 {!showPaymentLock ? <Download className="h-4 w-4" /> : <DollarSign className="h-4 w-4" />}
-                 <span className="hidden sm:inline">
-                    {!showPaymentLock 
-                      ? ((revision?.downloadCount || 0) >= 3 ? "Expired" : `Download (${3 - (revision?.downloadCount || 0)} left)`)
-                      : "Unlock Download"}
-                 </span>
-              </Button>
-              <Button 
+                 {!showPaymentLock ? <Download className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                 {!showPaymentLock 
+                    ? ((revision?.downloadCount || 0) >= 3 ? "Max Reached" : `Download (${3 - (revision?.downloadCount || 0)} left)`)
+                    : "Get Video File"}
+              </button>
+
+              <button 
                 onClick={handleShareReview}
-                size="sm" 
-                className="h-8 gap-2 bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20"
+                className="h-10 px-6 rounded-xl bg-white text-black text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.1)] flex items-center gap-3"
               >
-                 <Share2 className="h-4 w-4" />
-                 <span className="hidden sm:inline">Share Review</span>
-              </Button>
+                 <Share2 className="h-3.5 w-3.5 stroke-[2.5px]" />
+                 Share Link
+              </button>
           </div>
        </header>
 
-       <div className="flex flex-1 overflow-hidden">
-          {/* Main Video Area */}
-          <main className="relative flex-1 flex flex-col items-center justify-center bg-zinc-950 p-6">
-             <div className="relative w-full max-w-5xl aspect-video bg-black shadow-2xl rounded-xl border border-white/5 overflow-visible">
+       <div className="flex flex-1 overflow-hidden relative">
+          {/* Video Player */}
+          <main className="relative flex-1 flex flex-col items-center justify-center p-8 lg:p-12 transition-all duration-700">
+             
+             {/* Dynamic Glow Background */}
+             <div className="absolute inset-0 pointer-events-none opacity-20">
+                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-primary/10 blur-[150px] rounded-full" />
+             </div>
+
+             <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="relative w-full max-w-[1200px] aspect-video glass-panel border-white/[0.08] rounded-[2rem] shadow-[0_40px_100px_rgba(0,0,0,0.6)] overflow-hidden"
+             >
                 {revision && (
                     <VideoPlayer 
                         ref={playerRef}
@@ -390,43 +376,95 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
                     />
                 )}
                 
-                 {/* Floating Timeline Markers */}
-                 <div className="absolute -bottom-6 left-0 right-0 h-8">
-                     <TimelineComments 
+                {/* Timeline */}
+                <div className="absolute bottom-10 left-10 right-10">
+                    <TimelineComments 
                         duration={duration} 
                         comments={comments} 
                         onSeek={handleSeek}
                         hoverTime={hoverTime}
-                     />
-                 </div>
-             </div>
+                    />
+                </div>
+             </motion.div>
 
-             {/* Quick Actions Bar under video */}
-             <div className="mt-12 flex gap-4">
-                 <Button onClick={handleAddCommentStart} className="gap-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-white/10 shadow-lg transition-transform active:scale-95">
-                    <MessageSquarePlus className="h-4 w-4" />
-                    {isAddingComment ? "Commenting..." : `Add Comment at ${Math.floor(currentTime)}s`}
-                 </Button>
+             {/* Feedback Controls */}
+             <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="mt-14 flex items-center gap-6"
+             >
+                 <button 
+                    onClick={handleAddCommentStart} 
+                    className="group h-14 px-10 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05] hover:border-primary/40 text-white transition-all active:scale-95 flex items-center gap-4 relative overflow-hidden"
+                 >
+                    <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <MessageSquarePlus className="h-5 w-5 text-primary" />
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+                        {isAddingComment ? "Drafting..." : `Leave a comment at ${Math.floor(currentTime)}s`}
+                    </span>
+                 </button>
+
+                 <div className="h-10 w-px bg-white/[0.05]" />
+
+                 <div className="flex items-center gap-3">
+                    <button className="h-12 w-12 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-center text-zinc-600 hover:text-white transition-all">
+                        <Maximize2 className="h-4 w-4" />
+                    </button>
+                    <button 
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        className={cn(
+                            "h-12 w-12 rounded-xl flex items-center justify-center transition-all border",
+                            isSidebarOpen ? "bg-primary text-white border-primary/20" : "bg-white/[0.02] border-white/[0.05] text-zinc-600 hover:text-white"
+                        )}
+                    >
+                        {isSidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                    </button>
+                 </div>
+             </motion.div>
+
+             {/* System Status Indicators */}
+             <div className="absolute bottom-8 left-12 flex items-center gap-6 pointer-events-none">
+                <div className="flex items-center gap-2.5">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Auto-saving Feedback</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                    <Activity className="h-3 w-3 text-emerald-500" />
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Active</span>
+                </div>
              </div>
           </main>
 
-          {/* Sidebar */}
-          <aside className={cn(
-              "w-96 border-l border-white/10 bg-zinc-900 flex flex-col transition-all duration-300",
-              !isSidebarOpen && "w-0 opacity-0 overflow-hidden"
-          )}>
-              <CommentThread 
-                 comments={comments}
-                 activeCommentId={activeCommentId}
-                 isAddingComment={isAddingComment}
-                 draftTime={draftTime}
-                 onSelectComment={handleSelectComment}
-                 onResolveComment={handleResolveComment}
-                 onReply={handleReply}
-                 onSaveComment={handleSaveComment}
-                 onCancelComment={handleCancelComment}
-              />
-          </aside>
+          {/* 3. Threaded Communication Sidebar */}
+          <AnimatePresence>
+              {isSidebarOpen && (
+                <motion.aside 
+                    initial={{ x: 400, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 400, opacity: 0 }}
+                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    className="w-[450px] border-l border-white/[0.03] bg-[#050505]/40 backdrop-blur-3xl flex flex-col relative z-10 shadow-2xl"
+                >
+                    <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+                        <Zap className="h-40 w-40 text-primary blur-3xl" />
+                    </div>
+                    
+                    <CommentThread 
+                        comments={comments}
+                        activeCommentId={activeCommentId}
+                        isAddingComment={isAddingComment}
+                        draftTime={draftTime}
+                        onSelectComment={handleSelectComment}
+                        onResolveComment={handleResolveComment}
+                        onReply={handleReply}
+                        onSaveComment={handleSaveComment}
+                        onCancelComment={handleCancelComment}
+                        onUploadFile={handleUploadFile}
+                    />
+                </motion.aside>
+              )}
+          </AnimatePresence>
        </div>
        
        <GuestIdentityModal 
@@ -435,68 +473,67 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
             onClose={() => setIsGuestModalOpen(false)}
        />
 
-       {/* Unlock Download Modal */}
+       {/* Authorize Download Modal */}
        <Modal
            isOpen={isUnlockModalOpen}
            onClose={() => setIsUnlockModalOpen(false)}
-           title="Unlock Final Downloads"
+           title="Get Download Access"
        >
-            <div className="space-y-6">
-                <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-3">
-                   <div className="flex items-center justify-between">
-                       <span className="text-zinc-400 text-sm font-medium">Project</span>
-                       <span className="text-white text-sm font-semibold">{project?.name}</span>
+            <div className="space-y-10">
+                <div className="p-8 glass-panel border-white/[0.05] rounded-[2rem] space-y-6">
+                   <div className="flex items-center justify-between border-b border-white/[0.03] pb-4">
+                       <span className="text-zinc-600 font-black uppercase tracking-widest text-[9px]">Project</span>
+                       <span className="text-white font-bold font-heading text-sm">{project?.name}</span>
                    </div>
                    <div className="flex justify-between items-center">
-                       <span className="text-zinc-400 text-sm font-medium">Due Balance</span>
-                       <span className="text-primary font-mono font-bold">${((project?.totalCost || 0) - (project?.amountPaid || 0)).toLocaleString()}</span>
+                       <span className="text-zinc-600 font-black uppercase tracking-widest text-[9px]">Remaining Balance</span>
+                       <span className="text-primary font-heading font-black text-2xl tracking-tighter">₹{((project?.totalCost || 0) - (project?.amountPaid || 0)).toLocaleString()}</span>
                    </div>
                 </div>
 
-                <div className="grid gap-3">
+                <div className="grid gap-4">
                     <button 
                         onClick={handleRequestUnlock}
                         disabled={isRequesting || project?.downloadUnlockRequested}
                         className={cn(
-                            "w-full group relative flex flex-col items-start p-4 rounded-2xl border transition-all text-left",
+                            "w-full group relative flex flex-col items-start p-6 rounded-[1.5rem] border transition-all text-left",
                             project?.downloadUnlockRequested 
-                                ? "bg-zinc-900/50 border-zinc-800 cursor-not-allowed opacity-70" 
-                                : "bg-zinc-900 border-zinc-800 hover:border-primary/50 hover:bg-zinc-800/50"
+                                ? "bg-white/[0.01] border-white/[0.03] cursor-not-allowed opacity-50" 
+                                : "bg-white/[0.02] border-white/[0.05] hover:border-primary/40 hover:bg-primary/[0.02]"
                         )}
                     >
-                        <div className="flex items-center gap-3 mb-1">
-                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                                {isRequesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                        <div className="flex items-center gap-4 mb-2">
+                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform border border-primary/20">
+                                {isRequesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
                             </div>
-                            <span className="font-bold text-white">
-                                {project?.downloadUnlockRequested ? "Request Sent" : "Request PM Approval"}
+                            <span className="font-heading font-black text-white text-base tracking-tight">
+                                {project?.downloadUnlockRequested ? "Request Sent" : "Request Permission"}
                             </span>
                         </div>
-                        <p className="text-xs text-zinc-500 ml-11">Request access from your project manager. Best for direct billing accounts.</p>
+                        <p className="text-[11px] text-zinc-600 ml-14 font-medium leading-relaxed">Ask an admin to unlock the download for this project.</p>
                         
                         {project?.downloadUnlockRequested && (
-                            <div className="absolute top-4 right-4 text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-bold border border-emerald-500/20">
-                                PENDING
+                            <div className="absolute top-6 right-6 text-[9px] bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-lg font-black tracking-widest border border-emerald-500/20 uppercase">
+                                Sent...
                             </div>
                         )}
                     </button>
 
-                    <div className="relative group grayscale cursor-not-allowed">
-                        <div className="flex flex-col items-start p-4 rounded-2xl border border-zinc-800 bg-zinc-900 opacity-50">
-                            <div className="flex items-center gap-3 mb-1">
-                                <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500">
-                                    <DollarSign className="h-4 w-4" />
+                    <div className="relative group grayscale cursor-not-allowed opacity-30">
+                        <div className="flex flex-col items-start p-6 rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01]">
+                            <div className="flex items-center gap-4 mb-2">
+                                <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-600">
+                                    <IndianRupee className="h-5 w-5" />
                                 </div>
-                                <span className="font-bold text-zinc-400">Pay Now & Unlock</span>
+                                <span className="font-heading font-black text-zinc-400 text-base tracking-tight">Complete Payment</span>
                             </div>
-                            <p className="text-xs text-zinc-500 ml-11 italic">Instant unlock via direct payment (Currently Disabled)</p>
+                            <p className="text-[11px] text-zinc-700 ml-14 font-medium italic">Instant unlock with payment (Coming soon)</p>
                         </div>
-                        <div className="absolute inset-0 z-10" />
                     </div>
                 </div>
 
-                <p className="text-center text-[11px] text-zinc-500 leading-relaxed px-4">
-                    By requesting an unlock, you agree to our settlement terms. Once approved, the download button will be enabled for this revision.
+                <p className="text-center text-[10px] text-zinc-700 font-black uppercase tracking-[0.2em] leading-relaxed px-10">
+                    Once unlocked, you'll be able to download the high-quality final version.
                 </p>
             </div>
        </Modal>

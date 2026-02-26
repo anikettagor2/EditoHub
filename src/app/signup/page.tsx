@@ -12,8 +12,12 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import Image from "next/image";
+import { useBranding } from "@/lib/context/branding-context";
+
 export default function SignupPage() {
   const { signInWithGoogle, signupWithEmail, loading } = useAuth();
+  const { logoUrl } = useBranding();
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>("client");
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +26,11 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Editor Experience Meta
+  const [whatsapp, setWhatsapp] = useState("");
+  const [portfolio, setPortfolio] = useState("");
+
 
   const handleGoogleSignup = async () => {
     setIsSigningUp(true);
@@ -46,7 +55,11 @@ export default function SignupPage() {
     setIsSigningUp(true);
     setError(null);
     try {
-        await signupWithEmail(email, password, name, selectedRole);
+        const metadata = selectedRole === 'editor' ? {
+            whatsappNumber: whatsapp,
+            portfolio: [{ name: "Main Portfolio", url: portfolio, date: Date.now() }]
+        } : {};
+        await signupWithEmail(email, password, name, selectedRole, metadata);
     } catch (error: any) {
         console.error("Email signup failed", error);
         setError(error.message || "Signup failed. Please try again.");
@@ -94,13 +107,23 @@ export default function SignupPage() {
           transition={{ duration: 0.5 }}
           className="text-center"
         >
-          <Link href="/" className="inline-flex items-center gap-2 mb-8">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 backdrop-blur-md border border-primary/20 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-              <Film className="h-5 w-5 text-primary" />
+          <Link href="/" className="inline-flex items-center justify-center mb-8 w-full">
+            <div className="relative h-16 w-full flex items-center justify-center rounded-2xl overflow-hidden">
+              {logoUrl ? (
+                <Image 
+                  src={logoUrl} 
+                  alt="EditoHub Logo" 
+                  fill 
+                  className="object-contain"
+                  priority
+                />
+              ) : (
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center font-bold text-black italic text-xl shadow-[0_0_20px_rgba(var(--primary),0.3)]">E</div>
+                    <span className="text-3xl font-heading font-black tracking-tighter">EDITO_HUB</span>
+                </div>
+              )}
             </div>
-            <span className="text-2xl font-bold tracking-tight text-white">
-              EditoHub
-            </span>
           </Link>
           
           <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
@@ -159,6 +182,32 @@ export default function SignupPage() {
                       onChange={e => setName(e.target.value)}
                   />
               </div>
+
+              {/* Role-Specific Fields */}
+              {selectedRole === 'editor' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="space-y-3 pt-2 border-t border-white/5"
+                  >
+                      <div className="space-y-1.5">
+                          <Label className="text-zinc-400 text-[10px] uppercase tracking-wider font-bold">Professional Details</Label>
+                          <Input 
+                              placeholder="WhatsApp Number (+91...)" 
+                              className="bg-black/40 border-white/10 text-white h-10"
+                              value={whatsapp}
+                              onChange={e => setWhatsapp(e.target.value)}
+                          />
+                      </div>
+                      <Input 
+                          placeholder="Portfolio Link (Google Drive/YouTube/behance)" 
+                          className="bg-black/40 border-white/10 text-white h-10"
+                          value={portfolio}
+                          onChange={e => setPortfolio(e.target.value)}
+                      />
+                  </motion.div>
+              )}
+
               <div className="grid grid-cols-1 gap-3">
                   <Input 
                       type="email"

@@ -11,8 +11,12 @@ import { SnowBackground } from "@/components/snow-background";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import Image from "next/image";
+import { useBranding } from "@/lib/context/branding-context";
+
 export default function LoginPage() {
   const { signInWithGoogle, loginWithEmail, loading } = useAuth();
+  const { logoUrl } = useBranding();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -77,13 +81,23 @@ export default function LoginPage() {
           transition={{ duration: 0.5 }}
           className="text-center"
         >
-          <Link href="/" className="inline-flex items-center gap-2 mb-8">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 backdrop-blur-md border border-primary/20 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-              <Film className="h-5 w-5 text-primary" />
+          <Link href="/" className="inline-flex items-center justify-center mb-8 w-full">
+            <div className="relative h-16 w-full flex items-center justify-center rounded-2xl overflow-hidden">
+              {logoUrl ? (
+                <Image 
+                  src={logoUrl} 
+                  alt="EditoHub Logo" 
+                  fill 
+                  className="object-contain"
+                  priority
+                />
+              ) : (
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center font-bold text-black italic text-xl shadow-[0_0_20px_rgba(var(--primary),0.3)]">E</div>
+                    <span className="text-3xl font-heading font-black tracking-tighter">EDITO_HUB</span>
+                </div>
+              )}
             </div>
-            <span className="text-2xl font-bold tracking-tight text-white">
-              EditoHub
-            </span>
           </Link>
           
           <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">

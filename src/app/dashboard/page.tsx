@@ -13,14 +13,55 @@ export default function DashboardPage() {
 
   if (loading) {
      return (
-        <div className="flex h-screen items-center justify-center bg-background text-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="flex h-[calc(100vh-12rem)] items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+                <div className="relative h-12 w-12">
+                    <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+                    <div className="absolute inset-0 rounded-full border-t-2 border-primary animate-spin" />
+                </div>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest animate-pulse">Syncing Node...</span>
+            </div>
         </div>
      );
   }
 
   if (!user) {
       return null;
+  }
+
+  if (user.status === 'inactive') {
+      return (
+          <div className="flex h-[calc(100vh-20rem)] items-center justify-center p-6 text-center">
+              <div className="max-w-md space-y-6">
+                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 inline-block">
+                      <div className="h-8 w-8 text-red-500 font-black italic text-2xl flex items-center justify-center">!</div>
+                  </div>
+                  <div className="space-y-2">
+                       <h2 className="text-2xl font-bold text-white tracking-tight">Access Suspended</h2>
+                       <p className="text-zinc-400 text-sm">Your account protocol has been locked by administration. If you believe this is a desynchronization error, please contact system support.</p>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
+  if (user.onboardingStatus === 'pending') {
+      return (
+          <div className="flex h-[calc(100vh-20rem)] items-center justify-center p-6 text-center">
+              <div className="max-w-md space-y-6">
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 inline-block">
+                      <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+                  </div>
+                  <div className="space-y-2">
+                       <h2 className="text-2xl font-bold text-white tracking-tight">Access Protocol Pending</h2>
+                       <p className="text-zinc-400 text-sm">Welcome to the team! Your profile is currently under review by our administrative team. You will be granted dashboard access once your verification is complete.</p>
+                  </div>
+                  <div className="pt-6 border-t border-white/5 mt-6">
+                      <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Manual verification is in progress</div>
+                  </div>
+              </div>
+          </div>
+      );
   }
 
   return (

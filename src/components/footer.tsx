@@ -1,21 +1,33 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { Twitter, Instagram, Linkedin, Youtube, MapPin } from "lucide-react";
+import { useBranding } from "@/lib/context/branding-context";
 
 export function Footer() {
+  const { logoUrl } = useBranding();
+  
   return (
     <footer className="border-t border-white/10 bg-black py-16">
       <div className="container mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand */}
           <div className="space-y-6">
-            <Link href="/" className="block relative h-12 w-48 mb-2">
-               <Image 
-                src="/logo.png" 
-                alt="EditoHub Logo" 
-                fill 
-                className="object-contain object-left"
-               />
+            <Link href="/" className="block relative h-12 w-48 mb-2 rounded-xl overflow-hidden">
+               {logoUrl ? (
+                 <Image 
+                    src={logoUrl} 
+                    alt="EditoHub Logo" 
+                    fill 
+                    className="object-contain object-left"
+                 />
+               ) : (
+                <div className="flex items-center gap-2 h-full">
+                    <div className="w-8 h-8 rounded bg-primary flex items-center justify-center font-bold text-black italic">E</div>
+                    <span className="text-xl font-heading font-black tracking-tighter">EDITO_HUB</span>
+                </div>
+               )}
             </Link>
             <p className="text-muted-foreground leading-relaxed text-sm">
               We turn raw footage into cinematic stories. The premium choice for top-tier creators and brands aiming for viral impact.

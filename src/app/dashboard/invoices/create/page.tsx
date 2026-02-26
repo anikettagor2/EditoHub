@@ -279,7 +279,7 @@ export default function CreateInvoicePage() {
                                         </div>
                                         <div className="col-span-4 text-right">
                                             <div className="text-[10px] text-zinc-500 uppercase">Amount</div>
-                                            <div className="font-mono text-sm pt-1">${item.amount.toLocaleString()}</div>
+                                            <div className="font-mono text-sm pt-1">₹{item.amount.toLocaleString()}</div>
                                         </div>
                                         <div className="col-span-1 text-right">
                                              <Button 

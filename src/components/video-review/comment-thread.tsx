@@ -130,7 +130,7 @@ export function CommentThread({
     return (
         <div className="flex flex-col h-full bg-zinc-900 border-l border-white/10">
             <div className="p-4 border-b border-white/10 flex justify-between items-center bg-zinc-900 z-10">
-                <h3 className="font-semibold text-white">Comments ({comments.length})</h3>
+                <h3 className="font-bold text-base text-white">Project Feedback ({comments.length})</h3>
                 {isAddingComment && (
                     <Button variant="ghost" size="icon" onClick={onCancelComment} className="h-6 w-6 text-zinc-400 hover:text-white">
                         <X className="h-4 w-4" />
@@ -145,8 +145,8 @@ export function CommentThread({
                         <div className="p-4 rounded-xl border border-primary/50 bg-primary/5 shadow-lg mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
                              <div className="flex items-center gap-2 mb-3">
                                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                                    New Comment at {formatTime(draftTime || 0)}
+                                <span className="text-[11px] font-bold text-primary uppercase tracking-wider">
+                                    Note at {formatTime(draftTime || 0)}
                                 </span>
                             </div>
                             <Textarea
@@ -155,7 +155,7 @@ export function CommentThread({
                                 onChange={(e) => setDraftContent(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="Type your feedback here..."
-                                className="min-h-[80px] bg-black/50 border-primary/20 focus:border-primary/50 resize-none text-sm mb-3"
+                                className="min-h-[100px] bg-black/50 border-primary/20 focus:border-primary/50 resize-none text-[15px] mb-3 p-4"
                             />
 
                             {/* Attachment Previews */}
@@ -199,7 +199,7 @@ export function CommentThread({
                                         Cancel
                                     </Button>
                                     <Button size="sm" onClick={handleSave} disabled={isUploading} className="bg-primary hover:bg-primary/90 h-8">
-                                        Post Comment
+                                        Add Comment
                                     </Button>
                                 </div>
                             </div>
@@ -209,8 +209,8 @@ export function CommentThread({
                     {sortedComments.length === 0 && !isAddingComment && (
                         <div className="text-center py-10 text-zinc-500">
                             <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                            <p className="text-sm">No comments yet.</p>
-                            <p className="text-xs">Click on the timeline to add one.</p>
+                            <p className="text-sm">No messages here yet.</p>
+                            <p className="text-xs">Pick a moment on the timeline to share your feedback.</p>
                         </div>
                     )}
 
@@ -227,17 +227,17 @@ export function CommentThread({
                         >
                             <div className="flex items-start justify-between gap-3 mb-2">
                                 <div className="flex items-center gap-2">
-                                    <Avatar className="h-6 w-6 ring-1 ring-white/10">
+                                    <Avatar className="h-7 w-7 ring-1 ring-white/10">
                                         <AvatarImage src={comment.userAvatar || undefined} />
-                                        <AvatarFallback className="text-[10px] bg-zinc-700 text-zinc-300 font-bold">
+                                        <AvatarFallback className="text-[11px] bg-zinc-700 text-zinc-300 font-bold">
                                             {comment.userName.substring(0,2).toUpperCase()}
                                         </AvatarFallback>
                                     </Avatar>
-                                    <div className="flex flex-col leading-none">
-                                        <span className="text-xs font-semibold text-zinc-200">{comment.userName}</span>
-                                        <span className="text-[10px] text-zinc-500">{comment.userRole}</span>
+                                    <div className="flex flex-col leading-tight">
+                                        <span className="text-[14px] font-bold text-zinc-200">{comment.userName}</span>
+                                        <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-wider">{comment.userRole}</span>
                                     </div>
-                                    <span className="ml-auto text-[10px] bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-zinc-400 font-mono">
+                                    <span className="ml-auto text-[11px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-zinc-400 font-bold">
                                         {formatTime(comment.timestamp)}
                                     </span>
                                 </div>
@@ -254,7 +254,7 @@ export function CommentThread({
                             </div>
 
                             <p className={cn(
-                                "text-sm mb-3 leading-relaxed",
+                                "text-[15px] mb-4 leading-relaxed",
                                 comment.status === 'resolved' ? "text-muted-foreground line-through decoration-zinc-500 decoration-2" : "text-zinc-100"
                             )}>
                                 {comment.content}
@@ -264,7 +264,7 @@ export function CommentThread({
                             {comment.attachments && comment.attachments.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mb-3">
                                     {comment.attachments.map((url, idx) => (
-                                        <div key={idx} className="relative h-24 w-auto min-w-[100px] max-w-full rounded-lg overflow-hidden border border-white/10 bg-black/20 group/att">
+                                        <div key={idx} className="relative h-32 w-auto min-w-[120px] max-w-full rounded-xl overflow-hidden border border-white/10 bg-black/20 group/att shadow-2xl">
                                             <a href={url} target="_blank" rel="noopener noreferrer">
                                                 <img src={url} alt="attachment" className="h-full w-auto object-contain cursor-zoom-in" />
                                             </a>
@@ -288,16 +288,16 @@ export function CommentThread({
                             {comment.replies && comment.replies.length > 0 && (
                                 <div className="ml-4 pl-3 border-l-2 border-white/5 space-y-3 mt-2">
                                     {comment.replies.map(reply => (
-                                        <div key={reply.id} className="text-xs text-zinc-400">
-                                            <div className="flex items-baseline gap-2 mb-0.5">
-                                                <span className="font-bold text-zinc-300">{reply.userName}</span>
-                                                <span className="text-[9px] text-zinc-600">{new Date(reply.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                        <div key={reply.id} className="text-[13px] text-zinc-400">
+                                            <div className="flex items-baseline gap-2 mb-1">
+                                                <span className="font-bold text-zinc-200">{reply.userName}</span>
+                                                <span className="text-[11px] text-zinc-600 font-bold uppercase">{new Date(reply.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                             </div>
-                                            <p className="mb-2">{reply.content}</p>
+                                            <p className="mb-2 leading-relaxed">{reply.content}</p>
                                             {reply.attachments && reply.attachments.length > 0 && (
                                                 <div className="flex flex-wrap gap-1.5 mb-2">
                                                     {reply.attachments.map((url, idx) => (
-                                                        <div key={idx} className="relative h-16 w-auto rounded border border-white/5 overflow-hidden bg-black/20 group/ratt">
+                                                        <div key={idx} className="relative h-20 w-auto rounded-lg border border-white/5 overflow-hidden bg-black/20 group/ratt">
                                                             <a href={url} target="_blank" rel="noopener noreferrer">
                                                                 <img src={url} alt="attachment" className="h-full w-auto object-contain cursor-zoom-in" />
                                                             </a>
@@ -328,8 +328,8 @@ export function CommentThread({
                                         ref={replyInputRef}
                                         value={replyContent}
                                         onChange={(e) => setReplyContent(e.target.value)}
-                                        placeholder="Write a reply..."
-                                        className="min-h-[60px] bg-transparent border-none focus-visible:ring-0 text-xs p-0 mb-2 resize-none"
+                                        placeholder="Type your reply here..."
+                                        className="min-h-[70px] bg-transparent border-none focus-visible:ring-0 text-[14px] p-0 mb-3 resize-none leading-relaxed"
                                     />
                                     
                                     {replyAttachments.length > 0 && (

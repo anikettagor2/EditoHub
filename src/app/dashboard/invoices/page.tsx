@@ -117,7 +117,7 @@ export default function InvoicesPage() {
                             
                             <div className="flex items-center gap-6">
                                 <div className="text-right">
-                                    <p className="text-sm font-bold text-white">${invoice.total.toLocaleString()}</p>
+                                    <p className="text-sm font-bold text-white">₹{invoice.total.toLocaleString()}</p>
                                     <p className="text-xs text-zinc-500">Total Amount</p>
                                 </div>
                                 <Link href={`/invoices/${invoice.id}`}>

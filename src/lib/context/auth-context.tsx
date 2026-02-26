@@ -23,9 +23,9 @@ interface AuthContextType {
   signInWithGoogle: (role?: UserRole) => Promise<void>;
   loginAsAdmin: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
-  signupWithEmail: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
+  signupWithEmail: (email: string, password: string, name: string, role: UserRole, metadata?: any) => Promise<void>;
   logout: () => Promise<void>;
-  deleteAccount: () => Promise<void>;
+  requestAccountDeletion: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -37,7 +37,7 @@ const AuthContext = createContext<AuthContextType>({
   loginWithEmail: async () => {},
   signupWithEmail: async () => {},
   logout: async () => {},
-  deleteAccount: async () => {},
+  requestAccountDeletion: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -101,6 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 photoURL: result.user.photoURL,
                 role: selectedRole,
                 createdAt: Date.now(),
+                onboardingStatus: selectedRole === 'editor' ? 'pending' : 'approved',
+                status: selectedRole === 'editor' ? 'inactive' : 'active' as any,
             };
             await setDoc(userRef, newUser);
             setUser(newUser);
@@ -168,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
   };
 
-  const signupWithEmail = async (email: string, password: string, name: string, role: UserRole) => {
+  const signupWithEmail = async (email: string, password: string, name: string, role: UserRole, metadata?: any) => {
       try {
           const { createUserWithEmailAndPassword, updateProfile } = await import("firebase/auth");
           
@@ -186,6 +188,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               photoURL: null,
               role: role,
               createdAt: Date.now(),
+              onboardingStatus: role === 'editor' ? 'pending' : 'approved',
+              status: role === 'editor' ? 'inactive' : 'active' as any,
+              ...metadata
           };
           
           await setDoc(doc(db, "users", result.user.uid), newUser);
@@ -213,41 +218,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      }
   };
 
-  const deleteAccount = async () => {
-    if (!auth.currentUser) return;
+  const requestAccountDeletion = async () => {
+    if (!auth.currentUser || !user) return;
+    
+    // Safety check: super admin cannot delete themselves
+    if (user.role === 'admin') {
+        throw new Error("Administrative Protocol: Super Admin accounts cannot be requested for termination. Contact infrastructure support for manual lifecycle adjustment.");
+    }
+
     try {
         const uid = auth.currentUser.uid;
-        // 1. Delete Firestore Data (Mark as deleted or actual delete)
-        await setDoc(doc(db, "users", uid), { deleted: true, deletedAt: Date.now() }, { merge: true });
+        // Instead of deleting from Auth immediately, we mark for deletion in Firestore
+        // This keeps the account accessible until Admin approves
+        await setDoc(doc(db, "users", uid), { 
+            deletionRequested: true, 
+            deletionRequestedAt: Date.now() 
+        }, { merge: true });
         
-        // 2. Delete Auth User
-        await auth.currentUser.delete();
-        
-        // 3. Reset State
-        setUser(null);
-        setFirebaseUser(null);
-        router.push("/");
+        // We don't sign them out or delete from auth yet.
+        // We just notify them that the request is pending.
     } catch (error: any) {
-        if (error.code === 'auth/requires-recent-login') {
-            try {
-                // Determine provider - assuming Google for now as main auth
-                // Ideally check auth.currentUser.providerData[0].providerId
-                const provider = new GoogleAuthProvider();
-                await reauthenticateWithPopup(auth.currentUser, provider);
-                
-                // Retry delete after successful re-auth
-                await auth.currentUser.delete();
-                
-                setUser(null);
-                setFirebaseUser(null);
-                router.push("/");
-                return;
-            } catch (reAuthError) {
-                console.error("Re-authentication failed or cancelled:", reAuthError);
-                throw reAuthError;
-            }
-        }
-        console.error("Error deleting account:", error);
+        console.error("Error requesting account deletion:", error);
         throw error;
     }
   };
@@ -263,7 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, loginAsAdmin, loginWithEmail, signupWithEmail, logout, deleteAccount }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, signInWithGoogle, loginAsAdmin, loginWithEmail, signupWithEmail, logout, requestAccountDeletion }}>
       {children}
     </AuthContext.Provider>
   );

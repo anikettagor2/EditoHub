@@ -14,6 +14,13 @@ const poppins = Poppins({
   subsets: ["latin"],
 });
 
+import { Outfit } from "next/font/google";
+
+const outfit = Outfit({
+  variable: "--font-outfit",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "EditoHub | Premium Video Editing Agency",
   description: "Transform your raw footage into cinematic masterpieces. Professional video editing, scriptwriting, and thumbnail design.",
@@ -37,6 +44,7 @@ export default function RootLayout({
         className={cn(
           inter.variable,
           poppins.variable,
+          outfit.variable,
           "antialiased bg-background text-foreground min-h-screen selection:bg-primary/20 selection:text-primary font-sans"
         )}
       >
