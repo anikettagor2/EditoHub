@@ -35,7 +35,6 @@ export function DashboardSidebar() {
       case 'admin':
         return [
           { href: "/dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
-          { href: "/dashboard/projects", label: "Projects", icon: FolderOpen },
           { href: "/dashboard/users", label: "Users", icon: Users },
           { href: "/dashboard/invoices", label: "Invoices", icon: FileText },
           { href: "/dashboard/settings", label: "Settings", icon: Settings },

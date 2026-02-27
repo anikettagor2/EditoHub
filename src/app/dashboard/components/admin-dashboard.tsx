@@ -70,6 +70,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
 import { assignEditor, updateProject, togglePayLater, deleteProject, deleteUser, toggleUserStatus, rejectDeletionRequest, verifyEditor } from "@/app/actions/admin-actions";
+import { AdminOverviewGraphs } from "./admin-overview-graphs";
 
 export function AdminDashboard() {
   const { user: currentUser } = useAuth();
@@ -315,6 +316,13 @@ export function AdminDashboard() {
                 </div>
             </motion.div>
        </div>
+
+       {/* Graphs - Shown above numbers on overview */}
+       {activeTab === 'overview' && (
+           <div className="mb-4">
+               <AdminOverviewGraphs projects={projects} users={users} />
+           </div>
+       )}
 
        {/* Statistics Grid */}
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
