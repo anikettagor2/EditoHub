@@ -679,18 +679,22 @@ export function AdminDashboard() {
                                                 <button className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-white/[0.05] text-zinc-500 hover:text-white transition-all active:scale-[0.98]"><MoreHorizontal className="h-3.5 w-3.5" /></button>
                                             </DropdownMenuTrigger>
                                              <DropdownMenuContent align="end" className="w-52 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
-                                                <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }}>
-                                                    <Edit className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Edit Project
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}>
-                                                    <UserPlus className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Assign Editor
-                                                </DropdownMenuItem>
-                                                {(project as any).paymentOption === 'pay_later' && project.paymentStatus !== 'full_paid' && (
-                                                    <DropdownMenuItem className="p-2.5 text-xs text-emerald-500 hover:bg-emerald-500/10 transition-colors cursor-pointer rounded-lg font-bold" onClick={() => handleSettlePayment(project.id)}>
-                                                        <IndianRupee className="mr-2.5 h-3.5 w-3.5" /> Settle Payment
-                                                    </DropdownMenuItem>
+                                                {!(project.status === 'completed' || project.status === 'archived') && (
+                                                    <>
+                                                        <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }}>
+                                                            <Edit className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Edit Project
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}>
+                                                            <UserPlus className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Assign Editor
+                                                        </DropdownMenuItem>
+                                                        {(project as any).paymentOption === 'pay_later' && project.paymentStatus !== 'full_paid' && (
+                                                            <DropdownMenuItem className="p-2.5 text-xs text-emerald-500 hover:bg-emerald-500/10 transition-colors cursor-pointer rounded-lg font-bold" onClick={() => handleSettlePayment(project.id)}>
+                                                                <IndianRupee className="mr-2.5 h-3.5 w-3.5" /> Settle Payment
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        <DropdownMenuSeparator className="my-1 bg-border" />
+                                                    </>
                                                 )}
-                                                <DropdownMenuSeparator className="my-1 bg-border" />
                                                  <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setInspectProject(project); setIsProjectDetailModalOpen(true); }}>
                                                     <Search className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Inspect History
                                                 </DropdownMenuItem>
@@ -698,7 +702,7 @@ export function AdminDashboard() {
                                                 <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="p-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer rounded-lg">
                                                     <Trash2 className="mr-2.5 h-3.5 w-3.5" /> Delete Project
                                                 </DropdownMenuItem>
-                                            </DropdownMenuContent>
+                                             </DropdownMenuContent>
                                        </DropdownMenu>
                                    </td>
                                </motion.tr>

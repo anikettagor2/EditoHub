@@ -11,6 +11,7 @@ import {
     Search,
     Filter,
     MoreHorizontal,
+    Trash2,
     ArrowUpRight,
     ArrowDownLeft,
     AlertCircle,
@@ -46,7 +47,8 @@ import {
     togglePayLater, 
     setEditorPrice, 
     toggleProjectAutoPay,
-    settleProjectPayment
+    settleProjectPayment,
+    deleteProject
 } from "@/app/actions/admin-actions";
 import { unlockProjectDownloads } from "@/app/actions/project-actions";
 import { cn } from "@/lib/utils";
@@ -165,8 +167,14 @@ export function ProjectManagerDashboard() {
             toast.success("Editor payout marked as settled.");
         } catch (error) {
             toast.error("Failed to settle payout.");
-            console.error(error);
         }
+    };
+
+    const handleDeleteProject = async (projectId: string) => {
+        if(!confirm("Proceed with permanent deletion of this project?")) return;
+        const result = await deleteProject(projectId);
+        if (result.success) toast.success("Project purged.");
+        else toast.error("Purge failed.");
     };
 
     const unassignedCount = projects.filter(p => !p.assignedEditorId).length;
@@ -407,8 +415,11 @@ export function ProjectManagerDashboard() {
                                                         <button className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all active:scale-[0.98]"><MoreHorizontal className="h-3.5 w-3.5" /></button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-56 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
-                                                        <DropdownMenuLabel className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest px-3 py-2">Project Options</DropdownMenuLabel>
-                                                        <DropdownMenuSeparator className="my-1 bg-border" />
+                                                         <DropdownMenuLabel className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest px-3 py-2">Project Options</DropdownMenuLabel>
+                                                         <DropdownMenuSeparator className="my-1 bg-border" />
+                                                         
+                                                         {!(project.status === 'completed' || project.status === 'archived') && (
+                                                             <>
                                                         {!project.assignedEditorId && (
                                                             <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg px-3" onClick={() => { setSelectedProject(project); setEditorPriceInput(project.editorPrice?.toString() || ""); setIsAssignModalOpen(true); }}>
                                                                 <UserPlus className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Assign Editor
@@ -424,9 +435,16 @@ export function ProjectManagerDashboard() {
                                                                 <IndianRupee className="mr-2.5 h-3.5 w-3.5" /> Settle Payment
                                                             </DropdownMenuItem>
                                                         )}
-                                                        <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg px-3" onClick={() => { setInspectProject(project); setIsProjectDetailModalOpen(true); }}>
+                                                             </>
+                                                         )}
+
+                                                         <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg px-3" onClick={() => { setInspectProject(project); setIsProjectDetailModalOpen(true); }}>
                                                             <Search className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Project Status
-                                                        </DropdownMenuItem>
+                                                         </DropdownMenuItem>
+                                                         <DropdownMenuSeparator className="my-1 bg-border" />
+                                                         <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="p-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer rounded-lg px-3">
+                                                             <Trash2 className="mr-2.5 h-3.5 w-3.5" /> Delete Project
+                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </div>
