@@ -2097,7 +2097,7 @@ function ProjectStatusBadges({ project }: { project: any }) {
     const badges = [];
 
     // Overall Status
-    if (project.status === 'completed') {
+    if (project.status === 'completed' || project.status === 'archived') {
         badges.push({ label: "Completed", color: "text-zinc-500", bg: "bg-zinc-500/10", border: "border-zinc-500/20" });
     } else if (project.status === 'in_review') {
         badges.push({ label: "In Review", color: "text-purple-400", bg: "bg-purple-400/10", border: "border-purple-400/20" });
