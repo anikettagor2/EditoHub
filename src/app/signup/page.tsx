@@ -25,6 +25,7 @@ export default function SignupPage() {
   // Form State
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
   // Editor Experience Meta
@@ -63,19 +64,22 @@ export default function SignupPage() {
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) {
-        setError("Please fill in all fields");
+    if (!name || !email || !password || !phone) {
+        setError("Please fill in all mandatory fields (Name, Email, Phone, Password)");
         return;
     }
     
     setIsSigningUp(true);
     setError(null);
     try {
-        const metadata = selectedRole === 'editor' ? {
-            whatsappNumber: whatsapp,
-            portfolio: [{ name: "Main Portfolio", url: portfolio, date: Date.now() }],
-            initialPassword: password
-        } : {};
+        const metadata = {
+            phoneNumber: phone,
+            ...(selectedRole === 'editor' ? {
+                whatsappNumber: whatsapp,
+                portfolio: [{ name: "Main Portfolio", url: portfolio, date: Date.now() }],
+                initialPassword: password
+            } : {})
+        };
         await signupWithEmail(email, password, name, selectedRole, metadata);
     } catch (error: any) {
         console.error("Email signup failed", error);
@@ -197,6 +201,12 @@ export default function SignupPage() {
                       className="bg-black/40 border-white/10 text-white h-10"
                       value={name}
                       onChange={e => setName(e.target.value)}
+                  />
+                  <Input 
+                      placeholder="Phone Number (mandatory for login)" 
+                      className="bg-black/40 border-white/10 text-white h-10 mt-2"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
                   />
               </div>
 

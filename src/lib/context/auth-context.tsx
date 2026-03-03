@@ -22,7 +22,7 @@ interface AuthContextType {
   loading: boolean;
   signInWithGoogle: (role?: UserRole, initialPassword?: string, metadata?: any) => Promise<void>;
   loginAsAdmin: () => Promise<void>;
-  loginWithEmail: (email: string, password: string) => Promise<void>;
+  loginWithEmail: (identifier: string, password: string) => Promise<void>;
   signupWithEmail: (email: string, password: string, name: string, role: UserRole, metadata?: any) => Promise<void>;
   logout: () => Promise<void>;
   requestAccountDeletion: () => Promise<void>;
@@ -148,13 +148,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loginWithEmail = async (email: string, password: string) => {
+  const loginWithEmail = async (identifier: string, password: string) => {
       // Check for static admin credentials and map to real ones
       // Allow both short username and full email if password matches '1234'
-      const normalizedEmail = email.trim().toLowerCase();
-      if ((normalizedEmail === "admin@editohub" || normalizedEmail === "admin@editohub.com") && (password.trim() === "1234" || password.trim() === "admin1234")) {
+      const normalizedIdentifier = identifier.trim().toLowerCase();
+      
+      if ((normalizedIdentifier === "admin@editohub" || normalizedIdentifier === "admin@editohub.com") && (password.trim() === "1234" || password.trim() === "admin1234")) {
           await loginAsAdmin();
           return;
+      }
+
+      let email = normalizedIdentifier;
+
+      // Handle Phone Number Login
+      if (!normalizedIdentifier.includes("@")) {
+          try {
+              const { collection, query, where, getDocs } = await import("firebase/firestore");
+              const q = query(collection(db, "users"), where("phoneNumber", "==", identifier.trim()));
+              const querySnapshot = await getDocs(q);
+              
+              if (!querySnapshot.empty) {
+                  const userData = querySnapshot.docs[0].data() as User;
+                  if (userData.email) {
+                      email = userData.email;
+                  }
+              } else {
+                  throw new Error("No account found with this phone number.");
+              }
+          } catch (err: any) {
+              console.error("Phone number lookup failed", err);
+              throw err;
+          }
       }
 
       try {
@@ -163,7 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error: any) {
           console.error("Error signing in with Email/Pass", error);
           
-          // Enhanced Admin Recovery: If login fails for admin email, try ensuring it exists
+          // Enhanced Admin Recovery
           if (
               (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') &&
               (email.trim().toLowerCase() === "admin@editohub.com" || email.trim().toLowerCase() === "admin@editohub")
@@ -185,6 +209,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signupWithEmail = async (email: string, password: string, name: string, role: UserRole, metadata?: any) => {
       try {
           const { createUserWithEmailAndPassword, updateProfile } = await import("firebase/auth");
+          const { collection, query, where, getDocs } = await import("firebase/firestore");
+
+          // Check if phone number is already in use
+          if (metadata?.phoneNumber) {
+              const q = query(collection(db, "users"), where("phoneNumber", "==", metadata.phoneNumber.trim()));
+              const phoneSnapshot = await getDocs(q);
+              if (!phoneSnapshot.empty) {
+                  throw new Error("Phone number already in use by another account.");
+              }
+          }
           
           // 1. Create Auth User
           const result = await createUserWithEmailAndPassword(auth, email, password);

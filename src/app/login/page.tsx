@@ -21,7 +21,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   
   // Email/Pass State
-  const [email, setEmail] = useState("");
+  // Identification State
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
 
   const handleGoogleLogin = async () => {
@@ -39,15 +40,15 @@ export default function LoginPage() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-        setError("Please enter both email and password");
+    if (!identifier || !password) {
+        setError("Please enter both phone/email and password");
         return;
     }
 
     setIsLoggingIn(true);
     setError(null);
     try {
-        await loginWithEmail(email, password);
+        await loginWithEmail(identifier, password);
     } catch (error: any) {
         console.error("Email login failed", error);
         setError("Invalid email or password");
@@ -117,13 +118,13 @@ export default function LoginPage() {
           {/* Email Login Form */}
           <form onSubmit={handleEmailLogin} className="space-y-4">
               <div className="space-y-2">
-                  <Label className="text-zinc-300">Email Address</Label>
+                  <Label className="text-zinc-300">Phone Number or Email</Label>
                   <Input 
-                      type="email" 
-                      placeholder="you@example.com"
+                      type="text" 
+                      placeholder="Phone or you@example.com"
                       className="bg-black/40 border-white/10 text-white"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
                   />
               </div>
               <div className="space-y-2">
@@ -145,7 +146,7 @@ export default function LoginPage() {
                   disabled={isLoggingIn}
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6 rounded-xl"
               >
-                  {isLoggingIn ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Sign In with Email"}
+                  {isLoggingIn ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Sign In"}
               </Button>
           </form>
 
