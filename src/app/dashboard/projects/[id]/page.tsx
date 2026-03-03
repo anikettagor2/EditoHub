@@ -174,6 +174,44 @@ export default function ProjectDetailsPage() {
     const [editorRating, setEditorRating] = useState(0);
     const [editorReview, setEditorReview] = useState('');
     const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+    const [pendingDownloadId, setPendingDownloadId] = useState<string | null>(null);
+
+    const initiateDownload = async (revisionId: string) => {
+        setIsDownloading(true);
+        try {
+            const res = await registerDownload(id as string, revisionId);
+            if (res.success && res.downloadUrl) {
+                const anchor = document.createElement('a');
+                anchor.href = res.downloadUrl;
+                anchor.download = `${project?.name || 'video'}_v${revisions.find(r => r.id===revisionId)?.version || 1}.mp4`;
+                document.body.appendChild(anchor);
+                anchor.click();
+                document.body.removeChild(anchor);
+                toast.success(`Download initiated.`);
+                
+                const isPayLaterMode = user?.payLater || (project as any).isPayLaterRequest;
+                if (isPayLaterMode) {
+                    await updateDoc(doc(db, "projects", id as string), {
+                        clientHasDownloaded: true,
+                        downloadUnlockedAt: Date.now(),
+                        status: 'completed'
+                    });
+                    setProject(prev => prev ? ({ ...prev, clientHasDownloaded: true, status: 'completed' }) : null);
+                } else {
+                    await updateDoc(doc(db, "projects", id as string), {
+                        status: 'completed'
+                    });
+                    setProject(prev => prev ? ({ ...prev, status: 'completed' }) : null);
+                }
+            } else {
+                toast.error(res.error || 'Download error.');
+            }
+        } catch (e: any) {
+            toast.error(e.message || 'Download failed.');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
 
     const handleRatingSubmit = async () => {
         if (editorRating === 0) {
@@ -187,6 +225,11 @@ export default function ProjectDetailsPage() {
                 toast.success("Thank you for your feedback!");
                 setProject(prev => prev ? ({ ...prev, editorRating, editorReview }) : null);
                 setIsRatingModalOpen(false);
+                
+                if (pendingDownloadId) {
+                    await initiateDownload(pendingDownloadId);
+                    setPendingDownloadId(null);
+                }
             } else {
                 toast.error(res.error);
             }
@@ -395,7 +438,7 @@ export default function ProjectDetailsPage() {
                             <div className="text-xl font-bold text-emerald-400 mt-1 tabular-nums truncate">₹{project.totalCost?.toLocaleString() || 0}</div>
                         </div>
                     </div>
-                    {latestRevision && project.paymentStatus === 'full_paid' && (
+                    {latestRevision && (project.paymentStatus === 'full_paid' || user?.payLater || (project as any).isPayLaterRequest) && (
                         <div className="enterprise-card border-primary/20 bg-primary/[0.02] p-8 sm:p-12 text-center space-y-6 flex flex-col items-center">
                             <div className="h-16 w-16 bg-primary/20 border border-primary/30 rounded-2xl flex items-center justify-center text-primary shadow-[0_0_30px_rgba(99,102,241,0.2)]">
                                 <FileVideo className="h-8 w-8" />
@@ -407,27 +450,11 @@ export default function ProjectDetailsPage() {
                             <button
                                 disabled={isDownloading}
                                 onClick={async () => {
-                                    setIsDownloading(true);
-                                    try {
-                                        const res = await registerDownload(id as string, latestRevision.id);
-                                        if (res.success && res.downloadUrl) {
-                                            const anchor = document.createElement('a');
-                                            anchor.href = res.downloadUrl;
-                                            anchor.download = `${project?.name || 'video'}_v${latestRevision.version}.mp4`;
-                                            document.body.appendChild(anchor);
-                                            anchor.click();
-                                            document.body.removeChild(anchor);
-                                            toast.success(`Download initiated.`);
-                                            if (!project.editorRating && isClient) {
-                                                setTimeout(() => setIsRatingModalOpen(true), 1500);
-                                            }
-                                        } else {
-                                            toast.error(res.error || 'Download error.');
-                                        }
-                                    } catch (e: any) {
-                                        toast.error(e.message || 'Download failed.');
-                                    } finally {
-                                        setIsDownloading(false);
+                                    if (isClient && !project.editorRating) {
+                                        setPendingDownloadId(latestRevision.id);
+                                        setIsRatingModalOpen(true);
+                                    } else {
+                                        await initiateDownload(latestRevision.id);
                                     }
                                 }}
                                 className="h-12 px-8 rounded-xl bg-white text-black text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-[0.98] flex items-center gap-2.5 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
@@ -443,22 +470,7 @@ export default function ProjectDetailsPage() {
                 {/* Left: Content & Versions */}
                 <div className="lg:col-span-8 space-y-8">
                     
-                    {/* Pay Later Information */}
-                    {(project as any).isPayLaterRequest && (
-                        <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="flex items-center gap-4 p-5 enterprise-card border-emerald-500/20 bg-emerald-500/[0.02]"
-                        >
-                            <div className="h-10 w-10 bg-emerald-500/10 rounded-lg flex items-center justify-center shrink-0 border border-emerald-500/20">
-                                <IndianRupee className="h-5 w-5 text-emerald-500" />
-                            </div>
-                            <div className="space-y-0.5">
-                                <h4 className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Project Billing</h4>
-                                <p className="text-xs text-zinc-400 font-medium leading-relaxed">Your project is set to Pay Later. We'll handle the invoice once everything is approved.</p>
-                            </div>
-                        </motion.div>
-                    )}
+
                     
                     {/* Project Preview */}
                     {revisions.length > 0 ? (
@@ -529,33 +541,17 @@ export default function ProjectDetailsPage() {
                                                 );
                                             }
 
-                                            if (project.downloadsUnlocked) {
+                                            if (project.downloadsUnlocked || user?.payLater || (project as any).isPayLaterRequest) {
                                                 return (
                                                     <button
                                                         disabled={isDownloading}
                                                         onClick={async () => {
                                                             if (!latestRevision) return;
-                                                            setIsDownloading(true);
-                                                            try {
-                                                                const res = await registerDownload(id as string, latestRevision.id);
-                                                                 if (res.success && res.downloadUrl) {
-                                                                    const anchor = document.createElement('a');
-                                                                    anchor.href = res.downloadUrl;
-                                                                    anchor.download = `${project?.name || 'video'}_v${latestRevision.version}.mp4`;
-                                                                    document.body.appendChild(anchor);
-                                                                    anchor.click();
-                                                                    document.body.removeChild(anchor);
-                                                                    toast.success(`Download initiated.`);
-                                                                    if (!project.editorRating && isClient && project.status === 'completed') {
-                                                                        setTimeout(() => setIsRatingModalOpen(true), 1500);
-                                                                    }
-                                                                } else {
-                                                                    toast.error(res.error || 'Download error.');
-                                                                }
-                                                            } catch (e: any) {
-                                                                toast.error(e.message || 'Download failed.');
-                                                            } finally {
-                                                                setIsDownloading(false);
+                                                            if (isClient && !project.editorRating) {
+                                                                setPendingDownloadId(latestRevision.id);
+                                                                setIsRatingModalOpen(true);
+                                                            } else {
+                                                                await initiateDownload(latestRevision.id);
                                                             }
                                                         }}
                                                         className="h-11 px-6 rounded-lg bg-white text-black text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-[0.98] flex items-center gap-2.5 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
