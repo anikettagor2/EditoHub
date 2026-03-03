@@ -350,12 +350,17 @@ export function AdminDashboard() {
 
 
 
-  const filteredProjects = projects.filter(p => 
-      !searchQuery || 
-      p.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      p.clientName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      p.id?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = projects.filter(p => {
+      const sq = searchQuery.toLowerCase();
+      if (!sq) return true;
+      const editorName = users.find(u => u.uid === p.assignedEditorId)?.displayName?.toLowerCase() || '';
+      const pmName = users.find(u => u.uid === p.assignedPMId)?.displayName?.toLowerCase() || '';
+      return p.name?.toLowerCase().includes(sq) || 
+             p.clientName?.toLowerCase().includes(sq) || 
+             p.id?.toLowerCase().includes(sq) ||
+             editorName.includes(sq) ||
+             pmName.includes(sq);
+  });
 
   const filteredUsers = users.filter(u => {
       const q = searchQuery.toLowerCase();
@@ -406,7 +411,7 @@ export function AdminDashboard() {
                     {['overview', 'projects', 'users', 'team', 'terminations', 'requests', 'whatsapp'].map(tab => (
                         <button
                             key={tab}
-                            onClick={() => setActiveTab(tab as any)}
+                            onClick={() => { setActiveTab(tab as any); setSearchQuery(""); }}
                             className={cn(
                                 "px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all",
                                 activeTab === tab 
@@ -625,6 +630,11 @@ export function AdminDashboard() {
                                    <td className="px-6 py-6">
                                         {project.assignedEditorId ? (
                                             <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-zinc-200 text-xs font-bold truncate max-w-[120px]">
+                                                        {users.find(u => u.uid === project.assignedEditorId)?.displayName || 'Unknown Editor'}
+                                                    </span>
+                                                </div>
                                                 <span className={cn(
                                                     "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border w-fit transition-all",
                                                     project.assignmentStatus === 'accepted' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]" :
