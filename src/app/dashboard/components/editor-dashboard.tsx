@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { Project } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import { 
@@ -56,6 +56,7 @@ export function EditorDashboard() {
   const [mainTab, setMainTab] = useState<'tasks' | 'performance'>('tasks');
   const [activeTab, setActiveTab] = useState<'all' | 'todo' | 'review' | 'completed'>('all');
   const [searchQuery, setSearchQuery] = useState("");
+  const [userData, setUserData] = useState<any>(null);
 
   // Timer logic for assignments
   const [now, setNow] = useState(Date.now());
@@ -101,7 +102,14 @@ export function EditorDashboard() {
         setLoading(false);
     });
 
-    return () => unsubscribe();
+    const userRef = doc(db, "users", user.uid);
+    const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+            setUserData(docSnap.data());
+        }
+    });
+
+    return () => { unsubscribe(); unsubscribeUser(); };
   }, [user]);
 
   // Derived State
@@ -122,6 +130,21 @@ export function EditorDashboard() {
       return true;
   });
 
+  const editorStatus = userData?.availabilityStatus || 'offline';
+
+  const handleStatusUpdate = async (newStatus: 'online' | 'offline' | 'sleep') => {
+      if (!user?.uid) return;
+      try {
+          await updateDoc(doc(db, "users", user.uid), {
+              availabilityStatus: newStatus,
+              updatedAt: Date.now()
+          });
+          toast.success(`Availability changed to ${newStatus}`);
+      } catch(err) {
+          toast.error("Failed to update status");
+      }
+  };
+
   return (
     <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
        {/* Header Section */}
@@ -134,12 +157,32 @@ export function EditorDashboard() {
               className="space-y-4"
             >
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Network Node: Active</span>
+                    <div className={cn("flex flex-col md:flex-row md:items-center gap-6 pt-2")}>
+                         <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                             <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Network Node: Active</span>
+                         </div>
+                         <div className="hidden md:block h-4 w-px bg-card" />
+                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest font-mono hidden md:inline">Editor Protocol v4.2.0</span>
+                         
+                         <div className="relative md:border-l md:border-border md:pl-6 flex items-center">
+                             <div className={cn(
+                                 "h-2 w-2 rounded-full mr-2",
+                                 editorStatus === 'online' ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" :
+                                 editorStatus === 'sleep' ? "bg-yellow-500" : "bg-red-500"
+                             )} />
+                             <select 
+                                 value={editorStatus}
+                                 onChange={(e) => handleStatusUpdate(e.target.value as any)}
+                                 className="bg-transparent border-none text-[11px] font-bold uppercase tracking-widest text-primary hover:text-foreground transition-colors focus:ring-0 cursor-pointer appearance-none pr-6"
+                             >
+                                 <option value="online" className="bg-card">Online</option>
+                                 <option value="sleep" className="bg-card">Sleep</option>
+                                 <option value="offline" className="bg-card">Offline</option>
+                             </select>
+                             <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary pointer-events-none" />
+                         </div>
                     </div>
-                    <div className="h-4 w-px bg-card" />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest font-mono">Editor Protocol v4.2.0</span>
                 </div>
                 
                 <div className="space-y-1">
