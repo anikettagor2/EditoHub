@@ -75,7 +75,7 @@ import {
 
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
-import { assignEditor, updateProject, togglePayLater, deleteProject, deleteUser, toggleUserStatus, rejectDeletionRequest, verifyEditor, getWhatsAppTemplates, updateWhatsAppTemplates, settleProjectPayment } from "@/app/actions/admin-actions";
+import { assignEditor, updateProject, togglePayLater, deleteProject, deleteUser, toggleUserStatus, rejectDeletionRequest, verifyEditor, getWhatsAppTemplates, updateWhatsAppTemplates, settleProjectPayment, addProjectLog } from "@/app/actions/admin-actions";
 import { AdminOverviewGraphs } from "./admin-overview-graphs";
 import { AdminPerformanceTab } from "./admin-performance";
 
@@ -342,6 +342,7 @@ export function AdminDashboard() {
               editorPaid: true,
               editorPaidAt: Date.now()
           });
+          await addProjectLog(projectId, 'PAYMENT_MARKED', { uid: currentUser?.uid || 'system', displayName: currentUser?.displayName || 'Admin' }, 'Editor payment marked as cleared.');
           toast.success("Editor payment marked as cleared.");
       } catch (error) {
           toast.error("Failed to clear payment.");
@@ -357,6 +358,10 @@ export function AdminDashboard() {
               status: editForm.status
           });
           if (res.success) {
+              await addProjectLog(selectedProject.id, 'PROFILE_UPDATED', { uid: currentUser?.uid || 'system', displayName: currentUser?.displayName || 'Admin' }, 'Project profile specifications updated.');
+              if (editForm.status === 'completed' && selectedProject.status !== 'completed') {
+                  await addProjectLog(selectedProject.id, 'COMPLETED', { uid: currentUser?.uid || 'system', displayName: currentUser?.displayName || 'Admin' }, 'Project validated and marked as completed.');
+              }
               toast.success("Status updated.");
               setIsEditModalOpen(false);
           } else {

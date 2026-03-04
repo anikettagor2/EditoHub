@@ -240,7 +240,7 @@ export async function assignEditor(projectId: string, editorId: string, editorPr
 
         await addProjectLog(
             projectId,
-            'EDITOR_ASSIGNED',
+            'PROJECT_ASSIGNED',
             { uid: projectData?.assignedPMId || 'pm', displayName: pmName, designation: 'Project Manager' },
             `Editor ${editorName} assigned to project.`
         );

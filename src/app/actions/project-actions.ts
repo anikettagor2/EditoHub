@@ -131,6 +131,9 @@ export async function unlockProjectDownloads(projectId: string, userId: string) 
         // Notify client that project is completed/ready for download
         await notifyClientOfStatusUpdate(projectId, 'completed');
 
+        const { addProjectLog } = await import("./admin-actions");
+        await addProjectLog(projectId, 'COMPLETED', { uid: userId, displayName: userData?.displayName || 'PM/Admin' }, 'Downloads unlocked. Project successfully marked as completed.');
+
         revalidatePath(`/dashboard/projects/${projectId}`);
         return { success: true };
     } catch (error: any) {

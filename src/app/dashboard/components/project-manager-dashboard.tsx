@@ -136,6 +136,8 @@ export function ProjectManagerDashboard() {
                  members: arrayUnion(editorId),
                  updatedAt: Date.now()
             });
+            const { addProjectLog } = await import("@/app/actions/admin-actions");
+            await addProjectLog(selectedProject.id, 'PROJECT_ASSIGNED', { uid: user?.uid || 'system', displayName: user?.displayName || 'PM' }, `Editor assigned`);
             toast.success(`Editor assigned. Awaiting their acceptance.`);
             setIsAssignModalOpen(false);
             setSelectedProject(null);
@@ -164,6 +166,8 @@ export function ProjectManagerDashboard() {
                 editorPaid: true,
                 editorPaidAt: Date.now()
             });
+            const { addProjectLog } = await import("@/app/actions/admin-actions");
+            await addProjectLog(projectId, 'PAYMENT_MARKED', { uid: user?.uid || 'system', displayName: user?.displayName || 'PM' }, 'Editor payment marked as cleared.');
             toast.success("Editor payout marked as settled.");
         } catch (error) {
             toast.error("Failed to settle payout.");
