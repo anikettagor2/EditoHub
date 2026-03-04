@@ -61,6 +61,11 @@ service cloud.firestore {
       );
       
       allow delete: if isAdmin();
+      
+      // Chat Subcollection
+      match /chat/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
     }
 
     // 3. Invoices Collection

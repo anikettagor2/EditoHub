@@ -43,12 +43,13 @@ import { db } from "@/lib/firebase/config";
 import { collection, query, orderBy, onSnapshot, updateDoc, doc, arrayUnion, where } from "firebase/firestore";
 import { Project, User } from "@/types/schema";
 import { 
-    assignEditor, 
+    assignEditor,
     togglePayLater, 
     setEditorPrice, 
     toggleProjectAutoPay,
     settleProjectPayment,
-    deleteProject
+    deleteProject,
+    updateClientCreditLimit
 } from "@/app/actions/admin-actions";
 import { unlockProjectDownloads } from "@/app/actions/project-actions";
 import { cn } from "@/lib/utils";
@@ -201,8 +202,32 @@ export function ProjectManagerDashboard() {
         }
     };
 
+    const clientsOverLimit = users.filter(u => u.role === 'client' && u.payLater).filter(u => {
+        const uProjects = projects.filter(p => p.clientId === u.uid);
+        const uPending = uProjects.reduce((acc, p) => acc + ((p.totalCost || 0) - (p.amountPaid || 0)), 0);
+        return uPending >= (u.creditLimit || 5000);
+    });
+
     return (
         <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
+            {clientsOverLimit.length > 0 && (
+                <motion.div 
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 mb-6 flex items-center justify-between gap-4"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                            <AlertCircle className="h-6 w-6 text-red-500" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold uppercase tracking-tight">Financial Risk Alert: {clientsOverLimit.length} Clients Over Credit Limit</h4>
+                            <p className="text-[11px] font-medium opacity-80 uppercase tracking-widest mt-0.5">The following clients have exceeded their assigned credit limits: {clientsOverLimit.map(c => c.displayName).join(', ')}. Please review and collect pending dues.</p>
+                        </div>
+                    </div>
+                    <button onClick={() => { setActiveTab('clients'); setSearchQuery(''); }} className="px-4 py-2 bg-red-500 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 transition-all active:scale-95">Review Clients</button>
+                </motion.div>
+            )}
             {/* Header Layer */}
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pb-8 border-b border-border">
                 <motion.div 
@@ -492,7 +517,34 @@ export function ProjectManagerDashboard() {
                                                 <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest mt-1">UID: {u.uid.slice(0,12)}</div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-6">
+                                            <div className="flex flex-col items-end gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Credit Limit</span>
+                                                    <div className="relative">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">₹</span>
+                                                        <input 
+                                                            type="number" 
+                                                            defaultValue={u.creditLimit || 5000}
+                                                            onBlur={async (e) => {
+                                                                const val = Number(e.target.value);
+                                                                if(val < 0) return;
+                                                                const res = await updateClientCreditLimit(u.uid, val);
+                                                                if(res.success) toast.success("Limit updated");
+                                                                else toast.error("Update failed");
+                                                            }}
+                                                            className="h-8 w-24 pl-5 pr-2 bg-muted border border-border rounded text-[10px] font-bold text-foreground focus:border-primary/50 outline-none transition-all"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                { (projects.filter(p => p.clientId === u.uid && p.paymentStatus !== 'full_paid').reduce((acc, curr) => acc + (curr.totalCost || 0), 0)) > (u.creditLimit || 5000) && (
+                                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded">
+                                                        <AlertCircle className="h-2.5 w-2.5 text-red-500" />
+                                                        <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">LIMIT_EXCEEDED</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             <button 
                                                 className={cn(
                                                     "h-9 px-4 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all border",
@@ -747,9 +799,16 @@ export function ProjectManagerDashboard() {
                             </div>
                         ) : (
                             editors.map(editor => {
-                                 const isOnline = (editor as any).updatedAt > Date.now() - 10 * 60 * 1000;
+                                 const status = editor.availabilityStatus || 'offline';
+                                 const isOffline = status === 'offline';
+                                 const isSleep = status === 'sleep';
+                                 const isOnline = status === 'online';
+
                                  return (
-                                    <div key={editor.uid} className="flex items-center justify-between p-4 bg-muted/50 border border-border rounded-xl hover:border-primary/50 transition-all group/editor">
+                                    <div key={editor.uid} className={cn(
+                                        "flex items-center justify-between p-4 bg-muted/50 border border-border rounded-xl transition-all group/editor",
+                                        isOffline ? "opacity-50 grayscale-[0.5]" : "hover:border-primary/50"
+                                    )}>
                                         <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setSelectedEditorDetail(editor); setIsEditorModalOpen(true); }}>
                                             <Avatar className="h-10 w-10 border border-border">
                                                 <AvatarImage src={editor.photoURL || undefined} className="object-cover" />
@@ -758,16 +817,26 @@ export function ProjectManagerDashboard() {
                                             <div>
                                                 <div className="text-sm font-bold text-foreground group-hover/editor:text-primary transition-colors">{editor.displayName}</div>
                                                 <div className="flex items-center gap-2 mt-0.5">
-                                                    <div className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground")} />
-                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{isOnline ? 'Online' : 'Offline'}</span>
+                                                    <div className={cn(
+                                                        "h-1.5 w-1.5 rounded-full", 
+                                                        isOnline ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : 
+                                                        isSleep ? "bg-amber-500" : "bg-red-500"
+                                                    )} />
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{status}</span>
                                                 </div>
                                             </div>
                                         </div>
                                         <button 
+                                            disabled={isOffline}
                                             onClick={() => handleAssignEditor(editor.uid)}
-                                            className="h-9 px-4 bg-primary  text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-zinc-200 transition-all"
+                                            className={cn(
+                                                "h-9 px-4 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                                                isOffline 
+                                                    ? "bg-muted text-muted-foreground cursor-not-allowed" 
+                                                    : "bg-primary text-primary-foreground hover:bg-zinc-200 shadow-lg active:scale-95"
+                                            )}
                                         >
-                                            Assign Editor
+                                            {isOffline ? 'Editor Offline' : 'Assign Editor'}
                                         </button>
                                     </div>
                                  );

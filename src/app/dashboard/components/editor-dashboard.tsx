@@ -145,6 +145,34 @@ export function EditorDashboard() {
       }
   };
 
+  // Advanced Stats Calculation
+  const isToday = (timestamp: number) => {
+      const d = new Date(timestamp);
+      const today = new Date();
+      return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+  };
+
+  const isWithinDays = (timestamp: number, days: number) => {
+      const ms = days * 24 * 60 * 60 * 1000;
+      return Date.now() - timestamp < ms;
+  };
+
+  const earningsToday = completedProjects.filter(p => p.completedAt && isToday(p.completedAt)).reduce((acc, p) => acc + (p.editorPrice || 0), 0);
+  const earnings7Days = completedProjects.filter(p => p.completedAt && isWithinDays(p.completedAt, 7)).reduce((acc, p) => acc + (p.editorPrice || 0), 0);
+  const earnings30Days = completedProjects.filter(p => p.completedAt && isWithinDays(p.completedAt, 30)).reduce((acc, p) => acc + (p.editorPrice || 0), 0);
+  const pendingEarnings = projects.filter(p => ['completed', 'approved'].includes(p.status) && !p.editorPaid).reduce((acc, p) => acc + (p.editorPrice || 0), 0);
+
+  const projectsToday = projects.filter(p => isToday(p.createdAt)).length;
+  const projects7Days = projects.filter(p => isWithinDays(p.createdAt, 7)).length;
+  const projects30Days = projects.filter(p => isWithinDays(p.createdAt, 30)).length;
+  const totalRevisions = projects.reduce((acc, p) => acc + (p.revisionsCount || 0), 0);
+  
+  const completedWithTime = completedProjects.filter(p => p.completedAt && p.assignmentAt);
+  const avgDeliveryTimeMs = completedWithTime.length > 0
+    ? completedWithTime.reduce((acc, p) => acc + (p.completedAt! - p.assignmentAt!), 0) / completedWithTime.length
+    : 0;
+  const avgDeliveryTimeHrs = Math.round(avgDeliveryTimeMs / (1000 * 60 * 60));
+
   return (
     <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
        {/* Header Section */}
@@ -229,7 +257,7 @@ export function EditorDashboard() {
         <>
             {/* Statistics Grid */}
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <IndicatorCard 
+             <IndicatorCard 
                 label="Project Invitations" 
                 value={todoProjects.filter(p => p.assignmentStatus === 'pending').length} 
                 alert={todoProjects.filter(p => p.assignmentStatus === 'pending').length > 0}
@@ -237,31 +265,32 @@ export function EditorDashboard() {
                 subtext="Needs your response"
             />
             <IndicatorCard 
-                label="Pending Review" 
-                value={reviewProjects.length} 
-                icon={<Eye className="h-4 w-4" />}
-                subtext="Waiting for client feedback"
-            />
-            <IndicatorCard 
-                label="Completed" 
-                value={completedProjects.length} 
-                trend="+8 this month"
-                trendUp={true}
-                icon={<Layers className="h-4 w-4" />}
-                subtext="Projects you've finished"
+                label="Pending Payment" 
+                value={`₹${pendingEarnings.toLocaleString()}`} 
+                icon={<Clock className="h-4 w-4" />}
+                subtext="Unlocked earnings"
+                alert={pendingEarnings > 0}
             />
             <IndicatorCard 
                 label="Total Earnings" 
                 value={`₹${totalEarnings.toLocaleString()}`} 
                 icon={<IndianRupee className="h-4 w-4" />}
-                subtext="Income to date"
+                subtext="All time income"
+            />
+             <IndicatorCard 
+                label="Today's Yield" 
+                value={`₹${earningsToday.toLocaleString()}`} 
+                icon={<Zap className="h-4 w-4 text-amber-500" />}
+                subtext={`Projects Today: ${projectsToday}`}
+                trend={`7d: ₹${earnings7Days.toLocaleString()}`}
+                trendUp={earningsToday > 0}
             />
             <IndicatorCard 
-                label="Average Rating" 
-                value={averageRating > 0 ? averageRating.toFixed(1) : "N/A"} 
-                icon={<Star className="h-4 w-4" />}
-                subtext={ratedProjects.length > 0 ? `${ratedProjects.length} reviews` : "No reviews yet"}
-                trend={averageRating > 0 ? "From Clients" : ""}
+                label="Workflow Stats" 
+                value={`${completedProjects.length}`} 
+                icon={<Layers className="h-4 w-4" />}
+                subtext={`Avg Time: ${avgDeliveryTimeHrs}h`}
+                trend={`Revs: ${totalRevisions}`}
                 trendUp={true}
             />
        </div>

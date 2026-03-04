@@ -33,11 +33,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { handleProjectCreated } from "@/app/actions/admin-actions";
 
 const VIDEO_TYPES = [
-    { key: "Reels", label: "Reels", ratio: "9:16", desc: "Instagram Reels, YouTube Shorts, TikTok, Facebook Reels" },
-    { key: "Graphics Videos", label: "Graphic", ratio: "1:1", desc: "Instagram Feed, Facebook Feed, LinkedIn Feed" },
-    { key: "Ads/UGC Videos", label: "UGC Video", ratio: "9:16", desc: "Instagram Reels, TikTok, YouTube Shorts" },
-    { key: "Long Videos", label: "Long VIDEO", ratio: "16:9", desc: "YouTube, Vimeo, OTT Platforms" },
-    { key: "Short Videos", label: "Short Videos", ratio: "9:16", desc: "Generic short format" }
+    { key: "Reel Format", label: "Reel Format", desc: "Optimized for vertical consumption" },
+    { key: "Long Video", label: "Long Video", desc: "Standard horizontal long-form content" },
+    { key: "Documentary", label: "Documentary", desc: "Story-telling and cinematic archives" },
+    { key: "Podcast Edit", label: "Podcast Edit", desc: "Multi-cam or single stream podcasting" },
+    { key: "Motion Graphic", label: "Motion Graphic", desc: "Animated vectors and clean graphics" },
+    { key: "Cinematic Event", label: "Cinematic Event", desc: "High production value event coverage" }
+];
+
+const ASPECT_RATIOS = [
+    { key: "9:16", label: "9:16", desc: "Reels / Shorts" },
+    { key: "1:1", label: "1:1", desc: "Instagram Post" },
+    { key: "16:9", label: "16:9", desc: "YouTube Standard" }
 ];
 
 // Default urgent price if not fetched or set (fallback)
@@ -53,7 +60,8 @@ export default function NewProjectPage() {
 
     // Step 1: Project Information
     const [name, setName] = useState("");
-    const [videoType, setVideoType] = useState<string>("Reels");
+    const [videoType, setVideoType] = useState<string>("Reel Format");
+    const [aspectRatio, setAspectRatio] = useState<string>("9:16");
     const [urgency, setUrgency] = useState<'24hrs' | 'urgent'>('24hrs');
     const [description, setDescription] = useState("");
 
@@ -62,8 +70,10 @@ export default function NewProjectPage() {
     // Step 2: Project Uploaded
     const [rawFiles, setRawFiles] = useState<File[]>([]);
     const [scriptFiles, setScriptFiles] = useState<File[]>([]);
+    const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
     const [scriptText, setScriptText] = useState("");
     const [footageLink, setFootageLink] = useState("");
+    const [referenceLink, setReferenceLink] = useState("");
     
     // Misc
     const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
@@ -99,22 +109,26 @@ export default function NewProjectPage() {
         setCurrentStep(prev => Math.max(1, prev - 1));
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'raw' | 'script') => {
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'raw' | 'script' | 'reference') => {
         if (e.target.files) {
             const filesArray = Array.from(e.target.files);
             if (type === 'raw') {
                 setRawFiles(prev => [...prev, ...filesArray]);
-            } else {
+            } else if (type === 'script') {
                 setScriptFiles(prev => [...prev, ...filesArray]);
+            } else {
+                setReferenceFiles(prev => [...prev, ...filesArray]);
             }
         }
     };
 
-    const removeFile = (index: number, type: 'raw' | 'script') => {
+    const removeFile = (index: number, type: 'raw' | 'script' | 'reference') => {
         if (type === 'raw') {
             setRawFiles(prev => prev.filter((_, i) => i !== index));
-        } else {
+        } else if (type === 'script') {
             setScriptFiles(prev => prev.filter((_, i) => i !== index));
+        } else {
+            setReferenceFiles(prev => prev.filter((_, i) => i !== index));
         }
     };
 
@@ -126,6 +140,7 @@ export default function NewProjectPage() {
             // 1. Upload All Files
             const uploadedRawFiles: any[] = [];
             const uploadedScripts: any[] = [];
+            const uploadedReferences: any[] = [];
 
             const uploadFile = async (file: File, path: string) => {
                 const storageRef = ref(storage, `${path}/${user.uid}/${Date.now()}_${file.name}`);
@@ -160,6 +175,10 @@ export default function NewProjectPage() {
                 uploadedScripts.push(await uploadFile(file, 'scripts'));
             }
 
+            for (const file of referenceFiles) {
+                uploadedReferences.push(await uploadFile(file, 'references'));
+            }
+
             // 2. Create Project
             const projectData = {
                 name,
@@ -175,6 +194,10 @@ export default function NewProjectPage() {
                 footageLink, 
                 rawFiles: uploadedRawFiles,
                 scripts: uploadedScripts,
+                referenceFiles: uploadedReferences,
+                referenceLink,
+                aspectRatio,
+                videoFormat: videoType,
                 scriptText,
                 assignedPMId: user.managedByPM || null,
                 assignedSEId: user.managedBy || user.createdBy || null,
@@ -363,56 +386,74 @@ export default function NewProjectPage() {
                         <div className="space-y-8">
                             <div className="space-y-3">
                                 <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Video Type Format</Label>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {VIDEO_TYPES.map(vt => {
                                         const price = user?.customRates?.[vt.key] || BASE_PROJECT_PRICE;
                                         const hasCustomRate = user?.customRates?.[vt.key] !== undefined;
                                         const isSelected = videoType === vt.key;
                                         
-                                        const is9x16 = vt.ratio === "9:16";
-                                        const is16x9 = vt.ratio === "16:9";
-                                        const is1x1 = vt.ratio === "1:1";
-
                                         return (
                                             <button
                                                 key={vt.key}
                                                 type="button"
                                                 onClick={() => setVideoType(vt.key)}
                                                 className={cn(
-                                                    "flex flex-col relative items-center justify-start p-4 rounded-xl border transition-all text-left overflow-hidden h-full group",
+                                                    "flex flex-col p-4 rounded-xl border transition-all text-left group",
                                                     isSelected
                                                         ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(var(--primary),0.1)]" 
-                                                        : "bg-muted/50 border-border hover:border-border hover:bg-muted/50"
+                                                        : "bg-muted/50 border-border hover:border-border hover:bg-muted/60"
                                                 )}
                                             >
-                                                <div className="w-full h-24 mb-4 flex items-center justify-center bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 rounded-lg border border-border transition-colors">
+                                                <div className="flex flex-col w-full">
+                                                    <div className="flex items-center justify-between mb-1 gap-1">
+                                                        <span className={cn("text-xs font-bold", isSelected ? "text-primary" : "text-foreground")}>{vt.label}</span>
+                                                        <span className={cn("text-[10px] font-mono font-bold", hasCustomRate ? "text-amber-500" : "text-emerald-500")}>₹{price}</span>
+                                                    </div>
+                                                    <span className="text-[9px] text-muted-foreground line-clamp-1">{vt.desc}</span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 pt-6 border-t border-border">
+                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Select Aspect Ratio</Label>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    {ASPECT_RATIOS.map(ar => {
+                                        const isSelected = aspectRatio === ar.key;
+                                        const is9x16 = ar.key === "9:16";
+                                        const is16x9 = ar.key === "16:9";
+                                        const is1x1 = ar.key === "1:1";
+
+                                        return (
+                                            <button
+                                                key={ar.key}
+                                                type="button"
+                                                onClick={() => setAspectRatio(ar.key)}
+                                                className={cn(
+                                                    "flex flex-col items-center p-6 rounded-2xl border transition-all group relative overflow-hidden",
+                                                    isSelected
+                                                        ? "bg-primary/10 border-primary shadow-[0_0_20px_rgba(var(--primary),0.15)]" 
+                                                        : "bg-muted/30 border-border hover:border-border hover:bg-muted/50"
+                                                )}
+                                            >
+                                                <div className="mb-4 flex items-center justify-center h-16 w-full">
                                                     <div 
                                                         className={cn(
                                                             "border-2 transition-all duration-300 rounded-sm flex items-center justify-center shadow-lg",
-                                                            isSelected ? "border-primary bg-primary/20 text-primary scale-110" : "border-zinc-600 bg-muted-foreground text-muted-foreground group-hover:border-zinc-400 group-hover:scale-105"
+                                                            isSelected ? "border-primary bg-primary/20 text-primary scale-110" : "border-zinc-700 bg-muted-foreground/10 text-muted-foreground group-hover:border-zinc-500"
                                                         )}
                                                         style={{
-                                                            width: is9x16 ? '36px' : is16x9 ? '72px' : '48px',
-                                                            height: is9x16 ? '64px' : is16x9 ? '40px' : '48px',
+                                                            width: is9x16 ? '24px' : is16x9 ? '56px' : '40px',
+                                                            height: is9x16 ? '42px' : is16x9 ? '32px' : '40px',
                                                         }}
                                                     >
-                                                        <span className="text-[10px] font-bold">{vt.ratio}</span>
+                                                        <span className="text-[8px] font-black">{ar.key}</span>
                                                     </div>
                                                 </div>
-                                                
-                                                <div className="flex flex-col w-full h-full">
-                                                    <div className="flex items-start justify-between mb-1 gap-1 w-full flex-wrap xl:flex-nowrap">
-                                                        <span className={cn("text-xs font-bold leading-tight", isSelected ? "text-primary" : "text-foreground")}>{vt.label}</span>
-                                                        <span className={cn("text-[11px] font-mono font-bold whitespace-nowrap", hasCustomRate ? "text-amber-500" : "text-emerald-500")}>₹{price}</span>
-                                                    </div>
-                                                    <span className="text-[9px] text-muted-foreground leading-tight line-clamp-3 mb-2">{vt.desc}</span>
-                                                    
-                                                    <div className="mt-auto">
-                                                        {hasCustomRate && (
-                                                            <span className="text-[8px] uppercase tracking-widest font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">Custom Rate</span>
-                                                        )}
-                                                    </div>
-                                                </div>
+                                                <span className={cn("text-[10px] font-black uppercase tracking-widest", isSelected ? "text-primary" : "text-foreground/80")}>{ar.label}</span>
+                                                <span className="text-[9px] text-muted-foreground font-bold mt-1">{ar.desc}</span>
                                             </button>
                                         );
                                     })}
@@ -545,6 +586,52 @@ export default function NewProjectPage() {
                                     onChange={e => setFootageLink(e.target.value)}
                                     className="h-12 bg-muted/50 border-border focus:border-emerald-500/50 rounded-xl font-medium text-foreground placeholder:text-muted-foreground"
                                 />
+                            </div>
+
+                            {/* Reference Link & Files */}
+                            <div className="space-y-4 pt-6 mt-6 border-t-2 border-primary/20 bg-primary/5 p-6 rounded-2xl">
+                                <div className="space-y-1">
+                                    <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+                                        <Zap className="h-4 w-4" /> Style Reference (Optional)
+                                    </Label>
+                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Share a link or upload a file that shows your desired style</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                     <div className="space-y-2">
+                                         <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Reference URL</Label>
+                                         <Input 
+                                            placeholder="Instagram/YouTube link..." 
+                                            value={referenceLink}
+                                            onChange={e => setReferenceLink(e.target.value)}
+                                            className="h-11 bg-background/50 border-border rounded-xl text-xs"
+                                         />
+                                     </div>
+                                     <div className="space-y-2">
+                                         <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Reference File(s)</Label>
+                                         <div className="relative h-11 border border-dashed border-border rounded-xl flex items-center justify-center hover:bg-background/40 transition-colors cursor-pointer group">
+                                             <input 
+                                                type="file" 
+                                                multiple
+                                                onChange={(e) => handleFileUpload(e, 'reference')}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                             />
+                                             <UploadCloud className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                             <span className="ml-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest group-hover:text-foreground transition-colors">Attach File</span>
+                                         </div>
+                                     </div>
+                                </div>
+                                {referenceFiles.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 pt-2">
+                                        {referenceFiles.map((f, i) => (
+                                            <div key={i} className="bg-primary/10 border border-primary/20 rounded-md px-2 py-1 flex items-center gap-2 group">
+                                                <span className="text-[9px] font-bold text-primary truncate max-w-[100px]">{f.name}</span>
+                                                <button onClick={() => removeFile(i, 'reference')} className="text-primary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
 

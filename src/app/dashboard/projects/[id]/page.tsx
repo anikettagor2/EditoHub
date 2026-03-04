@@ -43,6 +43,7 @@ import { unlockProjectDownloads, requestDownloadUnlock, registerDownload, submit
 import { User, ProjectAssignmentStatus } from "@/types/schema";
 import { Modal } from "@/components/ui/modal";
 import { PaymentButton } from "@/components/payment-button";
+import { ProjectChat } from "@/components/project-chat";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 
@@ -175,6 +176,7 @@ export default function ProjectDetailsPage() {
     const [editorReview, setEditorReview] = useState('');
     const [isSubmittingRating, setIsSubmittingRating] = useState(false);
     const [pendingDownloadId, setPendingDownloadId] = useState<string | null>(null);
+    const [isChatOpen, setIsChatOpen] = useState(false);
 
     const initiateDownload = async (revisionId: string) => {
         setIsDownloading(true);
@@ -325,33 +327,86 @@ export default function ProjectDetailsPage() {
                              <p className="text-muted-foreground leading-relaxed italic text-sm">"{project.description || "No specific instructions provided."}"</p>
                         </div>
 
-                        {(project.footageLink || (project.rawFiles && project.rawFiles.length > 0)) && (
-                            <div className="pt-4 border-t border-border space-y-3">
+                        {(project.footageLink || (project.rawFiles && project.rawFiles.length > 0) || project.referenceLink || (project.referenceFiles && project.referenceFiles.length > 0)) && (
+                            <div className="pt-4 border-t border-border space-y-4">
                                 <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">Project Assets (Preview Only)</p>
-                                {project.footageLink && (
-                                    <a href={project.footageLink.startsWith('http') ? project.footageLink : `https://${project.footageLink}`} target="_blank" className="inline-flex items-center gap-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors uppercase tracking-widest">
-                                        <ExternalLink className="h-3 w-3" /> Drive Link
-                                    </a>
-                                )}
-                                {project.rawFiles && project.rawFiles.length > 0 && (
-                                    <div className="grid gap-2 mt-2">
-                                        {project.rawFiles.map((file: any, idx: number) => (
-                                            <div key={idx} className="flex items-center justify-between p-2.5 bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 rounded-lg border border-border group">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <FileVideo className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                                                    <div className="flex flex-col min-w-0">
-                                                        <span className="text-xs font-bold text-muted-foreground truncate">{file.name}</span>
-                                                        <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</span>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                
+                                <div className="flex flex-wrap gap-4">
+                                    {(project as any).videoFormat && (
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Format</span>
+                                            <span className="text-[11px] font-bold text-primary uppercase">{ (project as any).videoFormat }</span>
+                                        </div>
+                                    )}
+                                    {(project as any).aspectRatio && (
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Ratio</span>
+                                            <span className="text-[11px] font-bold text-primary uppercase">{ (project as any).aspectRatio }</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {project.footageLink && (
+                                        <a href={project.footageLink.startsWith('http') ? project.footageLink : `https://${project.footageLink}`} target="_blank" className="flex items-center gap-3 p-3 bg-black/5 dark:bg-black/40 rounded-xl border border-border group hover:border-primary/30 transition-all">
+                                            <div className="h-8 w-8 rounded-lg bg-card flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
+                                                <LinkIcon className="h-4 w-4" />
                                             </div>
-                                        ))}
+                                            <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground">Raw Footage Drive</span>
+                                        </a>
+                                    )}
+                                    {(project as any).referenceLink && (
+                                        <a href={(project as any).referenceLink.startsWith('http') ? (project as any).referenceLink : `https://${(project as any).referenceLink}`} target="_blank" className="flex items-center gap-3 p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10 group hover:border-emerald-500/30 transition-all">
+                                            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:text-emerald-400 transition-colors">
+                                                <Zap className="h-4 w-4" />
+                                            </div>
+                                            <span className="text-xs font-bold text-emerald-500 group-hover:text-emerald-400">Style Reference Link</span>
+                                        </a>
+                                    )}
+                                </div>
+
+                                {(project.rawFiles && project.rawFiles.length > 0) && (
+                                    <div className="space-y-2">
+                                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest ml-1">Raw Files</p>
+                                        <div className="grid gap-2">
+                                            {project.rawFiles.map((file: any, idx: number) => (
+                                                <div key={idx} className="flex items-center justify-between p-2.5 bg-black/5 dark:bg-black/40 rounded-lg border border-border group">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <FileVideo className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-xs font-bold text-muted-foreground truncate">{file.name}</span>
+                                                            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</span>
+                                                        </div>
+                                                    </div>
+                                                    <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
+
+                                {(project as any).referenceFiles && (project as any).referenceFiles.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-[9px] text-primary/70 font-black uppercase tracking-widest ml-1">Reference Assets</p>
+                                        <div className="grid gap-2">
+                                            {(project as any).referenceFiles.map((file: any, idx: number) => (
+                                                <div key={idx} className="flex items-center justify-between p-2.5 bg-primary/5 rounded-lg border border-primary/10 group">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <Eye className="h-4 w-4 text-primary/70 group-hover:text-primary transition-colors" />
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-xs font-bold text-primary/70 truncate">{file.name}</span>
+                                                        </div>
+                                                    </div>
+                                                    <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-primary/10 hover:bg-primary/20 hover:text-primary text-primary/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {previewFileUrl && (
                                     <div className="mt-4 rounded-xl overflow-hidden bg-background border border-border relative">
-                                        <button onClick={() => setPreviewFileUrl(null)} className="absolute top-2 right-2 h-8 w-8 bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 text-foreground rounded-lg flex items-center justify-center z-10 hover:bg-red-500/50 transition-colors"><X className="h-4 w-4" /></button>
+                                        <button onClick={() => setPreviewFileUrl(null)} className="absolute top-2 right-2 h-8 w-8 bg-black/60 text-white rounded-lg flex items-center justify-center z-10 hover:bg-red-500 transition-colors"><X className="h-4 w-4" /></button>
                                         <video src={previewFileUrl} controls controlsList="nodownload" className="w-full max-h-[400px]" autoPlay />
                                     </div>
                                 )}
@@ -380,6 +435,12 @@ export default function ProjectDetailsPage() {
 
     return (
         <div className="max-w-[1600px] mx-auto pb-20 space-y-10">
+            <ProjectChat 
+                projectId={id as string}
+                currentUser={user}
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+            />
             
             {/* Header Section */}
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between pb-8 border-b border-border">
@@ -400,6 +461,13 @@ export default function ProjectDetailsPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                     <button 
+                         onClick={() => setIsChatOpen(true)}
+                         className="h-11 px-5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-all active:scale-[0.98] flex items-center gap-2.5 text-[11px]"
+                     >
+                         <MessageSquare className="h-4 w-4" />
+                         Project Chat
+                     </button>
                      <button className="h-11 w-11 rounded-lg bg-muted/50 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-all active:scale-[0.98] hover:bg-muted/50">
                         <Share2 className="h-4 w-4" />
                      </button>
@@ -830,6 +898,8 @@ export default function ProjectDetailsPage() {
                         
                         <div className="space-y-4">
                             <DetailRow label="Client Account" value={project.brand || project.clientName || 'N/A'} />
+                            {(project as any).videoFormat && <DetailRow label="Video Format" value={(project as any).videoFormat} />}
+                            {(project as any).aspectRatio && <DetailRow label="Aspect Ratio" value={(project as any).aspectRatio} />}
                             <DetailRow label="Estimated Duration" value={`${project.duration || 0}m`} />
                             <DetailRow label="Target Delivery" value={project.deadline ? project.deadline : "TBD"} />
                             <div className="pt-6 border-t border-border space-y-3">
@@ -874,22 +944,84 @@ export default function ProjectDetailsPage() {
                                     <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest ml-1">Embedded Assets</p>
                                     <div className="grid gap-2">
                                         {project.rawFiles.map((file, idx) => (
-                                            <a 
+                                            <div 
                                                 key={idx}
-                                                href={file.url}
-                                                target="_blank"
-                                                className="flex items-center gap-3 p-3.5 bg-muted/50 hover:bg-muted/50 rounded-xl border border-border transition-all group"
+                                                className="flex flex-col p-3.5 bg-muted/50 rounded-xl border border-border transition-all group"
                                             >
-                                                <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/5 transition-all">
-                                                    <FileVideo className="h-4 w-4" />
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/5 transition-all">
+                                                        <FileVideo className="h-4 w-4" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0 text-left">
+                                                        <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground mb-0.5">{file.name}</p>
+                                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex items-center gap-2">
+                                                            <Eye className="h-3.5 w-3.5" /> Preview
+                                                        </button>
+                                                        <a href={file.url} download={file.name} target="_blank" className="h-8 w-8 rounded bg-muted hover:bg-zinc-800 flex items-center justify-center text-muted-foreground transition-all">
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </a>
+                                                    </div>
                                                 </div>
-                                                <div className="flex-1 min-w-0 text-left">
-                                                    <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground mb-0.5">{file.name}</p>
-                                                    <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</p>
-                                                </div>
-                                                <Download className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors mr-1" />
-                                            </a>
+                                            </div>
                                         ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Reference Section */}
+                            {((project as any).referenceLink || ((project as any).referenceFiles && (project as any).referenceFiles.length > 0)) && (
+                                <div className="space-y-4 pt-4 border-t border-border">
+                                    <p className="text-[9px] text-primary/70 font-black uppercase tracking-widest ml-1 flex items-center gap-2">
+                                        <Zap className="h-3 w-3" /> Style Reference Components
+                                    </p>
+                                    <div className="grid gap-3">
+                                        {(project as any).referenceLink && (
+                                            <a 
+                                                href={(project as any).referenceLink.startsWith('http') ? (project as any).referenceLink : `https://${(project as any).referenceLink}`} 
+                                                target="_blank" 
+                                                className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20 hover:border-primary/40 transition-all group"
+                                            >
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                                        <LinkIcon className="h-4 w-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[9px] text-primary font-bold uppercase tracking-widest leading-none mb-1.5">Style URL</p>
+                                                        <p className="text-sm font-bold text-primary truncate">Open Reference Page</p>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        )}
+                                        
+                                        {(project as any).referenceFiles && (project as any).referenceFiles.length > 0 && (
+                                            <div className="grid gap-2">
+                                                {(project as any).referenceFiles.map((file: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center justify-between p-3.5 bg-background/50 border border-border rounded-xl transition-all group">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <Eye className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                            <div className="flex-1 min-w-0 text-left">
+                                                                <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground">{file.name}</p>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {previewFileUrl && (
+                                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onClick={() => setPreviewFileUrl(null)}>
+                                    <div className="relative max-w-5xl w-full aspect-video bg-black rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(var(--primary),0.2)]" onClick={e => e.stopPropagation()}>
+                                        <button onClick={() => setPreviewFileUrl(null)} className="absolute top-6 right-6 h-12 w-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-md z-10 transition-all">
+                                            <X className="h-6 w-6" />
+                                        </button>
+                                        <video src={previewFileUrl} controls className="w-full h-full" autoPlay />
                                     </div>
                                 </div>
                             )}

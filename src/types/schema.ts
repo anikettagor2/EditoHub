@@ -12,12 +12,15 @@ export interface User {
     createdAt: number; // Timestamp
     phoneNumber?: string; // For guests
     companyName?: string; // Optional company name for clients
+    websiteUrl?: string; // Additional profile links for clients
+    clientCategory?: 'Retainer' | 'One-time' | 'Premium' | string; // Client category
     customRates?: Record<string, number>; // Custom video rates for this specific client
     allowedFormats?: Record<string, boolean>; // Which video formats are visible
     initialPassword?: string; // Temp password for new users
     createdBy?: string; // UID of sales exec or admin who created this user
     managedBy?: string; // UID of sales exec managing this client
     payLater?: boolean; // New feature: allows client to skip immediate payment
+    creditLimit?: number; // Maximum pending dues allowed for Pay Later
     deletionRequested?: boolean; // When user requests account deletion, pending admin approval
     deletionRequestedAt?: number; // Timestamp of deletion request
 
@@ -33,8 +36,16 @@ export interface User {
     skills?: string[]; // Specialization/Skills for editors
     skillPrices?: Record<string, string>; // Price range per skill
     status?: 'active' | 'inactive';
-    availabilityStatus?: 'online' | 'offline' | 'sleep'; // PM availability
+    availabilityStatus?: 'online' | 'offline' | 'sleep'; // Presence status
     maxProjectLimit?: number; // Admin defined max active units limit for PM
+
+    // Client Documents
+    documents?: {
+        agreement?: { url: string; name: string; uploadedAt: number };
+        gst?: { url: string; name: string; uploadedAt: number };
+        nda?: { url: string; name: string; uploadedAt: number };
+        invoices?: { id: string; url: string; name: string; uploadedAt: number }[]; // Since multiple invoice downloads maybe
+    };
 }
 
 export type ProjectStatus = 'active' | 'in_review' | 'approved' | 'completed' | 'archived' | 'pending_assignment';
@@ -49,6 +60,10 @@ export interface Project {
     deadline?: string;
     duration?: number;
     videoType?: string;
+    videoFormat?: string; // e.g., 'Reel Format', 'Documentary', etc.
+    aspectRatio?: '9:16' | '1:1' | '16:9' | string;
+    referenceLink?: string;
+    referenceFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[];
     budget?: number;
     totalCost?: number; // Calculated cost
     amountPaid?: number; // Upfront + Final
@@ -93,6 +108,8 @@ export interface Project {
         timestamp: number;
         details?: string;
     }[];
+    revisionsCount?: number; // Total revisions handled
+    completedAt?: number; // When the project was marked as completed/approved
 }
 
 export type ProjectAssignmentStatus = 'pending' | 'accepted' | 'rejected';
@@ -198,4 +215,14 @@ export interface Invoice {
     notes?: string;
     createdAt: number;
     updatedAt: number;
+}
+
+export interface ProjectMessage {
+    id: string;
+    projectId: string;
+    senderId: string;
+    senderName: string;
+    senderRole: UserRole;
+    text: string;
+    createdAt: number;
 }

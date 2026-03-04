@@ -78,6 +78,7 @@ import { useAuth } from "@/lib/context/auth-context";
 import { assignEditor, updateProject, togglePayLater, deleteProject, deleteUser, toggleUserStatus, rejectDeletionRequest, verifyEditor, getWhatsAppTemplates, updateWhatsAppTemplates, settleProjectPayment, addProjectLog } from "@/app/actions/admin-actions";
 import { AdminOverviewGraphs } from "./admin-overview-graphs";
 import { AdminPerformanceTab } from "./admin-performance";
+import { ClientDocuments } from "./client-documents";
 
 export function AdminDashboard() {
   const { user: currentUser } = useAuth();
@@ -417,8 +418,32 @@ export function AdminDashboard() {
              u.role?.toLowerCase().includes(q);
   });
 
+  const clientsOverLimit = users.filter(u => u.role === 'client' && u.payLater).filter(u => {
+      const uProjects = projects.filter(p => p.clientId === u.uid);
+      const uPending = uProjects.reduce((acc, p) => acc + ((p.totalCost || 0) - (p.amountPaid || 0)), 0);
+      return uPending >= (u.creditLimit || 5000);
+  });
+
   return (
     <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
+       {clientsOverLimit.length > 0 && (
+           <motion.div 
+               initial={{ opacity: 0, y: -20 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 mb-6 flex items-center justify-between gap-4"
+           >
+               <div className="flex items-center gap-3">
+                   <div className="h-10 w-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                       <AlertCircle className="h-6 w-6 text-red-500" />
+                   </div>
+                   <div>
+                       <h4 className="text-sm font-bold uppercase tracking-tight">Financial Risk Alert: {clientsOverLimit.length} Clients Over Credit Limit</h4>
+                       <p className="text-[11px] font-medium opacity-80 uppercase tracking-widest mt-0.5">The following clients have exceeded their assigned credit limits: {clientsOverLimit.map(c => c.displayName).join(', ')}. Please review and collect pending dues.</p>
+                   </div>
+               </div>
+               <button onClick={() => { setActiveTab('users'); setSearchQuery('client'); }} className="px-4 py-2 bg-red-500 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 transition-all active:scale-95">Review Clients</button>
+           </motion.div>
+       )}
        
        {/* Dashboard Header */}
        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pb-8 border-b border-border">
@@ -618,7 +643,7 @@ export function AdminDashboard() {
                                     className="hover:bg-muted/50 transition-colors group"
                                 >
                                     <td className="px-6 py-5">
-                                        <div className="text-sm font-bold text-foreground tracking-tight">{project.name}</div>
+                                        <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-bold text-foreground tracking-tight hover:text-primary transition-colors cursor-pointer">{project.name}</Link>
                                         <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">ID: {project.id.slice(0,12)}</div>
                                     </td>
                                     <td className="px-6 py-5">
@@ -669,7 +694,7 @@ export function AdminDashboard() {
                                     className="hover:bg-muted/50 transition-colors group"
                                >
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
-                                        <div className="text-base font-bold text-foreground tracking-tight leading-tight">{project.name}</div>
+                                        <Link href={`/dashboard/projects/${project.id}`} className="text-base font-bold text-foreground tracking-tight leading-tight hover:text-primary transition-colors cursor-pointer">{project.name}</Link>
                                          <div className="flex items-center gap-2 mt-1">
                                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">ID: {project.id.slice(0,12)}</span>
                                              {(project as any).isPayLaterRequest && (
@@ -739,6 +764,11 @@ export function AdminDashboard() {
                                                         <DropdownMenuSeparator className="my-1 bg-border" />
                                                     </>
                                                 )}
+                                                <DropdownMenuItem asChild className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg">
+                                                    <Link href={`/dashboard/projects/${project.id}`} className="flex items-center w-full">
+                                                        <ExternalLink className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Open Project Hub
+                                                    </Link>
+                                                </DropdownMenuItem>
                                                  <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setInspectProject(project); setIsProjectDetailModalOpen(true); }}>
                                                     <Search className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Inspect History
                                                 </DropdownMenuItem>
@@ -789,7 +819,17 @@ export function AdminDashboard() {
                                                 <AvatarFallback className="text-muted-foreground font-bold text-xs uppercase group-hover/profile:text-primary">{u.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
                                             <div>
-                                                <div className="text-sm font-bold text-foreground tracking-tight leading-tight group-hover/profile:text-primary transition-colors">{u.displayName}</div>
+                                                <div className="text-sm font-bold text-foreground tracking-tight leading-tight group-hover/profile:text-primary transition-colors flex items-center gap-2">
+                                                    {u.displayName}
+                                                    {u.role === 'client' && u.payLater && (() => {
+                                                        const uProjects = projects.filter(p => p.clientId === u.uid);
+                                                        const uPending = uProjects.reduce((acc, p) => acc + ((p.totalCost || 0) - (p.amountPaid || 0)), 0);
+                                                        if (uPending >= (u.creditLimit || 5000)) {
+                                                            return <span className="flex items-center gap-1 text-[8px] bg-red-500 text-white px-1.5 py-0.5 rounded font-black uppercase lg:animate-pulse">Limit Exceeded</span>;
+                                                        }
+                                                        return null;
+                                                    })()}
+                                                </div>
                                                 <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">UID: {u.uid.slice(0,8)}</div>
                                             </div>
                                         </div>
@@ -1365,9 +1405,18 @@ export function AdminDashboard() {
                                                             <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mt-1">{client.companyName || client.email}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex flex-col md:items-end gap-1 border border-orange-500/20 bg-orange-500/5 px-6 py-3 rounded-xl">
-                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Total Pending Dues</span>
-                                                        <span className="text-2xl font-black text-orange-400 tabular-nums">₹{totalDues.toLocaleString()}</span>
+                                                    <div className="flex flex-col md:items-end gap-3">
+                                                        <div className="flex flex-col md:items-end gap-1 border border-orange-500/20 bg-orange-500/5 px-6 py-3 rounded-xl w-full">
+                                                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Total Pending Dues</span>
+                                                            <span className="text-2xl font-black text-orange-400 tabular-nums">₹{totalDues.toLocaleString()}</span>
+                                                        </div>
+                                                        <button 
+                                                            disabled
+                                                            className="w-full md:w-auto h-9 px-4 rounded-lg bg-orange-500/50 text-foreground font-bold uppercase tracking-widest transition-all text-[10px] cursor-not-allowed opacity-50 flex items-center justify-center gap-2"
+                                                        >
+                                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                                            Mark All Received
+                                                        </button>
                                                     </div>
                                                 </div>
                                                 
@@ -1449,9 +1498,18 @@ export function AdminDashboard() {
                                                             <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mt-1 text-blue-400/80">{editor.email}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex flex-col md:items-end gap-1 border border-blue-500/20 bg-blue-500/5 px-6 py-3 rounded-xl">
-                                                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Total Payout Pending</span>
-                                                        <span className="text-2xl font-black text-blue-400 tabular-nums">₹{totalEditorDues.toLocaleString()}</span>
+                                                    <div className="flex flex-col md:items-end gap-3">
+                                                        <div className="flex flex-col md:items-end gap-1 border border-blue-500/20 bg-blue-500/5 px-6 py-3 rounded-xl w-full">
+                                                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Total Payout Pending</span>
+                                                            <span className="text-2xl font-black text-blue-400 tabular-nums">₹{totalEditorDues.toLocaleString()}</span>
+                                                        </div>
+                                                        <button 
+                                                            disabled
+                                                            className="w-full md:w-auto h-9 px-4 rounded-lg bg-blue-500/50 text-foreground font-bold uppercase tracking-widest transition-all text-[10px] cursor-not-allowed opacity-50 flex items-center justify-center gap-2"
+                                                        >
+                                                            <RefreshCw className="h-3.5 w-3.5" />
+                                                            Settle All Dues
+                                                        </button>
                                                     </div>
                                                 </div>
                                                 
@@ -1786,6 +1844,100 @@ export function AdminDashboard() {
                             </div>
                         )}
                     </div>
+
+                    {/* Client Specific Details */}
+                    {selectedUserDetail.role === 'client' && (
+                        <div className="pt-6 border-t border-border mt-6 space-y-4">
+                            <h4 className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                                <Layers className="h-3 w-3" /> Client Profile Details
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="enterprise-card p-4 bg-muted/50 border-border space-y-1">
+                                    <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Company Name</Label>
+                                    <div className="text-sm font-semibold text-foreground">
+                                        {selectedUserDetail.companyName || <span className="text-muted-foreground opacity-50">Not Provided</span>}
+                                    </div>
+                                </div>
+                                <div className="enterprise-card p-4 bg-muted/50 border-border space-y-1">
+                                    <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Client Category</Label>
+                                    <div className="text-sm font-bold text-emerald-500">
+                                        {selectedUserDetail.clientCategory || 'Retainer'}
+                                    </div>
+                                </div>
+                                <div className="enterprise-card p-4 bg-muted/50 border-border space-y-1">
+                                    <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Website / Social Links</Label>
+                                    <div className="text-sm font-medium text-foreground truncate">
+                                        {selectedUserDetail.websiteUrl ? (
+                                            <a href={selectedUserDetail.websiteUrl.startsWith('http') ? selectedUserDetail.websiteUrl : `https://${selectedUserDetail.websiteUrl}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors">
+                                                {selectedUserDetail.websiteUrl} <ExternalLink className="h-3 w-3 shrink-0" />
+                                            </a>
+                                        ) : (
+                                            <span className="text-muted-foreground opacity-50">Not Provided</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="enterprise-card p-4 bg-muted/50 border-border space-y-3 col-span-1 md:col-span-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Pay Later Authority</Label>
+                                            <p className="text-[10px] text-muted-foreground">Allow projects without up-front payment</p>
+                                        </div>
+                                        <button 
+                                            onClick={async () => {
+                                                const newVal = !selectedUserDetail.payLater;
+                                                setSelectedUserDetail({ ...selectedUserDetail, payLater: newVal });
+                                                try {
+                                                    await updateDoc(doc(db, "users", selectedUserDetail.uid), {
+                                                        payLater: newVal,
+                                                        updatedAt: Date.now()
+                                                    });
+                                                    toast.success(`Pay Later ${newVal ? 'Enabled' : 'Disabled'}`);
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    toast.error("Failed to update status");
+                                                }
+                                            }}
+                                            className={cn(
+                                                "h-8 px-4 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all",
+                                                selectedUserDetail.payLater ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-muted text-muted-foreground border border-border"
+                                            )}
+                                        >
+                                            {selectedUserDetail.payLater ? "Authorized" : "Disabled"}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="enterprise-card p-4 bg-muted/50 border-border space-y-2">
+                                    <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Credit Limit (₹)</Label>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            type="number" 
+                                            defaultValue={selectedUserDetail.creditLimit || 5000}
+                                            onBlur={async (e) => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                setSelectedUserDetail({ ...selectedUserDetail, creditLimit: val });
+                                                try {
+                                                    await updateDoc(doc(db, "users", selectedUserDetail.uid), {
+                                                        creditLimit: val,
+                                                        updatedAt: Date.now()
+                                                    });
+                                                    toast.success("Credit limit updated");
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    toast.error("Failed to update limit");
+                                                }
+                                            }}
+                                            className="w-full h-8 bg-black/20 border border-border rounded px-3 text-xs font-bold text-foreground focus:outline-none focus:border-primary/50"
+                                        />
+                                        <Shield className="h-4 w-4 text-muted-foreground opacity-30" />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="pt-4 border-t border-border">
+                                <ClientDocuments userProfile={selectedUserDetail} isClient={false} />
+                            </div>
+                        </div>
+                    )}
 
                     {/* Pinned Portfolio Works */}
                     {selectedUserDetail.portfolio && Array.isArray(selectedUserDetail.portfolio) && selectedUserDetail.portfolio.length > 0 ? (

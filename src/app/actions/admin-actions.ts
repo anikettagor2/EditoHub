@@ -350,6 +350,22 @@ export async function togglePayLater(uid: string, payLater: boolean) {
 }
 
 /**
+ * Updates a client's credit limit
+ */
+export async function updateClientCreditLimit(uid: string, creditLimit: number) {
+    try {
+        await adminDb.collection('users').doc(uid).update({
+            creditLimit: creditLimit,
+            updatedAt: Date.now()
+        });
+        revalidatePath('/dashboard');
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Rejects a user's deletion request
  */
 export async function rejectDeletionRequest(uid: string) {

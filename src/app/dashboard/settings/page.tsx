@@ -11,8 +11,10 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, setDoc } from "firebase/firestore";
 import { useBranding } from "@/lib/context/branding-context";
 import Image from "next/image";
-import { Upload } from "lucide-react";
+import { Upload, Save } from "lucide-react";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function SettingsPage() {
     const { user, requestAccountDeletion } = useAuth();
@@ -20,6 +22,14 @@ export default function SettingsPage() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isAvatarUploading, setIsAvatarUploading] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [clientProfile, setClientProfile] = useState({
+        displayName: user?.displayName || "",
+        companyName: user?.companyName || "",
+        phoneNumber: user?.phoneNumber || "",
+        websiteUrl: user?.websiteUrl || "",
+        clientCategory: user?.clientCategory || "Retainer"
+    });
 
     const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
@@ -146,6 +156,28 @@ export default function SettingsPage() {
         }
     };
 
+    const handleSaveClientProfile = async () => {
+        if (!user) return;
+        setIsSavingProfile(true);
+        const toastId = toast.loading("Updating profile details...");
+        try {
+            await setDoc(doc(db, "users", user.uid), {
+                displayName: clientProfile.displayName,
+                companyName: clientProfile.companyName,
+                phoneNumber: clientProfile.phoneNumber,
+                websiteUrl: clientProfile.websiteUrl,
+                clientCategory: clientProfile.clientCategory,
+                updatedAt: Date.now()
+            }, { merge: true });
+            toast.success("Profile details updated successfully", { id: toastId });
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to update profile", { id: toastId });
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
+
     if (!user) return null;
 
     return (
@@ -227,6 +259,72 @@ export default function SettingsPage() {
 
                 {user.role !== 'admin' && (
                     <>
+                        <div className="h-px bg-card" />
+
+                        {user.role === 'client' && (
+                            <div className="space-y-6 pt-2">
+                                <div>
+                                    <h3 className="text-emerald-500 text-sm font-semibold uppercase tracking-wider">Client Portfolio & Profile</h3>
+                                    <p className="text-xs text-muted-foreground mt-1">Configure your personalized information for your editing team.</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Client Name (Display Name)</Label>
+                                        <Input 
+                                            value={clientProfile.displayName}
+                                            onChange={(e) => setClientProfile({...clientProfile, displayName: e.target.value})}
+                                            className="bg-card text-foreground"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Company Name</Label>
+                                        <Input 
+                                            value={clientProfile.companyName}
+                                            onChange={(e) => setClientProfile({...clientProfile, companyName: e.target.value})}
+                                            className="bg-card text-foreground"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Contact Number</Label>
+                                        <Input 
+                                            value={clientProfile.phoneNumber}
+                                            onChange={(e) => setClientProfile({...clientProfile, phoneNumber: e.target.value})}
+                                            className="bg-card text-foreground"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Website / Social Links</Label>
+                                        <Input 
+                                            value={clientProfile.websiteUrl}
+                                            onChange={(e) => setClientProfile({...clientProfile, websiteUrl: e.target.value})}
+                                            className="bg-card text-foreground"
+                                            placeholder="https://"
+                                        />
+                                    </div>
+                                    <div className="space-y-2 md:col-span-2">
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Client Category</Label>
+                                        <select 
+                                            value={clientProfile.clientCategory}
+                                            onChange={(e) => setClientProfile({...clientProfile, clientCategory: e.target.value})}
+                                            className="w-full flex h-10 rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                                        >
+                                            <option value="Retainer">Retainer</option>
+                                            <option value="One-time">One-time</option>
+                                            <option value="Premium">Premium</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <Button 
+                                    onClick={handleSaveClientProfile}
+                                    disabled={isSavingProfile}
+                                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
+                                >
+                                    {isSavingProfile ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                                    Save Profile Details
+                                </Button>
+                            </div>
+                        )}
+
                         <div className="h-px bg-card" />
 
                         {/* Danger Zone */}
