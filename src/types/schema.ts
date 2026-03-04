@@ -24,7 +24,7 @@ export interface User {
     // Role-specific metrics
     income?: number; // Total income for editor
     rating?: number; // Rating for editor
-    portfolio?: { name: string; url: string; date: number }[]; // Showcase projects for editor
+    portfolio?: { name: string; url: string; date?: number; clientName?: string; category?: string }[]; // Showcase projects for editor
     onboardingStatus?: 'pending' | 'approved' | 'rejected'; // For editors created by SE/PM
     totalRevenueGenerated?: number; // For SE/PM
     whatsappNumber?: string;

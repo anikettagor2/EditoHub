@@ -1760,27 +1760,7 @@ export function AdminDashboard() {
                                         </div>
                                     </div>
                                 )}
-                                {selectedUserDetail.portfolio && Array.isArray(selectedUserDetail.portfolio) && selectedUserDetail.portfolio.length > 0 ? (
-                                    <div className="space-y-2 pt-2 border-t border-border">
-                                        <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Portfolio Links</Label>
-                                        <div className="space-y-2">
-                                            {selectedUserDetail.portfolio.map((port: any, idx: number) => (
-                                                <a key={idx} href={port.url || port} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-muted/50 border border-border rounded-lg text-sm text-blue-400 hover:text-blue-300 hover:bg-muted/50 transition-all truncate">
-                                                    <Globe className="h-3.5 w-3.5 flex-shrink-0 text-blue-500/70" />
-                                                    <span className="truncate">{port.name || port.url || port}</span>
-                                                </a>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : selectedUserDetail.portfolio && typeof selectedUserDetail.portfolio === 'string' ? (
-                                    <div className="space-y-1.5 pt-2 border-t border-border">
-                                        <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Portfolio Link</Label>
-                                        <a href={selectedUserDetail.portfolio as string} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-muted/50 border border-border rounded-lg text-sm text-blue-400 hover:text-blue-300 hover:bg-muted/50 transition-all truncate">
-                                            <Globe className="h-3.5 w-3.5 flex-shrink-0 text-blue-500/70" />
-                                            <span className="truncate">{selectedUserDetail.portfolio}</span>
-                                        </a>
-                                    </div>
-                                ) : null}
+                                
                             </div>
                         </div>
 
@@ -1801,6 +1781,81 @@ export function AdminDashboard() {
                             </div>
                         )}
                     </div>
+
+                    {/* Pinned Portfolio Works */}
+                    {selectedUserDetail.portfolio && Array.isArray(selectedUserDetail.portfolio) && selectedUserDetail.portfolio.length > 0 ? (
+                        <div className="space-y-4 pt-6 border-t border-border mt-6">
+                            <h4 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] flex items-center gap-2 px-1">
+                                <MonitorPlay className="h-3 w-3 text-primary" /> Best 3-5 works pinned
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {selectedUserDetail.portfolio.slice(0, 5).map((port: any, idx: number) => (
+                                    <div key={idx} className="bg-muted/30 border border-border rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden group hover:bg-muted/50 hover:border-primary/40 transition-all hover:shadow-lg">
+                                        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none transition-opacity group-hover:opacity-10">
+                                            {port.url?.includes('youtube.com') || port.url?.includes('youtu.be') ? <MonitorPlay className="h-16 w-16 text-red-500" /> : <Globe className="h-16 w-16 text-blue-500" />}
+                                        </div>
+                                        
+                                        <div className="flex items-start gap-4 z-10">
+                                            <div className="h-12 w-12 rounded-lg bg-card border border-border flex items-center justify-center shrink-0 shadow-inner group-hover:border-primary/50 transition-colors">
+                                                {port.url?.includes('drive.google.com') ? <FolderOpen className="h-5 w-5 text-emerald-500" /> :
+                                                 port.url?.includes('youtube.com') || port.url?.includes('youtu.be') ? <MonitorPlay className="h-5 w-5 text-red-500" /> :
+                                                 <Globe className="h-5 w-5 text-blue-400" />}
+                                            </div>
+                                            <div className="flex flex-col min-w-0 mt-0.5">
+                                                <span className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors tracking-tight">{port.name || 'Showcase Project'}</span>
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground truncate flex items-center gap-1.5 mt-1">
+                                                    <UserIcon className="h-3 w-3" /> {port.clientName || 'General Portfolio'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center justify-between border-t border-border pt-4 mt-1 z-10">
+                                            <span className="bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+                                                {port.category || 'Editing'}
+                                            </span>
+                                            <a href={port.url || port} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 bg-card px-3 py-1.5 rounded-md border border-border hover:border-blue-500/40 transition-all uppercase tracking-widest shadow-sm">
+                                                <ExternalLink className="h-3 w-3" /> Drive Link / Preview
+                                            </a>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : selectedUserDetail.portfolio && typeof selectedUserDetail.portfolio === 'string' ? (
+                        <div className="space-y-4 pt-6 border-t border-border mt-6">
+                            <h4 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] flex items-center gap-2 px-1">
+                                <MonitorPlay className="h-3 w-3 text-primary" /> Highlighted Work Pinned
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="bg-muted/30 border border-border rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden group hover:bg-muted/50 hover:border-primary/40 transition-all hover:shadow-lg">
+                                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none transition-opacity group-hover:opacity-10">
+                                        <Globe className="h-16 w-16 text-blue-500" />
+                                    </div>
+                                    
+                                    <div className="flex items-start gap-4 z-10">
+                                        <div className="h-12 w-12 rounded-lg bg-card border border-border flex items-center justify-center shrink-0 shadow-inner group-hover:border-primary/50 transition-colors">
+                                            <Globe className="h-5 w-5 text-blue-400" />
+                                        </div>
+                                        <div className="flex flex-col min-w-0 mt-0.5">
+                                            <span className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors tracking-tight">Main Portfolio Link</span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground truncate flex items-center gap-1.5 mt-1">
+                                                <UserIcon className="h-3 w-3" /> General Masterpiece
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between border-t border-border pt-4 mt-1 z-10">
+                                        <span className="bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md">
+                                            Editing
+                                        </span>
+                                        <a href={selectedUserDetail.portfolio as string} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 bg-card px-3 py-1.5 rounded-md border border-border hover:border-blue-500/40 transition-all uppercase tracking-widest shadow-sm">
+                                            <ExternalLink className="h-3 w-3" /> Drive Link / Preview
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
 
                     {/* Role Metrics */}
                     <div className="pt-6 border-t border-border">
