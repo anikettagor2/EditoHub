@@ -154,17 +154,23 @@ export default function ProjectDetailsPage() {
         };
     }, [id, authLoading]);
 
-    // Admin: Fetch Editors
+    // Admin: Fetch Editors & PMs
     useEffect(() => {
-        if (user?.role === 'admin') {
+        if (user?.role === 'admin' || user?.role === 'project_manager' || (user?.role === 'client' && project?.assignedPMId)) {
             getAllUsers().then(res => {
                 if (res.success && res.data) {
                     const allUsers = res.data as User[];
-                    setEditors(allUsers.filter(u => u.role === 'editor'));
+                    if (user?.role === 'admin' || user?.role === 'project_manager') {
+                        setEditors(allUsers.filter(u => u.role === 'editor'));
+                    }
+                    if (project?.assignedPMId) {
+                        const pm = allUsers.find(u => u.uid === project.assignedPMId);
+                        if (pm) setAssignedPM(pm);
+                    }
                 }
             });
         }
-    }, [user]);
+    }, [user, project?.assignedPMId]);
 
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -293,6 +299,7 @@ export default function ProjectDetailsPage() {
     const isEditor = user?.role === 'editor';
     const isAssignedEditor = isEditor && project.assignedEditorId === user?.uid;
     const isPaymentLocked = isClient && project.paymentStatus !== 'full_paid';
+    const [assignedPM, setAssignedPM] = useState<User | null>(null);
 
     const showFeedbackTool = canManage ? (project.assignmentStatus === 'accepted') : true;
 
@@ -471,7 +478,7 @@ export default function ProjectDetailsPage() {
                      <button className="h-11 w-11 rounded-lg bg-muted/50 border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-all active:scale-[0.98] hover:bg-muted/50">
                         <Share2 className="h-4 w-4" />
                      </button>
-                     {(isAdmin || (isAssignedEditor && (project.assignmentStatus === 'accepted' || project.status === 'active'))) && (
+                     {(canManage || (isAssignedEditor && (project.assignmentStatus === 'accepted' || project.status === 'active'))) && (
                         <Link href={`/dashboard/projects/${id}/upload`}>
                             <button className="h-11 px-6 rounded-lg bg-primary  text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-md shadow-primary/10 active:scale-[0.98] flex items-center gap-2.5">
                                 <Upload className="h-4 w-4" />
@@ -668,9 +675,9 @@ export default function ProjectDetailsPage() {
                             </div>
                             <h3 className="text-xl font-bold text-foreground mb-2 tracking-tight">Setting Up Your Project</h3>
                             <p className="text-muted-foreground max-w-sm mb-8 text-sm font-medium leading-relaxed">
-                                {(isEditor || isAdmin) ? "Project is ready. Please upload the first version of the video to start the review process." : "We're working on your video! We'll let you know as soon as the first version is ready for you to see."}
+                                {(isEditor || canManage) ? "Project is ready. Please upload the first version of the video to start the review process." : "We're working on your video! We'll let you know as soon as the first version is ready for you to see."}
                             </p>
-                            {(isAdmin || (isAssignedEditor && (project.assignmentStatus === 'accepted' || project.status === 'active'))) && (
+                            {(canManage || (isAssignedEditor && (project.assignmentStatus === 'accepted' || project.status === 'active'))) && (
                                 <Link href={`/dashboard/projects/${id}/upload`}>
                                     <button className="h-12 px-8 rounded-lg bg-primary  text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-md shadow-primary/10 active:scale-[0.98]">
                                         Upload First Draft
@@ -898,6 +905,7 @@ export default function ProjectDetailsPage() {
                         
                         <div className="space-y-4">
                             <DetailRow label="Client Account" value={project.brand || project.clientName || 'N/A'} />
+                            {assignedPM && <DetailRow label="Project Manager" value={assignedPM.displayName || "Assigned PM"} />}
                             {(project as any).videoFormat && <DetailRow label="Video Format" value={(project as any).videoFormat} />}
                             {(project as any).aspectRatio && <DetailRow label="Aspect Ratio" value={(project as any).aspectRatio} />}
                             <DetailRow label="Estimated Duration" value={`${project.duration || 0}m`} />

@@ -106,7 +106,7 @@ export function ClientDocuments({ userProfile, isClient }: ClientDocumentsProps)
                                 >
                                     <Eye className="h-3.5 w-3.5" /> View
                                 </a>
-                                {isClient && (
+                                {!isClient && (
                                     <label className="h-9 px-4 rounded-lg bg-muted border border-border hover:bg-accent text-foreground transition-colors flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest cursor-pointer">
                                         <Upload className="h-3.5 w-3.5" /> Replace
                                         <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.png" onChange={(e) => handleFileUpload(e, docType)} disabled={uploadingDocType === docType} />
@@ -118,7 +118,7 @@ export function ClientDocuments({ userProfile, isClient }: ClientDocumentsProps)
                         <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border rounded-xl bg-background text-center space-y-3">
                             <FileText className="h-10 w-10 text-muted-foreground opacity-50" />
                             <p className="text-sm font-bold text-muted-foreground">Not uploaded yet.</p>
-                            {isClient && (
+                            {!isClient && (
                                 <label className="mt-2 h-10 px-6 rounded-lg bg-primary text-primary-foreground hover:bg-zinc-200 shadow-md transition-colors flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest cursor-pointer">
                                     {uploadingDocType === docType ? (
                                         <><Loader2 className="h-4 w-4 animate-spin" /> {uploadProgress.toFixed(0)}%</>
@@ -184,7 +184,7 @@ export function ClientDocuments({ userProfile, isClient }: ClientDocumentsProps)
                             ))
                         )}
                         
-                        {isClient && (
+                        {!isClient && (
                             <div className="mt-4 flex justify-end">
                                 <label className="h-9 px-4 rounded-lg bg-muted border border-border text-foreground hover:bg-accent transition-colors flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest cursor-pointer">
                                     {uploadingDocType === 'invoices' ? (
