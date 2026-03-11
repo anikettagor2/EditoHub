@@ -36,7 +36,7 @@ export default function ServicesPage() {
                     className="text-7xl md:text-9xl font-black uppercase tracking-tighter leading-none mb-8"
                 >
                     Engineered <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-purple-500 to-primary italic">Excellence</span>
+                    <span className="text-transparent bg-clip-text bg-linear-to-r from-primary via-purple-500 to-primary italic">Excellence</span>
                 </motion.h1>
                 <motion.p 
                     initial={{ opacity: 0, y: 20 }}

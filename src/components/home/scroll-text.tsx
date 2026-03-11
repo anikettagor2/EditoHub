@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
+import { CheckCircle } from "lucide-react";
 
 function ScrollText() {
     const textRef = useRef<HTMLDivElement>(null);
@@ -10,17 +11,17 @@ function ScrollText() {
     useEffect(() => {
         gsap.registerPlugin(ScrollTrigger);
         
-        const chars = textRef.current?.querySelectorAll(".char");
-        if (chars) {
-            gsap.fromTo(chars, 
-                { opacity: 0.1 },
+        const words = textRef.current?.querySelectorAll(".word");
+        if (words) {
+            gsap.fromTo(words, 
+                { opacity: 0.15 },
                 {
                     opacity: 1,
-                    stagger: 0.1,
+                    stagger: 0.08,
                     scrollTrigger: {
                         trigger: textRef.current,
-                        start: "top 80%",
-                        end: "bottom 20%",
+                        start: "top 75%",
+                        end: "bottom 30%",
                         scrub: true,
                     }
                 }
@@ -28,16 +29,39 @@ function ScrollText() {
         }
     }, []);
 
-    const text = "We create cinematic visuals that don't just tell a story—they create an obsession. From high-fashion commercials to high-stakes gaming reels, our methodology remains consistent: Absolute Precision.";
+    const text = "We don't just edit videos. We craft content that hooks viewers in the first 3 seconds, keeps them engaged, and drives them to take action.";
+
+    const features = [
+        "Dedicated editor for every project",
+        "Unlimited revisions included", 
+        "24-48 hour turnaround",
+        "Secure file handling"
+    ];
 
     return (
-        <section className="bg-black py-60 px-6">
-            <div ref={textRef} className="max-w-5xl mx-auto">
-                <p className="text-3xl md:text-6xl font-black uppercase tracking-tighter text-white leading-[1.1]">
-                    {text.split(" ").map((word, i) => (
-                        <span key={i} className="char inline-block mr-[0.3em]">{word}</span>
+        <section className="bg-black py-32 md:py-48 px-6">
+            <div className="max-w-5xl mx-auto">
+                {/* Main Text */}
+                <div ref={textRef} className="mb-20">
+                    <p className="text-2xl sm:text-3xl md:text-5xl font-semibold text-white leading-snug tracking-tight">
+                        {text.split(" ").map((word, i) => (
+                            <span key={i} className="word inline-block mr-[0.25em]">{word}</span>
+                        ))}
+                    </p>
+                </div>
+
+                {/* Feature Pills */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {features.map((feature, i) => (
+                        <div 
+                            key={i} 
+                            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-white/5 border border-white/10"
+                        >
+                            <CheckCircle className="w-5 h-5 text-primary shrink-0" />
+                            <span className="text-sm text-zinc-300 font-medium">{feature}</span>
+                        </div>
                     ))}
-                </p>
+                </div>
             </div>
         </section>
     );

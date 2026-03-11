@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
@@ -24,13 +24,30 @@ import {
     Link as LinkIcon,
     FileText,
     Image as ImageIcon,
-    CreditCard
+    CreditCard,
+    AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { handleProjectCreated } from "@/app/actions/admin-actions";
+
+interface UploadedFile {
+    name: string;
+    url: string;
+    size: number;
+    type: string;
+    uploadedAt: number;
+}
+
+interface FileWithProgress {
+    file: File;
+    progress: number;
+    status: 'pending' | 'uploading' | 'complete' | 'error';
+    uploadedData?: UploadedFile;
+    error?: string;
+}
 
 const VIDEO_TYPES = [
     { key: "Reel Format", label: "Reel Format", desc: "Optimized for vertical consumption" },
@@ -47,9 +64,9 @@ const ASPECT_RATIOS = [
     { key: "16:9", label: "16:9", desc: "YouTube Standard" }
 ];
 
-// Default urgent price if not fetched or set (fallback)
 const DEFAULT_URGENT_PRICE = 500;
 const BASE_PROJECT_PRICE = 1000;
+const MAX_CONCURRENT_UPLOADS = 3; // Upload up to 3 files simultaneously
 
 export default function NewProjectPage() {
     const router = useRouter();
@@ -65,18 +82,15 @@ export default function NewProjectPage() {
     const [urgency, setUrgency] = useState<'24hrs' | 'urgent'>('24hrs');
     const [description, setDescription] = useState("");
 
-
-
-    // Step 2: Project Uploaded
-    const [rawFiles, setRawFiles] = useState<File[]>([]);
-    const [scriptFiles, setScriptFiles] = useState<File[]>([]);
-    const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
+    // Step 3: Files with immediate upload tracking
+    const [rawFiles, setRawFiles] = useState<FileWithProgress[]>([]);
+    const [scriptFiles, setScriptFiles] = useState<FileWithProgress[]>([]);
+    const [referenceFiles, setReferenceFiles] = useState<FileWithProgress[]>([]);
     const [scriptText, setScriptText] = useState("");
     const [footageLink, setFootageLink] = useState("");
     const [referenceLink, setReferenceLink] = useState("");
     
     // Misc
-    const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Derived Logic
@@ -84,11 +98,165 @@ export default function NewProjectPage() {
     
     // Dynamic pricing calculation
     const basePrice = user?.customRates?.[videoType] || BASE_PROJECT_PRICE;
-
     const urgentExtraCost = urgency === 'urgent' ? DEFAULT_URGENT_PRICE : 0;
     const finalCost = basePrice + urgentExtraCost;
 
     const canPayLater = user?.payLater === true;
+
+    // Check if all files are uploaded
+    const allFilesUploaded = [...rawFiles, ...scriptFiles, ...referenceFiles].every(
+        f => f.status === 'complete'
+    );
+    const hasUploadingFiles = [...rawFiles, ...scriptFiles, ...referenceFiles].some(
+        f => f.status === 'uploading'
+    );
+    const totalUploadProgress = (() => {
+        const allFiles = [...rawFiles, ...scriptFiles, ...referenceFiles];
+        if (allFiles.length === 0) return 100;
+        const total = allFiles.reduce((acc, f) => acc + f.progress, 0);
+        return Math.round(total / allFiles.length);
+    })();
+
+    // Immediate file upload function
+    const uploadFileImmediately = useCallback(async (
+        file: File, 
+        path: string,
+        onProgress: (progress: number) => void,
+        onComplete: (data: UploadedFile) => void,
+        onError: (error: string) => void
+    ) => {
+        if (!user) return;
+
+        try {
+            const storageRef = ref(storage, `${path}/${user.uid}/${Date.now()}_${file.name}`);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    onProgress(progress);
+                }, 
+                (error) => {
+                    console.error('Upload error:', error);
+                    onError(error.message || 'Upload failed');
+                }, 
+                async () => {
+                    try {
+                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        onComplete({
+                            name: file.name,
+                            url: downloadURL,
+                            size: file.size,
+                            type: file.type,
+                            uploadedAt: Date.now()
+                        });
+                    } catch (err: any) {
+                        onError(err.message || 'Failed to get download URL');
+                    }
+                }
+            );
+        } catch (error: any) {
+            onError(error.message || 'Upload failed');
+        }
+    }, [user]);
+
+    // Handle file selection and immediate upload
+    const handleFileUpload = useCallback((
+        e: React.ChangeEvent<HTMLInputElement>, 
+        type: 'raw' | 'script' | 'reference'
+    ) => {
+        if (!e.target.files || !user) return;
+        
+        const files = Array.from(e.target.files);
+        const path = type === 'raw' ? 'raw_footage' : type === 'script' ? 'scripts' : 'references';
+        
+        const newFileEntries: FileWithProgress[] = files.map(file => ({
+            file,
+            progress: 0,
+            status: 'pending' as const
+        }));
+
+        // Add files to state
+        if (type === 'raw') {
+            setRawFiles(prev => [...prev, ...newFileEntries]);
+        } else if (type === 'script') {
+            setScriptFiles(prev => [...prev, ...newFileEntries]);
+        } else {
+            setReferenceFiles(prev => [...prev, ...newFileEntries]);
+        }
+
+        // Start uploading each file
+        files.forEach((file, index) => {
+            const setState = type === 'raw' ? setRawFiles : type === 'script' ? setScriptFiles : setReferenceFiles;
+            
+            // Find the index in the new combined array
+            setTimeout(() => {
+                setState(prev => {
+                    const fileIndex = prev.findIndex(f => f.file === file && f.status === 'pending');
+                    if (fileIndex === -1) return prev;
+                    
+                    const updated = [...prev];
+                    updated[fileIndex] = { ...updated[fileIndex], status: 'uploading' };
+                    return updated;
+                });
+
+                uploadFileImmediately(
+                    file,
+                    path,
+                    (progress) => {
+                        setState(prev => {
+                            const fileIndex = prev.findIndex(f => f.file === file);
+                            if (fileIndex === -1) return prev;
+                            const updated = [...prev];
+                            updated[fileIndex] = { ...updated[fileIndex], progress };
+                            return updated;
+                        });
+                    },
+                    (uploadedData) => {
+                        setState(prev => {
+                            const fileIndex = prev.findIndex(f => f.file === file);
+                            if (fileIndex === -1) return prev;
+                            const updated = [...prev];
+                            updated[fileIndex] = { 
+                                ...updated[fileIndex], 
+                                status: 'complete', 
+                                progress: 100,
+                                uploadedData 
+                            };
+                            return updated;
+                        });
+                    },
+                    (error) => {
+                        setState(prev => {
+                            const fileIndex = prev.findIndex(f => f.file === file);
+                            if (fileIndex === -1) return prev;
+                            const updated = [...prev];
+                            updated[fileIndex] = { 
+                                ...updated[fileIndex], 
+                                status: 'error', 
+                                error 
+                            };
+                            return updated;
+                        });
+                        toast.error(`Failed to upload ${file.name}`);
+                    }
+                );
+            }, index * 200); // Stagger uploads slightly
+        });
+
+        // Reset input
+        e.target.value = '';
+    }, [user, uploadFileImmediately]);
+
+    const removeFile = (index: number, type: 'raw' | 'script' | 'reference') => {
+        if (type === 'raw') {
+            setRawFiles(prev => prev.filter((_, i) => i !== index));
+        } else if (type === 'script') {
+            setScriptFiles(prev => prev.filter((_, i) => i !== index));
+        } else {
+            setReferenceFiles(prev => prev.filter((_, i) => i !== index));
+        }
+    };
 
     const handleNextStep = () => {
         if (currentStep === 1) {
@@ -101,6 +269,13 @@ export default function NewProjectPage() {
             if (rawFiles.length === 0 && !footageLink) {
                 return toast.error("Please provide either raw files or a Google Drive link.");
             }
+            if (hasUploadingFiles) {
+                return toast.error("Please wait for all files to finish uploading.");
+            }
+            const failedFiles = [...rawFiles, ...scriptFiles, ...referenceFiles].filter(f => f.status === 'error');
+            if (failedFiles.length > 0) {
+                return toast.error(`${failedFiles.length} file(s) failed to upload. Please remove and re-upload them.`);
+            }
             setCurrentStep(4);
         }
     };
@@ -109,77 +284,25 @@ export default function NewProjectPage() {
         setCurrentStep(prev => Math.max(1, prev - 1));
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'raw' | 'script' | 'reference') => {
-        if (e.target.files) {
-            const filesArray = Array.from(e.target.files);
-            if (type === 'raw') {
-                setRawFiles(prev => [...prev, ...filesArray]);
-            } else if (type === 'script') {
-                setScriptFiles(prev => [...prev, ...filesArray]);
-            } else {
-                setReferenceFiles(prev => [...prev, ...filesArray]);
-            }
-        }
-    };
-
-    const removeFile = (index: number, type: 'raw' | 'script' | 'reference') => {
-        if (type === 'raw') {
-            setRawFiles(prev => prev.filter((_, i) => i !== index));
-        } else if (type === 'script') {
-            setScriptFiles(prev => prev.filter((_, i) => i !== index));
-        } else {
-            setReferenceFiles(prev => prev.filter((_, i) => i !== index));
-        }
-    };
-
     const handleSubmitProject = async (paymentOption: 'pay_now' | 'pay_later') => {
         if (!user) return;
         setIsSubmitting(true);
 
         try {
-            // 1. Upload All Files
-            const uploadedRawFiles: any[] = [];
-            const uploadedScripts: any[] = [];
-            const uploadedReferences: any[] = [];
+            // Files are already uploaded - just collect the data
+            const uploadedRawFiles = rawFiles
+                .filter(f => f.status === 'complete' && f.uploadedData)
+                .map(f => f.uploadedData!);
+            
+            const uploadedScripts = scriptFiles
+                .filter(f => f.status === 'complete' && f.uploadedData)
+                .map(f => f.uploadedData!);
+            
+            const uploadedReferences = referenceFiles
+                .filter(f => f.status === 'complete' && f.uploadedData)
+                .map(f => f.uploadedData!);
 
-            const uploadFile = async (file: File, path: string) => {
-                const storageRef = ref(storage, `${path}/${user.uid}/${Date.now()}_${file.name}`);
-                const uploadTask = uploadBytesResumable(storageRef, file);
-
-                return new Promise<any>((resolve, reject) => {
-                    uploadTask.on('state_changed', 
-                        (snapshot) => {
-                            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                            setUploadProgress(prev => ({ ...prev, [file.name]: progress }));
-                        }, 
-                        (error) => reject(error), 
-                        async () => {
-                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                            resolve({
-                                name: file.name,
-                                url: downloadURL,
-                                size: file.size,
-                                type: file.type,
-                                uploadedAt: Date.now()
-                            });
-                        }
-                    );
-                });
-            };
-
-            for (const file of rawFiles) {
-                uploadedRawFiles.push(await uploadFile(file, 'raw_footage'));
-            }
-
-            for (const file of scriptFiles) {
-                uploadedScripts.push(await uploadFile(file, 'scripts'));
-            }
-
-            for (const file of referenceFiles) {
-                uploadedReferences.push(await uploadFile(file, 'references'));
-            }
-
-            // 2. Create Project
+            // Create Project
             const projectData = {
                 name,
                 videoType,
@@ -510,18 +633,45 @@ export default function NewProjectPage() {
                                         </div>
                                     </div>
                                 </div>
-                                {/* File List */}
+                                {/* File List with Progress */}
                                 {rawFiles.length > 0 && (
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-                                        {rawFiles.map((file, i) => (
-                                            <div key={i} className="flex items-center justify-between bg-muted/50 border border-border rounded-lg p-2 group pr-1">
-                                                <div className="flex items-center gap-2 min-w-0 pr-2">
-                                                    {file.type.includes('image') ? <ImageIcon className="w-4 h-4 text-amber-500 shrink-0" /> : <FileVideo className="w-4 h-4 text-blue-500 shrink-0" />}
-                                                    <span className="text-[10px] text-muted-foreground truncate font-semibold">{file.name}</span>
+                                    <div className="space-y-2 mt-4">
+                                        {rawFiles.map((fileItem, i) => (
+                                            <div key={i} className="bg-muted/50 border border-border rounded-lg p-3 group">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        {fileItem.file.type.includes('image') ? <ImageIcon className="w-4 h-4 text-amber-500 shrink-0" /> : <FileVideo className="w-4 h-4 text-blue-500 shrink-0" />}
+                                                        <span className="text-xs text-foreground truncate font-medium">{fileItem.file.name}</span>
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                            ({(fileItem.file.size / 1024 / 1024).toFixed(1)} MB)
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {fileItem.status === 'complete' && (
+                                                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                                        )}
+                                                        {fileItem.status === 'error' && (
+                                                            <AlertCircle className="w-4 h-4 text-red-500" />
+                                                        )}
+                                                        {fileItem.status === 'uploading' && (
+                                                            <span className="text-[10px] text-primary font-bold">{Math.round(fileItem.progress)}%</span>
+                                                        )}
+                                                        <button type="button" onClick={() => removeFile(i, 'raw')} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 text-red-500 rounded transition-all">
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <button type="button" onClick={() => removeFile(i, 'raw')} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 text-red-500 rounded transition-all shrink-0">
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
+                                                {(fileItem.status === 'uploading' || fileItem.status === 'pending') && (
+                                                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-300"
+                                                            style={{ width: `${fileItem.progress}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+                                                {fileItem.status === 'error' && (
+                                                    <p className="text-[10px] text-red-500 mt-1">{fileItem.error || 'Upload failed'}</p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -558,16 +708,35 @@ export default function NewProjectPage() {
                                         />
                                     </div>
                                 </div>
-                                {/* Script Files List */}
+                                {/* Script Files List with Progress */}
                                 {scriptFiles.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mt-4">
-                                        {scriptFiles.map((file, i) => (
-                                            <div key={i} className="flex items-center gap-2 bg-muted/50 border border-border rounded-md px-2 py-1.5 group">
-                                                <FileText className="w-3.5 h-3.5 text-pink-500 shrink-0" />
-                                                <span className="text-[10px] text-muted-foreground truncate max-w-[150px] font-semibold">{file.name}</span>
-                                                <button type="button" onClick={() => removeFile(i, 'script')} className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
-                                                    <X className="w-3 h-3" />
-                                                </button>
+                                    <div className="space-y-2 mt-4">
+                                        {scriptFiles.map((fileItem, i) => (
+                                            <div key={i} className="bg-muted/50 border border-border rounded-lg p-3 group">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        <FileText className="w-3.5 h-3.5 text-pink-500 shrink-0" />
+                                                        <span className="text-xs text-foreground truncate font-medium">{fileItem.file.name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {fileItem.status === 'complete' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                                                        {fileItem.status === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
+                                                        {fileItem.status === 'uploading' && (
+                                                            <span className="text-[10px] text-primary font-bold">{Math.round(fileItem.progress)}%</span>
+                                                        )}
+                                                        <button type="button" onClick={() => removeFile(i, 'script')} className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {(fileItem.status === 'uploading' || fileItem.status === 'pending') && (
+                                                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-gradient-to-r from-pink-500 to-pink-400 transition-all duration-300"
+                                                            style={{ width: `${fileItem.progress}%` }}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -621,13 +790,30 @@ export default function NewProjectPage() {
                                      </div>
                                 </div>
                                 {referenceFiles.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                        {referenceFiles.map((f, i) => (
-                                            <div key={i} className="bg-primary/10 border border-primary/20 rounded-md px-2 py-1 flex items-center gap-2 group">
-                                                <span className="text-[9px] font-bold text-primary truncate max-w-[100px]">{f.name}</span>
-                                                <button onClick={() => removeFile(i, 'reference')} className="text-primary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <X className="h-3 w-3" />
-                                                </button>
+                                    <div className="space-y-2 pt-2">
+                                        {referenceFiles.map((fileItem, i) => (
+                                            <div key={i} className="bg-primary/10 border border-primary/20 rounded-lg p-2.5 group">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-[10px] font-bold text-primary truncate max-w-[150px]">{fileItem.file.name}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {fileItem.status === 'complete' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                                                        {fileItem.status === 'error' && <AlertCircle className="w-3 h-3 text-red-500" />}
+                                                        {fileItem.status === 'uploading' && (
+                                                            <span className="text-[9px] text-primary font-bold">{Math.round(fileItem.progress)}%</span>
+                                                        )}
+                                                        <button onClick={() => removeFile(i, 'reference')} className="text-primary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {(fileItem.status === 'uploading' || fileItem.status === 'pending') && (
+                                                    <div className="h-1 bg-primary/20 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="h-full bg-primary transition-all duration-300"
+                                                            style={{ width: `${fileItem.progress}%` }}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -635,12 +821,63 @@ export default function NewProjectPage() {
                             </div>
                         </div>
 
+                        {/* Overall Upload Progress */}
+                        {(rawFiles.length > 0 || scriptFiles.length > 0 || referenceFiles.length > 0) && (
+                            <div className="bg-muted/30 border border-border rounded-xl p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                        Upload Progress
+                                    </span>
+                                    <span className={cn(
+                                        "text-xs font-bold",
+                                        allFilesUploaded ? "text-emerald-500" : hasUploadingFiles ? "text-primary" : "text-muted-foreground"
+                                    )}>
+                                        {allFilesUploaded ? (
+                                            <span className="flex items-center gap-1">
+                                                <CheckCircle2 className="w-3 h-3" /> All Files Uploaded
+                                            </span>
+                                        ) : hasUploadingFiles ? (
+                                            `${totalUploadProgress}% Complete`
+                                        ) : (
+                                            'Ready'
+                                        )}
+                                    </span>
+                                </div>
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                    <div 
+                                        className={cn(
+                                            "h-full transition-all duration-500",
+                                            allFilesUploaded 
+                                                ? "bg-gradient-to-r from-emerald-500 to-emerald-400" 
+                                                : "bg-gradient-to-r from-primary to-primary/70"
+                                        )}
+                                        style={{ width: `${totalUploadProgress}%` }}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
+                                    <span>{rawFiles.length + scriptFiles.length + referenceFiles.length} file(s)</span>
+                                    <span>
+                                        {[...rawFiles, ...scriptFiles, ...referenceFiles].filter(f => f.status === 'complete').length} uploaded
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between pt-4">
                             <Button type="button" onClick={handlePrevStep} variant="ghost" size="lg" className="rounded-xl text-muted-foreground hover:text-foreground">
                                 <ChevronLeft className="mr-2 w-4 h-4" /> Go Back
                             </Button>
-                            <Button onClick={handleNextStep} size="lg" className="rounded-xl px-10 shadow-xl font-bold tracking-wide">
-                                Next Step <ChevronRight className="ml-2 w-4 h-4" />
+                            <Button 
+                                onClick={handleNextStep} 
+                                size="lg" 
+                                className="rounded-xl px-10 shadow-xl font-bold tracking-wide"
+                                disabled={hasUploadingFiles}
+                            >
+                                {hasUploadingFiles ? (
+                                    <>Uploading... {totalUploadProgress}%</>
+                                ) : (
+                                    <>Next Step <ChevronRight className="ml-2 w-4 h-4" /></>
+                                )}
                             </Button>
                         </div>
                     </motion.div>
@@ -689,21 +926,14 @@ export default function NewProjectPage() {
                             </div>
                         </div>
 
-                        {/* Progress display if submitting */}
-                        {isSubmitting && Object.keys(uploadProgress).length > 0 && (
-                            <div className="space-y-3 bg-muted/50 border border-border rounded-xl p-4">
-                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Uploading Assets...</p>
-                                {Object.entries(uploadProgress).map(([fileName, progress]) => (
-                                    <div key={fileName} className="space-y-1.5">
-                                        <div className="flex justify-between text-[10px] font-bold">
-                                            <span className="text-foreground truncate max-w-[200px]">{fileName}</span>
-                                            <span className="text-primary">{Math.round(progress)}%</span>
-                                        </div>
-                                        <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-                                            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
-                                        </div>
-                                    </div>
-                                ))}
+                        {/* Submission Status */}
+                        {isSubmitting && (
+                            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                                <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                                <div>
+                                    <p className="text-sm font-bold text-foreground">Creating Your Project...</p>
+                                    <p className="text-xs text-muted-foreground">This will only take a moment</p>
+                                </div>
                             </div>
                         )}
 

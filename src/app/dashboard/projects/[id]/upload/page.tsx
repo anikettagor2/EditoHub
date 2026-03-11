@@ -140,8 +140,8 @@ export default function UploadRevisionPage() {
                     <div className="space-y-6 relative z-10">
                         <Label className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1">Master Video File</Label>
                         <div className={cn(
-                            "group relative border-2 border-dashed border-border rounded-[2.5rem] bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 hover:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 hover:border-primary/50 transition-all duration-700 min-h-[280px] flex flex-col items-center justify-center text-center cursor-pointer p-10 shadow-inner",
-                            file ? "border-primary/60 bg-primary/[0.04]" : ""
+                            "group relative border-2 border-dashed border-border rounded-[2.5rem] bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all duration-700 min-h-[280px] flex flex-col items-center justify-center text-center cursor-pointer p-10 shadow-inner",
+                            file ? "border-primary/60 bg-primary/5" : ""
                         )}>
                             <input 
                                 type="file" 
@@ -185,7 +185,7 @@ export default function UploadRevisionPage() {
                         <Textarea 
                             id="description" 
                             placeholder="Specify revisions, technical adjustments, or focus points for this version..."
-                            className="bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 border-border focus:border-primary/50 focus:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 transition-all duration-700 rounded-[2rem] font-bold text-foreground placeholder:text-muted-foreground text-base leading-relaxed p-8 min-h-[180px] shadow-inner"
+                            className="bg-muted/30 border-border focus:border-primary/50 focus:bg-muted/50 transition-all duration-700 rounded-[2rem] font-bold text-foreground placeholder:text-muted-foreground text-base leading-relaxed p-8 min-h-[180px] shadow-inner"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                         />

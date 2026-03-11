@@ -3,39 +3,21 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { 
-    Loader2, 
     UserPlus, 
-    Mail, 
-    Lock, 
     User as UserIcon, 
-    LogOut, 
     RefreshCw, 
     Copy, 
-    ExternalLink, 
-    Shield,
     Search,
-    Filter,
-    CheckCircle2,
-    Clock,
     MoreHorizontal,
-    ArrowUpRight,
-    ArrowDownLeft,
-    AlertCircle,
     Briefcase,
     Plus,
     ChevronDown,
     IndianRupee,
-    Zap,
-    Monitor,
-    Globe,
-    Activity,
-    Database,
-    ShieldCheck,
     Users,
     Key,
-    Smartphone,
-    Terminal,
-    Cpu
+    Trash2,
+    Clock,
+    CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase/config";
@@ -53,6 +35,50 @@ import {
     DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+
+// Stats Card Component
+function StatsCard({ icon, value, label, color = "blue", alert = false }: {
+    icon: React.ReactNode;
+    value: number | string;
+    label: string;
+    color?: "blue" | "amber" | "green" | "purple";
+    alert?: boolean;
+}) {
+    const colorStyles = {
+        blue: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+        amber: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+        green: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+        purple: "bg-purple-500/10 text-purple-600 border-purple-500/20"
+    };
+
+    return (
+        <motion.div 
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -2 }}
+            className={cn(
+                "relative bg-card border border-border rounded-xl p-5 hover:shadow-md transition-all duration-200",
+                alert && "ring-2 ring-amber-500/30"
+            )}
+        >
+            <div className="flex items-start justify-between">
+                <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center border", colorStyles[color])}>
+                    {icon}
+                </div>
+                {alert && (
+                    <span className="flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                )}
+            </div>
+            <div className="mt-4">
+                <p className="text-3xl font-bold text-foreground tabular-nums">{value}</p>
+                <p className="text-sm text-muted-foreground mt-1">{label}</p>
+            </div>
+        </motion.div>
+    );
+}
 
 export function SalesDashboard() {
     const { user } = useAuth();
@@ -143,7 +169,7 @@ export function SalesDashboard() {
             pass += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         setPassword(pass);
-        toast.info("Secure access key generated");
+        toast.info("Password generated");
     };
 
     const handleCreateClient = async (e: React.FormEvent) => {
@@ -157,11 +183,9 @@ export function SalesDashboard() {
         
         if (finalPMId === "automatic") {
             try {
-                // Find all online PMs
                 const onlinePMs = projectManagers.filter(pm => pm.availabilityStatus === 'online');
                 
                 if (onlinePMs.length > 0) {
-                    // Get all active projects to calculate load
                     const projectsRef = collection(db, "projects");
                     const qActive = query(projectsRef, where("status", "not-in", ["completed", "approved"]));
                     const activeSnaps = await getDocs(qActive);
@@ -176,27 +200,25 @@ export function SalesDashboard() {
                         }
                     });
                     
-                    // Filter PMs who are below their maxProjectLimit (default to 10 if not set)
                     const availablePMs = onlinePMs.filter(pm => {
-                        const limit = pm.maxProjectLimit || 10; // Default limit
+                        const limit = pm.maxProjectLimit || 10;
                         return pmLoad[pm.uid] < limit;
                     });
                     
                     if (availablePMs.length > 0) {
-                        // Pick the one with the lowest load
                         availablePMs.sort((a, b) => pmLoad[a.uid] - pmLoad[b.uid]);
                         finalPMId = availablePMs[0].uid;
                     } else {
-                        toast.error("No online Project Managers have available capacity. Proceeding without PM assignment.");
+                        toast.error("No available project managers. Client will be created without PM assignment.");
                         finalPMId = "";
                     }
                 } else {
-                    toast.error("No Project Managers are currently online. Proceeding without PM assignment.");
+                    toast.error("No project managers online. Client will be created without PM assignment.");
                     finalPMId = "";
                 }
             } catch (err) {
                 console.error("Auto PM assignment error:", err);
-                toast.error("Failed to automatically assign PM. Proceeding without PM.");
+                toast.error("Failed to auto-assign PM.");
                 finalPMId = "";
             }
         }
@@ -242,7 +264,6 @@ export function SalesDashboard() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Creation failed");
             
-            // Assign PM explicitly after creation
             if (finalPMId && finalPMId !== "automatic") {
                 await updateDoc(doc(db, "users", data.user.uid), {
                     managedByPM: finalPMId,
@@ -250,7 +271,7 @@ export function SalesDashboard() {
                 });
             }
 
-            toast.success(`Client initialized: ${backup.name}`);
+            toast.success(`Client "${backup.name}" created successfully`);
             setIsCreateOpen(false);
 
         } catch (error: any) {
@@ -258,19 +279,6 @@ export function SalesDashboard() {
             setPendingClients(prev => prev.filter(c => c.id !== tempId));
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const handleAssignPM = async (clientId: string, pmId: string) => {
-        try {
-            const clientRef = doc(db, "users", clientId);
-            await updateDoc(clientRef, {
-                managedByPM: pmId,
-                updatedAt: Date.now()
-            });
-            toast.success("Project Manager assigned successfully");
-        } catch (error: any) {
-            toast.error("Assignment failed: " + error.message);
         }
     };
 
@@ -282,420 +290,423 @@ export function SalesDashboard() {
                 deletionRequested: true,
                 deletionRequestedAt: Date.now()
             });
-            toast.success("Deletion request sent to admin.");
+            toast.success("Deletion request sent to admin");
         } catch (err: any) {
-            toast.error("Failed to request deletion: " + err.message);
+            toast.error("Failed to request deletion");
         }
     };
 
     return (
-        <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
-            {/* Header Section */}
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pb-8 border-b border-border">
-                <motion.div 
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="space-y-2"
+        <div className="space-y-8 max-w-[1600px] mx-auto pb-16">
+            {/* Header */}
+            <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+            >
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+                        Welcome back, {user?.displayName?.split(' ')[0]}
+                    </h1>
+                    <p className="text-muted-foreground mt-1">
+                        Manage your clients and track your sales
+                    </p>
+                </div>
+                
+                <button
+                    onClick={() => setIsCreateOpen(!isCreateOpen)}
+                    className={cn(
+                        "flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-medium transition-all",
+                        isCreateOpen 
+                            ? "bg-muted text-foreground border border-border" 
+                            : "bg-primary text-primary-foreground hover:bg-primary/90"
+                    )}
                 >
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
-                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Sales Dashboard</span>
-                        </div>
-                    </div>
-                    <h1 className="text-4xl md:text-5xl font-heading font-bold tracking-tight text-foreground leading-tight">Sales <span className="text-muted-foreground">Portfolio</span></h1>
-                    <div className="flex items-center gap-6 pt-2">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <UserIcon className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Executive: {user?.displayName?.split(' ')[0]}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <ShieldCheck className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sales Auth: Level 3</span>
-                        </div>
-                    </div>
-                </motion.div>
+                    {isCreateOpen ? (
+                        <>Cancel</>
+                    ) : (
+                        <>
+                            <UserPlus className="h-4 w-4" />
+                            Add Client
+                        </>
+                    )}
+                </button>
+            </motion.div>
 
-                <motion.div
-                   initial={{ opacity: 0, x: 20 }}
-                   animate={{ opacity: 1, x: 0 }}
-                   className="flex items-center gap-3"
-                >
-                    <button
-                        onClick={() => setIsCreateOpen(!isCreateOpen)}
-                        className={cn(
-                            "flex items-center gap-2.5 h-10 px-5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all",
-                            isCreateOpen 
-                                ? "bg-muted text-foreground border border-border hover:bg-muted/80" 
-                                : "bg-primary text-primary-foreground shadow-lg hover:opacity-90 active:scale-[0.98]"
-                        )}
-                    >
-                        {isCreateOpen ? (
-                            <>Abort Initialization</>
-                        ) : (
-                            <>
-                                <UserPlus className="h-4 w-4" />
-                                Add Client
-                            </>
-                        )}
-                    </button>
-                </motion.div>
-            </div>
-
-            {/* Statistics Row */}
+            {/* Stats Grid - Only show when form is closed */}
             {!isCreateOpen && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <IndicatorCard 
-                        label="Portfolio Index" 
-                        value={myClients.length} 
-                        icon={<Users className="h-4 w-4" />}
-                        subtext="Assigned entities"
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <StatsCard 
+                        icon={<Users className="h-5 w-5" />}
+                        value={myClients.length}
+                        label="Total Clients"
+                        color="blue"
                     />
-                    <IndicatorCard 
-                        label="Pending Authorization" 
-                        value={pendingClients.length} 
+                    <StatsCard 
+                        icon={<Clock className="h-5 w-5" />}
+                        value={pendingClients.length}
+                        label="Pending Setup"
+                        color="amber"
                         alert={pendingClients.length > 0}
-                        icon={<Database className="h-4 w-4" />}
-                        subtext="Gathering data"
                     />
-                    <IndicatorCard 
-                        label="Acquisition Revenue" 
-                        value="₹0" 
-                        icon={<IndianRupee className="h-4 w-4" />}
-                        subtext="LTV verified"
+                    <StatsCard 
+                        icon={<IndianRupee className="h-5 w-5" />}
+                        value="₹0"
+                        label="Revenue Generated"
+                        color="green"
                     />
-                    <IndicatorCard 
-                        label="Ecosystem Reach" 
-                        value="Global" 
-                        icon={<Globe className="h-4 w-4" />}
-                        subtext="Multi-node distribution"
+                    <StatsCard 
+                        icon={<CheckCircle2 className="h-5 w-5" />}
+                        value={myClients.filter(c => !c.deletionRequested).length}
+                        label="Active Clients"
+                        color="purple"
                     />
                 </div>
             )}
 
-            <div className="grid lg:grid-cols-12 gap-8 items-start">
-                 <AnimatePresence mode="popLayout">
-                 {/* Initialization Form */}
-                 {isCreateOpen && (
-                     <motion.div 
-                        key="creation-form"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="lg:col-span-5 bg-card/40 backdrop-blur-sm border border-border p-8 rounded-2xl relative overflow-hidden group/form"
-                    >
-                        <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none group-hover/form:opacity-10 transition-opacity">
-                            <Zap className="h-32 w-32 text-primary blur-2xl" />
-                        </div>
-                        
-                        <div className="flex items-center gap-2.5 mb-8">
-                            <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                                <ShieldCheck className="h-4 w-4 text-primary" />
-                            </div>
-                            <h3 className="text-[11px] font-bold text-foreground/90 uppercase tracking-widest">Initialize Entity</h3>
-                        </div>
-                        
-                        <form onSubmit={handleCreateClient} className="space-y-6 relative z-10">
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Client Identity</Label>
-                                <input 
-                                    placeholder="Entity Full Name" 
-                                    value={name} 
-                                    onChange={e => setName(e.target.value)} 
-                                    required 
-                                    className="w-full h-11 px-4 rounded-lg border border-border bg-muted/50 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground font-medium"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Auth Endpoint (Email)</Label>
-                                <input 
-                                    type="email" 
-                                    placeholder="endpoint@client.hub" 
-                                    value={email} 
-                                    onChange={e => setEmail(e.target.value)} 
-                                    required 
-                                    className="w-full h-11 px-4 rounded-lg border border-border bg-muted/50 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground font-medium"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Network Contact (Phone)</Label>
-                                <div className="flex gap-3">
-                                    <div className="flex items-center justify-center h-11 px-3 bg-muted/50 border border-border rounded-lg text-[10px] font-bold text-muted-foreground tracking-widest">+91</div>
-                                    <input 
-                                        type="tel" 
-                                        placeholder="Operational Mobile" 
-                                        value={phone} 
-                                        onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} 
-                                        required 
-                                        className="w-full h-11 px-4 rounded-lg border border-border bg-muted/50 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground font-medium"
-                                    />
+            <div className="grid lg:grid-cols-12 gap-6 items-start">
+                <AnimatePresence mode="popLayout">
+                    {/* Create Client Form */}
+                    {isCreateOpen && (
+                        <motion.div 
+                            key="creation-form"
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.98 }}
+                            className="lg:col-span-5 bg-card border border-border p-6 rounded-xl"
+                        >
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                                    <UserPlus className="h-5 w-5 text-primary" />
                                 </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Access Key</Label>
-                                <div className="flex gap-2">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Min 6 characters" 
-                                        value={password} 
-                                        onChange={e => setPassword(e.target.value)} 
-                                        required 
-                                        className="w-full h-11 px-4 rounded-lg border border-border bg-muted/50 text-sm text-foreground font-mono focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground"
-                                    />
-                                    <button type="button" onClick={generatePassword} className="h-11 w-11 flex items-center justify-center rounded-lg bg-muted/50 border border-border hover:bg-muted/50 transition-all group active:scale-[0.95]">
-                                        <Key className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                                    </button>
+                                <div>
+                                    <h3 className="text-base font-semibold text-foreground">New Client</h3>
+                                    <p className="text-xs text-muted-foreground">Create a new client account</p>
                                 </div>
                             </div>
                             
-                            <div className="pt-6 border-t border-border">
-                                <Label className="mb-4 block text-[10px] uppercase text-muted-foreground font-bold tracking-widest ml-1">Asset Pricing Matrix</Label>
-                                <div className="grid gap-3">
-                                    {VIDEO_TYPES_LABELS.map((type) => (
-                                        <div key={type} className={cn(
-                                            "flex items-center justify-between p-3.5 rounded-xl border transition-all", 
-                                            allowedFormats[type] 
-                                                ? "bg-primary/[0.05] border-primary/30" 
-                                                : "bg-muted/50 border-border opacity-40 grayscale"
-                                        )}>
-                                            <div className="flex items-center gap-3">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={allowedFormats[type]} 
-                                                    onChange={(e) => setAllowedFormats({...allowedFormats, [type]: e.target.checked})}
-                                                    className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/40 transition-all cursor-pointer"
-                                                />
-                                                <span className="text-[11px] font-bold text-foreground/80 uppercase tracking-widest">{type}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-muted-foreground font-bold">₹</span>
-                                                <input 
-                                                    disabled={!allowedFormats[type]}
-                                                    className="h-8 w-20 text-xs font-bold bg-transparent border-none text-foreground focus:ring-0 text-right pr-0 disabled:opacity-30 tabular-nums" 
-                                                    value={customRates[type]} 
-                                                    onChange={(e) => setCustomRates({...customRates, [type]: parseInt(e.target.value) || 0})}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
+                            <form onSubmit={handleCreateClient} className="space-y-5">
+                                {/* Name */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-sm font-medium">Full Name</Label>
+                                    <input 
+                                        placeholder="John Doe" 
+                                        value={name} 
+                                        onChange={e => setName(e.target.value)} 
+                                        required 
+                                        className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:border-primary/50 focus:outline-none transition-colors"
+                                    />
                                 </div>
-                            </div>
+                                
+                                {/* Email */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-sm font-medium">Email Address</Label>
+                                    <input 
+                                        type="email" 
+                                        placeholder="client@example.com" 
+                                        value={email} 
+                                        onChange={e => setEmail(e.target.value)} 
+                                        required 
+                                        className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:border-primary/50 focus:outline-none transition-colors"
+                                    />
+                                </div>
+                                
+                                {/* Phone */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-sm font-medium">Phone Number</Label>
+                                    <div className="flex gap-2">
+                                        <div className="flex items-center justify-center h-10 px-3 bg-muted border border-border rounded-lg text-sm text-muted-foreground">+91</div>
+                                        <input 
+                                            type="tel" 
+                                            placeholder="9876543210" 
+                                            value={phone} 
+                                            onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} 
+                                            required 
+                                            className="flex-1 h-10 px-3 rounded-lg border border-border bg-background text-sm focus:border-primary/50 focus:outline-none transition-colors"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                {/* Password */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-sm font-medium">Password</Label>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Min 6 characters" 
+                                            value={password} 
+                                            onChange={e => setPassword(e.target.value)} 
+                                            required 
+                                            className="flex-1 h-10 px-3 rounded-lg border border-border bg-background text-sm font-mono focus:border-primary/50 focus:outline-none transition-colors"
+                                        />
+                                        <button 
+                                            type="button" 
+                                            onClick={generatePassword} 
+                                            className="h-10 w-10 flex items-center justify-center rounded-lg border border-border hover:bg-muted transition-colors"
+                                        >
+                                            <Key className="h-4 w-4 text-muted-foreground" />
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* Video Types & Pricing */}
+                                <div className="pt-4 border-t border-border">
+                                    <Label className="text-sm font-medium mb-3 block">Video Types & Pricing</Label>
+                                    <div className="space-y-2">
+                                        {VIDEO_TYPES_LABELS.map((type) => (
+                                            <div key={type} className={cn(
+                                                "flex items-center justify-between p-3 rounded-lg border transition-all", 
+                                                allowedFormats[type] 
+                                                    ? "bg-primary/5 border-primary/20" 
+                                                    : "bg-muted/30 border-border opacity-60"
+                                            )}>
+                                                <div className="flex items-center gap-3">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={allowedFormats[type]} 
+                                                        onChange={(e) => setAllowedFormats({...allowedFormats, [type]: e.target.checked})}
+                                                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                                                    />
+                                                    <span className="text-sm text-foreground">{type}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-sm text-muted-foreground">₹</span>
+                                                    <input 
+                                                        disabled={!allowedFormats[type]}
+                                                        className="h-8 w-20 text-sm text-right bg-transparent border-none focus:ring-0 disabled:opacity-40 tabular-nums" 
+                                                        value={customRates[type]} 
+                                                        onChange={(e) => setCustomRates({...customRates, [type]: parseInt(e.target.value) || 0})}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
 
-                            <div className="pt-6 border-t border-border flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest ml-1">Pay Later Authority</Label>
-                                    <p className="text-[10px] text-muted-foreground font-medium ml-1">Enable deferred payment options for this client.</p>
+                                {/* Pay Later */}
+                                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
+                                    <div>
+                                        <p className="text-sm font-medium text-foreground">Allow Pay Later</p>
+                                        <p className="text-xs text-muted-foreground">Client can pay after project completion</p>
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={payLaterEligible} 
+                                        onChange={(e) => setPayLaterEligible(e.target.checked)}
+                                        className="h-5 w-5 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                                    />
                                 </div>
+
+                                {/* PM Assignment */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-sm font-medium">Project Manager</Label>
+                                    <p className="text-xs text-muted-foreground mb-2">Assign a PM to handle this client's projects</p>
+                                    <div className="relative">
+                                        <select
+                                            value={assignedPM}
+                                            onChange={(e) => setAssignedPM(e.target.value)}
+                                            className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:border-primary/50 focus:outline-none appearance-none"
+                                        >
+                                            <option value="automatic">Auto-assign based on availability</option>
+                                            {projectManagers.map(pm => (
+                                                <option key={pm.uid} value={pm.uid}>
+                                                    {pm.displayName} 
+                                                    {pm.availabilityStatus === 'online' ? ' (Online)' : pm.availabilityStatus === 'sleep' ? ' (Away)' : ' (Offline)'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                    </div>
+                                </div>
+
+                                <button 
+                                    type="submit" 
+                                    className="w-full h-10 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" 
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <RefreshCw className="h-4 w-4 animate-spin" />
+                                            Creating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Plus className="h-4 w-4" />
+                                            Create Client
+                                        </>
+                                    )}
+                                </button>
+                            </form>
+                        </motion.div>
+                    )}
+
+                    {/* Clients Table */}
+                    <motion.div 
+                        layout
+                        className={cn(
+                            "bg-card border border-border rounded-xl overflow-hidden", 
+                            isCreateOpen ? "lg:col-span-7" : "lg:col-span-12"
+                        )}
+                    >
+                        {/* Search Header */}
+                        <div className="p-4 md:p-5 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-lg font-semibold text-foreground">My Clients</h2>
+                                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                                    {displayedClients.length} total
+                                </span>
+                            </div>
+                            
+                            <div className="relative w-full md:w-72">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <input 
-                                    type="checkbox" 
-                                    checked={payLaterEligible} 
-                                    onChange={(e) => setPayLaterEligible(e.target.checked)}
-                                    className="h-5 w-5 rounded border-border bg-card text-primary focus:ring-primary/40 transition-all cursor-pointer"
+                                    type="text"
+                                    placeholder="Search by name or email..." 
+                                    className="h-9 w-full rounded-lg border border-border bg-background pl-9 pr-4 text-sm focus:border-primary/50 focus:outline-none transition-colors"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
-
-                            <div className="pt-6 border-t border-border">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Project Manager Assignment</Label>
-                                <p className="text-[10px] text-muted-foreground font-medium ml-1 mb-3">Assign a Project Manager to automatically handle projects from this client.</p>
-                                <div className="relative">
-                                    <select
-                                        value={assignedPM}
-                                        onChange={(e) => setAssignedPM(e.target.value)}
-                                        className="w-full h-11 px-4 rounded-lg border border-border bg-muted/50 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-all font-medium appearance-none"
-                                    >
-                                        <option value="automatic" className="bg-card">Auto-Assign (Based on availability & load)</option>
-                                        {projectManagers.map(pm => (
-                                            <option key={pm.uid} value={pm.uid} className="bg-card">
-                                                {pm.displayName} 
-                                                {pm.availabilityStatus === 'online' ? ' (Online)' : pm.availabilityStatus === 'sleep' ? ' (Away)' : ' (Offline)'}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                                </div>
-                            </div>
-
-                            <button 
-                                type="submit" 
-                                className="w-full h-12 bg-primary  text-primary-foreground text-[11px] font-bold uppercase tracking-widest rounded-lg shadow-xl hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-20 flex items-center justify-center gap-2" 
-                                disabled={isLoading}
-                            >
-                                {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                                {isLoading ? "INITIALIZING..." : "COMMIT INITIALIZATION"}
-                            </button>
-                        </form>
-                     </motion.div>
-                 )}
-
-                 {/* Operational Client Database */}
-                 <motion.div 
-                    layout
-                    className={cn(
-                        "enterprise-card bg-card/40 backdrop-blur-sm overflow-hidden", 
-                        isCreateOpen ? "lg:col-span-7" : "lg:col-span-12"
-                    )}
-                 >
-                      {/* Search & Tool Layer */}
-                      <div className="p-6 border-b border-border flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                        <div className="relative w-full sm:w-96">
-                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors" />
-                             <input 
-                                type="text"
-                                placeholder="Locate entity in database..." 
-                                className="h-10 w-full rounded-lg border border-border bg-muted/50 pl-11 pr-4 text-xs font-medium text-foreground focus:bg-muted/50 focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
                         </div>
-                        <div className="flex items-center gap-4">
-                             <div className="hidden sm:flex items-center gap-2.5">
-                                 <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
-                                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Index Scale: {displayedClients.length} Units</span>
-                             </div>
-                             <div className="h-4 w-px bg-card" />
-                             <button className="h-10 px-5 rounded-lg border border-border bg-muted/50 text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all flex items-center gap-2">
-                                 <Filter className="h-3.5 w-3.5" /> Operations Filter
-                             </button>
+
+                        {/* Table */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="bg-muted/50 border-b border-border">
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Client</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Email</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Password</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                                        <th className="px-4 py-3 w-12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {displayedClients.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-4 py-16 text-center">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <Users className="h-10 w-10 text-muted-foreground/30" />
+                                                    <p className="text-sm text-muted-foreground">No clients yet</p>
+                                                    <p className="text-xs text-muted-foreground">Click "Add Client" to create your first client</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        displayedClients.map((client, idx) => (
+                                            <motion.tr 
+                                                key={client.id}
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                transition={{ delay: idx * 0.02 }}
+                                                className={cn(
+                                                    "group hover:bg-muted/30 transition-colors", 
+                                                    client.isPending && "bg-primary/5"
+                                                )}
+                                            >
+                                                {/* Client Name */}
+                                                <td className="px-4 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 rounded-full bg-muted border border-border flex items-center justify-center overflow-hidden">
+                                                            {client.photoURL ? (
+                                                                <Image src={client.photoURL} alt={client.displayName || "User"} width={36} height={36} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <span className="text-sm font-semibold text-primary">{client.displayName?.[0]}</span>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium text-foreground">{client.displayName}</p>
+                                                            {client.phoneNumber && (
+                                                                <p className="text-xs text-muted-foreground">+91 {client.phoneNumber}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                
+                                                {/* Email */}
+                                                <td className="px-4 py-4">
+                                                    <button 
+                                                        onClick={() => { navigator.clipboard.writeText(client.email); toast.success("Email copied"); }}
+                                                        className="flex items-center gap-2 group/copy"
+                                                    >
+                                                        <span className="text-sm text-muted-foreground group-hover/copy:text-foreground transition-colors">{client.email}</span>
+                                                        <Copy className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover/copy:opacity-100 transition-opacity" />
+                                                    </button>
+                                                </td>
+                                                
+                                                {/* Password */}
+                                                <td className="px-4 py-4">
+                                                    {client.initialPassword ? (
+                                                        <button 
+                                                            onClick={() => { navigator.clipboard.writeText(client.initialPassword); toast.success("Password copied"); }}
+                                                            className="flex items-center gap-2 group/pass"
+                                                        >
+                                                            <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-1 rounded border border-primary/20">{client.initialPassword}</span>
+                                                            <Copy className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover/pass:opacity-100 transition-opacity" />
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">Not available</span>
+                                                    )}
+                                                </td>
+                                                
+                                                {/* Status */}
+                                                <td className="px-4 py-4">
+                                                    {client.isPending ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                                            <RefreshCw className="h-3 w-3 animate-spin" />
+                                                            Setting up...
+                                                        </span>
+                                                    ) : client.deletionRequested ? (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-600 border border-red-500/20">
+                                                            Deletion Requested
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                                            Active
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                
+                                                {/* Actions */}
+                                                <td className="px-4 py-4">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <button className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-48">
+                                                            <DropdownMenuLabel className="text-xs text-muted-foreground">Actions</DropdownMenuLabel>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem className="text-sm cursor-pointer">
+                                                                <Briefcase className="mr-2 h-4 w-4" /> View History
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem 
+                                                                onClick={() => handleRequestDeletion(client.id)}
+                                                                className="text-sm cursor-pointer text-red-500"
+                                                            >
+                                                                <Trash2 className="mr-2 h-4 w-4" /> Request Deletion
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </td>
+                                            </motion.tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-                      </div>
 
-                      <div className="overflow-x-auto">
-                           <table className="w-full text-left">
-                                 <thead>
-                                     <tr className="bg-muted/30">
-                                         <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Entity Identity</th>
-                                         <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Auth Endpoint</th>
-                                         <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Primary Key</th>
-                                         <th className="px-6 py-4 border-b border-border w-[80px]"></th>
-                                     </tr>
-                                 </thead>
-                                 <tbody className="divide-y divide-border">
-                                     {displayedClients.length === 0 ? (
-                                         <tr>
-                                             <td colSpan={4} className="px-6 py-24 text-center">
-                                                 <div className="flex flex-col items-center gap-4 opacity-30">
-                                                     <Globe className="h-12 w-12 text-muted-foreground" />
-                                                     <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Index Null: No Entities found</p>
-                                                 </div>
-                                             </td>
-                                         </tr>
-                                     ) : (
-                                         displayedClients.map((client, idx) => (
-                                             <motion.tr 
-                                                 key={client.id}
-                                                 initial={{ opacity: 0, y: 10 }}
-                                                 animate={{ opacity: 1, y: 0 }}
-                                                 transition={{ delay: idx * 0.05 }}
-                                                 className={cn(
-                                                     "group hover:bg-muted/10 transition-colors relative", 
-                                                     client.isPending && "bg-primary/5"
-                                                 )}
-                                             >
-                                                 <td className="px-6 py-6 transition-all duration-300 group-hover:pl-8">
-                                                     <div className="flex items-center gap-4">
-                                                         <div className="w-10 h-10 rounded bg-muted border border-border text-primary flex items-center justify-center font-bold text-xs uppercase shadow-2xl group-hover:scale-105 transition-transform overflow-hidden">
-                                                             {client.photoURL ? <Image src={client.photoURL} alt={client.displayName || "User"} width={40} height={40} className="w-full h-full object-cover" /> : client.displayName?.[0]}
-                                                         </div>
-                                                         <div>
-                                                             <div className="text-base font-bold text-foreground tracking-tight leading-tight">{client.displayName}</div>
-                                                             <div className="flex items-center gap-2 mt-1">
-                                                                  {client.isPending ? (
-                                                                      <span className="text-[9px] text-primary font-bold uppercase tracking-widest animate-pulse">Initializing...</span>
-                                                                  ) : (
-                                                                      <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Auth Authorized</span>
-                                                                  )}
-                                                             </div>
-                                                         </div>
-                                                     </div>
-                                                 </td>
-                                                 <td className="px-6 py-6">
-                                                      <div className="flex items-center gap-2 group/copy cursor-pointer w-fit" onClick={() => { navigator.clipboard.writeText(client.email); toast.success("Endpoint copied"); }}>
-                                                         <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground/90 transition-colors">{client.email}</span>
-                                                         <Copy className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover/copy:opacity-100 transition-opacity" />
-                                                      </div>
-                                                 </td>
-                                                 <td className="px-6 py-6">
-                                                     {client.initialPassword ? (
-                                                         <div className="flex items-center gap-3 group/pass cursor-pointer w-fit" onClick={() => { navigator.clipboard.writeText(client.initialPassword); toast.success("Access key copied"); }}>
-                                                             <span className="font-mono text-[11px] text-primary bg-primary/10 px-2.5 py-1 rounded border border-primary/20 transition-all group-hover:shadow-[0_0_10px_rgba(var(--primary),0.3)]">{client.initialPassword}</span>
-                                                             <Copy className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover/pass:opacity-100 transition-opacity" />
-                                                         </div>
-                                                     ) : (
-                                                         <span className="text-muted-foreground text-[9px] font-bold uppercase tracking-widest">ENCRYPTED_KEY</span>
-                                                     )}
-                                                 </td>
-                                                 <td className="px-6 py-6 text-right">
-                                                     <DropdownMenu>
-                                                         <DropdownMenuTrigger asChild>
-                                                             <button className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all active:scale-[0.98]"><MoreHorizontal className="h-4 w-4" /></button>
-                                                         </DropdownMenuTrigger>
-                                                         <DropdownMenuContent align="end" className="w-56 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
-                                                             <DropdownMenuLabel className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest px-3 py-2">Operational Actions</DropdownMenuLabel>
-                                                             <DropdownMenuSeparator className="my-1 bg-border" />
-                                                             <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg"><Briefcase className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Inspect History</DropdownMenuItem>
-                                                             <DropdownMenuSeparator className="my-1 bg-border" />
-                                                             <DropdownMenuItem onClick={() => handleRequestDeletion(client.id)} className="p-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer rounded-lg"><LogOut className="mr-2.5 h-3.5 w-3.5" /> Request Delete Authorization</DropdownMenuItem>
-                                                         </DropdownMenuContent>
-                                                     </DropdownMenu>
-                                                 </td>
-                                             </motion.tr>
-                                         ))
-                                     )}
-                                 </tbody>
-                           </table>
-                      </div>
-
-                       <div className="p-6 border-t border-border bg-muted/30 flex items-center justify-between">
-                             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                                 Ecosystem State: {displayedClients.length} assigned units
-                             </span>
-                             <div className="flex items-center gap-2">
-                                 <button className="h-9 px-4 rounded-lg border border-border bg-muted/50 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground disabled:opacity-30 transition-all active:scale-[0.98]" disabled>Back</button>
-                                 <button className="h-9 px-4 rounded-lg border border-border bg-muted/50 text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground disabled:opacity-30 transition-all active:scale-[0.98]" disabled>Next</button>
-                             </div>
-                       </div>
-                 </motion.div>
-                 </AnimatePresence>
+                        {/* Table Footer */}
+                        <div className="px-4 py-3 border-t border-border bg-muted/30">
+                            <span className="text-xs text-muted-foreground">
+                                Showing {displayedClients.length} client{displayedClients.length !== 1 ? 's' : ''}
+                            </span>
+                        </div>
+                    </motion.div>
+                </AnimatePresence>
             </div>
         </div>
-    );
-}
-
-function IndicatorCard({ label, value, subtext, trend, trendUp, alert, icon }: any) {
-    return (
-        <motion.div 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ y: -4, transition: { duration: 0.2 } }}
-            className={cn(
-                "group relative enterprise-card p-6 md:p-8 transition-all duration-300",
-                alert && "after:absolute after:inset-0 after:rounded-xl after:ring-1 after:ring-primary/40 after:animate-pulse"
-            )}
-        >
-            <div className="flex justify-between items-start mb-6">
-                <div className="h-10 w-10 bg-muted border border-border rounded-lg flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:border-primary/30 transition-all duration-300">
-                    {icon}
-                </div>
-                {alert && <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />}
-            </div>
-            
-            <div className="space-y-1.5">
-                <span className="text-[11px] uppercase font-bold tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">{label}</span>
-                <div className="flex items-end gap-3">
-                    <span className="text-3xl font-black tracking-tight text-foreground font-heading tabular-nums">{value}</span>
-                </div>
-                
-                <div className="flex items-center gap-3 pt-4 border-t border-border mt-4">
-                    {trend && (
-                        <span className={cn(
-                            "flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest", 
-                            trendUp ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-muted text-muted-foreground border border-border"
-                        )}>
-                            {trend}
-                        </span>
-                    )}
-                    <span className="text-muted-foreground/60 text-[10px] font-bold uppercase tracking-wider">{subtext}</span>
-                </div>
-            </div>
-        </motion.div>
     );
 }

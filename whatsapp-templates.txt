@@ -1,0 +1,992 @@
+================================================================================
+                    EDITOHUB - WHATSAPP MESSAGE TEMPLATES FOR AISENSY
+================================================================================
+
+Instructions:
+- Copy each template and create it in Aisensy
+- Replace {{1}}, {{2}}, etc. with the variable placeholders in Aisensy
+- After approval, share the campaign/template ID for each template
+
+================================================================================
+                              CLIENT TEMPLATES
+================================================================================
+
+--------------------------------------------------------------------------------
+TEMPLATE 1: CLIENT - WELCOME MESSAGE
+--------------------------------------------------------------------------------
+Template Name: client_welcome
+Category: UTILITY
+Language: English
+
+Header: 🎬 Welcome to EditoHub!
+
+Body:
+Hi {{1}},
+
+Welcome to EditoHub! Your account has been successfully created.
+
+🎯 *What's Next:*
+• Submit your first video project
+• Upload raw footage & references
+• Get professional edits delivered
+
+📊 *Your Dashboard:* {{2}}
+
+Need help? Our team is here for you!
+
+Footer: EditoHub - Professional Video Editing
+
+Buttons:
+- Call to Action: Visit Dashboard | {{2}}
+
+Variables:
+{{1}} = Client Name
+{{2}} = Dashboard URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 2: CLIENT - PROJECT SUBMITTED
+--------------------------------------------------------------------------------
+Template Name: client_project_submitted
+Category: UTILITY
+Language: English
+
+Header: ✅ Project Received!
+
+Body:
+Hi {{1}},
+
+Your project *"{{2}}"* has been successfully submitted!
+
+📋 *Project Details:*
+• Project ID: {{3}}
+• Video Type: {{4}}
+• Estimated Delivery: {{5}}
+
+Our team is reviewing your requirements. You'll be notified once an editor is assigned.
+
+Footer: EditoHub - Professional Video Editing
+
+Variables:
+{{1}} = Client Name
+{{2}} = Project Name
+{{3}} = Project ID
+{{4}} = Video Type
+{{5}} = Deadline
+
+--------------------------------------------------------------------------------
+TEMPLATE 3: CLIENT - EDITOR ASSIGNED
+--------------------------------------------------------------------------------
+Template Name: client_editor_assigned
+Category: UTILITY
+Language: English
+
+Header: 👨‍💻 Editor Assigned!
+
+Body:
+Hi {{1}},
+
+Great news! An editor has been assigned to your project.
+
+📽️ *Project:* {{2}}
+✨ *Editor:* {{3}}
+⏰ *Expected Delivery:* {{4}}
+
+Your editor will start working on your video shortly. You can track progress on your dashboard.
+
+Footer: EditoHub - Professional Video Editing
+
+Buttons:
+- Call to Action: Track Progress | {{5}}
+
+Variables:
+{{1}} = Client Name
+{{2}} = Project Name
+{{3}} = Editor Name
+{{4}} = Deadline
+{{5}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 4: CLIENT - DRAFT READY FOR REVIEW
+--------------------------------------------------------------------------------
+Template Name: client_draft_ready
+Category: UTILITY
+Language: English
+
+Header: 🎬 Your Draft is Ready!
+
+Body:
+Hi {{1}},
+
+Exciting news! A new draft for *"{{2}}"* is ready for your review.
+
+📦 *Version:* {{3}}
+📝 *Editor Notes:* {{4}}
+
+Please review the video and share your feedback. You can:
+✅ Approve the draft
+📝 Request revisions
+
+Footer: EditoHub - Professional Video Editing
+
+Buttons:
+- Call to Action: Review Now | {{5}}
+
+Variables:
+{{1}} = Client Name
+{{2}} = Project Name
+{{3}} = Version Number
+{{4}} = Editor Description/Notes
+{{5}} = Review URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 5: CLIENT - REVISION UPLOADED
+--------------------------------------------------------------------------------
+Template Name: client_revision_uploaded
+Category: UTILITY
+Language: English
+
+Header: 🔄 Revision Ready!
+
+Body:
+Hi {{1}},
+
+Your revision for *"{{2}}"* is now ready!
+
+📦 *Version:* {{3}}
+✏️ *Changes Made:* {{4}}
+
+Review the updated video and let us know your thoughts.
+
+Footer: EditoHub - Professional Video Editing
+
+Buttons:
+- Call to Action: Review Revision | {{5}}
+
+Variables:
+{{1}} = Client Name
+{{2}} = Project Name
+{{3}} = Version Number
+{{4}} = Revision Notes
+{{5}} = Review URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 6: CLIENT - PROJECT COMPLETED
+--------------------------------------------------------------------------------
+Template Name: client_project_completed
+Category: UTILITY
+Language: English
+
+Header: 🎉 Project Completed!
+
+Body:
+Hi {{1}},
+
+Congratulations! Your project *"{{2}}"* has been completed and approved.
+
+📥 *Download Link:* Available on dashboard
+💳 *Final Amount:* ₹{{3}}
+
+Thank you for choosing EditoHub! We'd love to work with you again.
+
+⭐ Please rate your experience to help us improve.
+
+Footer: EditoHub - Professional Video Editing
+
+Buttons:
+- Call to Action: Download & Rate | {{4}}
+
+Variables:
+{{1}} = Client Name
+{{2}} = Project Name
+{{3}} = Total Cost
+{{4}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 7: CLIENT - PAYMENT REMINDER
+--------------------------------------------------------------------------------
+Template Name: client_payment_reminder
+Category: UTILITY
+Language: English
+
+Header: 💳 Payment Reminder
+
+Body:
+Hi {{1}},
+
+This is a friendly reminder for your pending payment.
+
+📽️ *Project:* {{2}}
+💰 *Amount Due:* ₹{{3}}
+📅 *Due Date:* {{4}}
+
+Please complete the payment to download your final video.
+
+Footer: EditoHub - Professional Video Editing
+
+Buttons:
+- Call to Action: Pay Now | {{5}}
+
+Variables:
+{{1}} = Client Name
+{{2}} = Project Name
+{{3}} = Amount Due
+{{4}} = Due Date
+{{5}} = Payment URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 8: CLIENT - PAYMENT RECEIVED
+--------------------------------------------------------------------------------
+Template Name: client_payment_received
+Category: UTILITY
+Language: English
+
+Header: ✅ Payment Confirmed!
+
+Body:
+Hi {{1}},
+
+We've received your payment of ₹{{2}} for project *"{{3}}"*.
+
+🧾 *Transaction ID:* {{4}}
+📅 *Date:* {{5}}
+
+Your download access has been unlocked. Thank you!
+
+Footer: EditoHub - Professional Video Editing
+
+Variables:
+{{1}} = Client Name
+{{2}} = Amount Paid
+{{3}} = Project Name
+{{4}} = Transaction ID
+{{5}} = Payment Date
+
+
+================================================================================
+                              EDITOR TEMPLATES
+================================================================================
+
+--------------------------------------------------------------------------------
+TEMPLATE 9: EDITOR - WELCOME MESSAGE
+--------------------------------------------------------------------------------
+Template Name: editor_welcome
+Category: UTILITY
+Language: English
+
+Header: 🎬 Welcome to EditoHub Team!
+
+Body:
+Hi {{1}},
+
+Congratulations! Your editor application has been approved.
+
+🎯 *Getting Started:*
+• Complete your profile
+• Set your availability status
+• Wait for project assignments
+
+💼 *Your Dashboard:* {{2}}
+
+Our team will assign projects based on your skills. Best of luck!
+
+Footer: EditoHub - Editor Network
+
+Buttons:
+- Call to Action: Setup Profile | {{2}}
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Dashboard URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 10: EDITOR - NEW PROJECT INVITATION
+--------------------------------------------------------------------------------
+Template Name: editor_project_invitation
+Category: UTILITY
+Language: English
+
+Header: 🚀 New Project Invitation!
+
+Body:
+Hi {{1}},
+
+You've been invited to work on a new project!
+
+📽️ *Project:* {{2}}
+🎥 *Type:* {{3}}
+💰 *Your Earnings:* ₹{{4}}
+⏰ *Deadline:* {{5}}
+
+⚠️ *Please respond within 5 minutes* or the project will be reassigned.
+
+Footer: EditoHub - Editor Network
+
+Buttons:
+- Call to Action: View & Accept | {{6}}
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Project Name
+{{3}} = Video Type
+{{4}} = Editor Price
+{{5}} = Deadline
+{{6}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 11: EDITOR - ASSIGNMENT CONFIRMED
+--------------------------------------------------------------------------------
+Template Name: editor_assignment_confirmed
+Category: UTILITY
+Language: English
+
+Header: ✅ Project Assigned!
+
+Body:
+Hi {{1}},
+
+You've accepted the project. Time to create magic!
+
+📽️ *Project:* {{2}}
+👤 *Client:* {{3}}
+⏰ *Deadline:* {{4}}
+💰 *Your Earnings:* ₹{{5}}
+
+Access raw footage and references on your dashboard. Happy editing!
+
+Footer: EditoHub - Editor Network
+
+Buttons:
+- Call to Action: Start Working | {{6}}
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Project Name
+{{3}} = Client Name
+{{4}} = Deadline
+{{5}} = Editor Price
+{{6}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 12: EDITOR - DEADLINE REMINDER
+--------------------------------------------------------------------------------
+Template Name: editor_deadline_reminder
+Category: UTILITY
+Language: English
+
+Header: ⏰ Deadline Approaching!
+
+Body:
+Hi {{1}},
+
+Reminder: Your project deadline is approaching.
+
+📽️ *Project:* {{2}}
+⏰ *Deadline:* {{3}}
+📊 *Time Left:* {{4}}
+
+Please ensure timely delivery to maintain your rating.
+
+Footer: EditoHub - Editor Network
+
+Buttons:
+- Call to Action: View Project | {{5}}
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Project Name
+{{3}} = Deadline Date
+{{4}} = Hours/Days Left
+{{5}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 13: EDITOR - REVISION REQUESTED
+--------------------------------------------------------------------------------
+Template Name: editor_revision_requested
+Category: UTILITY
+Language: English
+
+Header: 📝 Revision Requested
+
+Body:
+Hi {{1}},
+
+The client has requested revisions for *"{{2}}"*.
+
+✏️ *Feedback:*
+{{3}}
+
+⏰ Please address these changes as soon as possible.
+
+Footer: EditoHub - Editor Network
+
+Buttons:
+- Call to Action: View Feedback | {{4}}
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Project Name
+{{3}} = Client Feedback Summary
+{{4}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 14: EDITOR - PAYMENT PROCESSED
+--------------------------------------------------------------------------------
+Template Name: editor_payment_processed
+Category: UTILITY
+Language: English
+
+Header: 💰 Payment Sent!
+
+Body:
+Hi {{1}},
+
+Great news! Your payment has been processed.
+
+📽️ *Project:* {{2}}
+💰 *Amount:* ₹{{3}}
+🏦 *Transfer ID:* {{4}}
+📅 *Date:* {{5}}
+
+Thank you for your excellent work!
+
+Footer: EditoHub - Editor Network
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Project Name
+{{3}} = Amount
+{{4}} = Transfer/Transaction ID
+{{5}} = Payment Date
+
+--------------------------------------------------------------------------------
+TEMPLATE 15: EDITOR - PROJECT APPROVED
+--------------------------------------------------------------------------------
+Template Name: editor_project_approved
+Category: UTILITY
+Language: English
+
+Header: 🎉 Project Approved!
+
+Body:
+Hi {{1}},
+
+Congratulations! Your work on *"{{2}}"* has been approved by the client.
+
+⭐ *Client Rating:* {{3}}/5
+💬 *Review:* {{4}}
+💰 *Earnings:* ₹{{5}}
+
+Keep up the great work!
+
+Footer: EditoHub - Editor Network
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Project Name
+{{3}} = Rating
+{{4}} = Client Review
+{{5}} = Earnings
+
+
+================================================================================
+                         PROJECT MANAGER TEMPLATES
+================================================================================
+
+--------------------------------------------------------------------------------
+TEMPLATE 16: PM - NEW PROJECT RECEIVED
+--------------------------------------------------------------------------------
+Template Name: pm_new_project
+Category: UTILITY
+Language: English
+
+Header: 📥 New Project Received
+
+Body:
+Hi {{1}},
+
+A new project has been submitted and needs assignment.
+
+📽️ *Project:* {{2}}
+👤 *Client:* {{3}}
+🎥 *Type:* {{4}}
+⏰ *Deadline:* {{5}}
+💰 *Budget:* ₹{{6}}
+
+Please assign an editor as soon as possible.
+
+Footer: EditoHub - Project Management
+
+Buttons:
+- Call to Action: Assign Editor | {{7}}
+
+Variables:
+{{1}} = PM Name
+{{2}} = Project Name
+{{3}} = Client Name
+{{4}} = Video Type
+{{5}} = Deadline
+{{6}} = Project Budget
+{{7}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 17: PM - DRAFT SUBMITTED
+--------------------------------------------------------------------------------
+Template Name: pm_draft_submitted
+Category: UTILITY
+Language: English
+
+Header: 🎬 Draft Submitted
+
+Body:
+Hi {{1}},
+
+An editor has submitted a draft for review.
+
+📽️ *Project:* {{2}}
+👨‍💻 *Editor:* {{3}}
+📦 *Version:* {{4}}
+
+The client has been notified. Monitor for feedback.
+
+Footer: EditoHub - Project Management
+
+Buttons:
+- Call to Action: Review Draft | {{5}}
+
+Variables:
+{{1}} = PM Name
+{{2}} = Project Name
+{{3}} = Editor Name
+{{4}} = Version Number
+{{5}} = Review URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 18: PM - CLIENT FEEDBACK RECEIVED
+--------------------------------------------------------------------------------
+Template Name: pm_client_feedback
+Category: UTILITY
+Language: English
+
+Header: 💬 Client Feedback Received
+
+Body:
+Hi {{1}},
+
+New feedback received on a project.
+
+📽️ *Project:* {{2}}
+👤 *Client:* {{3}}
+📝 *Comments:* {{4}}
+
+Please review and coordinate with the editor if needed.
+
+Footer: EditoHub - Project Management
+
+Buttons:
+- Call to Action: View Feedback | {{5}}
+
+Variables:
+{{1}} = PM Name
+{{2}} = Project Name
+{{3}} = Client Name
+{{4}} = Feedback Summary
+{{5}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 19: PM - PROJECT COMPLETED
+--------------------------------------------------------------------------------
+Template Name: pm_project_completed
+Category: UTILITY
+Language: English
+
+Header: ✅ Project Completed
+
+Body:
+Hi {{1}},
+
+A project has been completed and approved.
+
+📽️ *Project:* {{2}}
+👤 *Client:* {{3}}
+👨‍💻 *Editor:* {{4}}
+⏱️ *Delivery Time:* {{5}}
+💰 *Revenue:* ₹{{6}}
+
+Footer: EditoHub - Project Management
+
+Variables:
+{{1}} = PM Name
+{{2}} = Project Name
+{{3}} = Client Name
+{{4}} = Editor Name
+{{5}} = Days/Hours taken
+{{6}} = Total Revenue
+
+--------------------------------------------------------------------------------
+TEMPLATE 20: PM - URGENT DEADLINE ALERT
+--------------------------------------------------------------------------------
+Template Name: pm_urgent_deadline
+Category: UTILITY
+Language: English
+
+Header: ⚠️ URGENT: Deadline Alert
+
+Body:
+Hi {{1}},
+
+A project is at risk of missing its deadline!
+
+📽️ *Project:* {{2}}
+👨‍💻 *Editor:* {{3}}
+⏰ *Deadline:* {{4}}
+📊 *Status:* {{5}}
+
+Immediate action required.
+
+Footer: EditoHub - Project Management
+
+Buttons:
+- Call to Action: Take Action | {{6}}
+
+Variables:
+{{1}} = PM Name
+{{2}} = Project Name
+{{3}} = Editor Name
+{{4}} = Deadline
+{{5}} = Current Status
+{{6}} = Project URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 21: PM - EDITOR DECLINED PROJECT
+--------------------------------------------------------------------------------
+Template Name: pm_editor_declined
+Category: UTILITY
+Language: English
+
+Header: ❌ Editor Declined Project
+
+Body:
+Hi {{1}},
+
+An editor has declined a project assignment.
+
+📽️ *Project:* {{2}}
+👨‍💻 *Editor:* {{3}}
+📝 *Reason:* {{4}}
+
+Please reassign to another editor.
+
+Footer: EditoHub - Project Management
+
+Buttons:
+- Call to Action: Reassign | {{5}}
+
+Variables:
+{{1}} = PM Name
+{{2}} = Project Name
+{{3}} = Editor Name
+{{4}} = Decline Reason
+{{5}} = Project URL
+
+
+================================================================================
+                              ADMIN TEMPLATES
+================================================================================
+
+--------------------------------------------------------------------------------
+TEMPLATE 22: ADMIN - NEW USER REGISTRATION
+--------------------------------------------------------------------------------
+Template Name: admin_new_user
+Category: UTILITY
+Language: English
+
+Header: 👤 New User Registration
+
+Body:
+Hi Admin,
+
+A new user has registered on EditoHub.
+
+👤 *Name:* {{1}}
+📧 *Email:* {{2}}
+🎭 *Role:* {{3}}
+📅 *Date:* {{4}}
+
+{{5}}
+
+Footer: EditoHub - Admin Panel
+
+Buttons:
+- Call to Action: Review User | {{6}}
+
+Variables:
+{{1}} = User Name
+{{2}} = User Email
+{{3}} = Role (Client/Editor)
+{{4}} = Registration Date
+{{5}} = "Requires approval" or "Auto-approved"
+{{6}} = Admin Panel URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 23: ADMIN - PAYMENT RECEIVED
+--------------------------------------------------------------------------------
+Template Name: admin_payment_received
+Category: UTILITY
+Language: English
+
+Header: 💰 Payment Received
+
+Body:
+Hi Admin,
+
+A payment has been received.
+
+💳 *Amount:* ₹{{1}}
+👤 *Client:* {{2}}
+📽️ *Project:* {{3}}
+🧾 *Transaction ID:* {{4}}
+📅 *Date:* {{5}}
+
+Footer: EditoHub - Admin Panel
+
+Variables:
+{{1}} = Amount
+{{2}} = Client Name
+{{3}} = Project Name
+{{4}} = Transaction ID
+{{5}} = Date
+
+--------------------------------------------------------------------------------
+TEMPLATE 24: ADMIN - DAILY SUMMARY
+--------------------------------------------------------------------------------
+Template Name: admin_daily_summary
+Category: UTILITY
+Language: English
+
+Header: 📊 Daily Summary Report
+
+Body:
+Hi Admin,
+
+Here's your daily summary for {{1}}:
+
+📥 *New Projects:* {{2}}
+✅ *Completed:* {{3}}
+👥 *New Users:* {{4}}
+💰 *Revenue:* ₹{{5}}
+📤 *Payouts:* ₹{{6}}
+
+Footer: EditoHub - Admin Panel
+
+Buttons:
+- Call to Action: View Dashboard | {{7}}
+
+Variables:
+{{1}} = Date
+{{2}} = New Projects Count
+{{3}} = Completed Projects Count
+{{4}} = New Users Count
+{{5}} = Total Revenue
+{{6}} = Total Payouts
+{{7}} = Dashboard URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 25: ADMIN - EDITOR PERFORMANCE ALERT
+--------------------------------------------------------------------------------
+Template Name: admin_editor_alert
+Category: UTILITY
+Language: English
+
+Header: ⚠️ Editor Performance Alert
+
+Body:
+Hi Admin,
+
+An editor needs attention.
+
+👨‍💻 *Editor:* {{1}}
+📊 *Issue:* {{2}}
+⭐ *Current Rating:* {{3}}/5
+📅 *Active Projects:* {{4}}
+
+Consider reviewing their performance.
+
+Footer: EditoHub - Admin Panel
+
+Buttons:
+- Call to Action: Review Editor | {{5}}
+
+Variables:
+{{1}} = Editor Name
+{{2}} = Issue Description (late deliveries, low rating, etc.)
+{{3}} = Rating
+{{4}} = Active Project Count
+{{5}} = Editor Profile URL
+
+--------------------------------------------------------------------------------
+TEMPLATE 26: ADMIN - DOWNLOAD UNLOCK REQUEST
+--------------------------------------------------------------------------------
+Template Name: admin_download_request
+Category: UTILITY
+Language: English
+
+Header: 🔓 Download Unlock Request
+
+Body:
+Hi Admin,
+
+A client has requested download access without full payment.
+
+👤 *Client:* {{1}}
+📽️ *Project:* {{2}}
+💰 *Paid:* ₹{{3}}
+💳 *Remaining:* ₹{{4}}
+
+Please review and take action.
+
+Footer: EditoHub - Admin Panel
+
+Buttons:
+- Call to Action: Review Request | {{5}}
+
+Variables:
+{{1}} = Client Name
+{{2}} = Project Name
+{{3}} = Amount Paid
+{{4}} = Amount Remaining
+{{5}} = Project URL
+
+
+================================================================================
+                           SALES EXECUTIVE TEMPLATES
+================================================================================
+
+--------------------------------------------------------------------------------
+TEMPLATE 27: SALES - NEW LEAD
+--------------------------------------------------------------------------------
+Template Name: sales_new_lead
+Category: UTILITY
+Language: English
+
+Header: 🎯 New Lead Assigned
+
+Body:
+Hi {{1}},
+
+A new lead has been assigned to you.
+
+👤 *Name:* {{2}}
+📧 *Email:* {{3}}
+📱 *Phone:* {{4}}
+💼 *Interest:* {{5}}
+
+Follow up within 24 hours for best conversion.
+
+Footer: EditoHub - Sales Team
+
+Variables:
+{{1}} = Sales Executive Name
+{{2}} = Lead Name
+{{3}} = Lead Email
+{{4}} = Lead Phone
+{{5}} = Service Interest
+
+--------------------------------------------------------------------------------
+TEMPLATE 28: SALES - LEAD CONVERTED
+--------------------------------------------------------------------------------
+Template Name: sales_lead_converted
+Category: UTILITY
+Language: English
+
+Header: 🎉 Lead Converted!
+
+Body:
+Hi {{1}},
+
+Congratulations! Your lead has converted to a client.
+
+👤 *Client:* {{2}}
+📽️ *First Project:* {{3}}
+💰 *Value:* ₹{{4}}
+🏆 *Your Commission:* ₹{{5}}
+
+Great work! Keep it up.
+
+Footer: EditoHub - Sales Team
+
+Variables:
+{{1}} = Sales Executive Name
+{{2}} = Client Name
+{{3}} = Project Name
+{{4}} = Project Value
+{{5}} = Commission Amount
+
+
+================================================================================
+                           GENERAL/SYSTEM TEMPLATES
+================================================================================
+
+--------------------------------------------------------------------------------
+TEMPLATE 29: OTP VERIFICATION
+--------------------------------------------------------------------------------
+Template Name: otp_verification
+Category: AUTHENTICATION
+Language: English
+
+Body:
+Your EditoHub verification code is: *{{1}}*
+
+This code expires in 10 minutes. Do not share this code with anyone.
+
+Footer: EditoHub
+
+Variables:
+{{1}} = OTP Code
+
+--------------------------------------------------------------------------------
+TEMPLATE 30: PASSWORD RESET
+--------------------------------------------------------------------------------
+Template Name: password_reset
+Category: UTILITY
+Language: English
+
+Header: 🔐 Password Reset Request
+
+Body:
+Hi {{1}},
+
+We received a password reset request for your EditoHub account.
+
+Click the link below to reset your password:
+{{2}}
+
+This link expires in 1 hour. If you didn't request this, please ignore this message.
+
+Footer: EditoHub - Security
+
+Variables:
+{{1}} = User Name
+{{2}} = Reset Link
+
+
+================================================================================
+                              SETUP CHECKLIST
+================================================================================
+
+After creating all templates in Aisensy, please provide:
+
+1. Template ID/Campaign Link for each template
+2. Confirmation of approval status
+3. Any variables that need adjustment
+
+Total Templates: 30
+
+Categories:
+- Client Templates: 8
+- Editor Templates: 7
+- Project Manager Templates: 6
+- Admin Templates: 5
+- Sales Templates: 2
+- General/System Templates: 2
+
+================================================================================

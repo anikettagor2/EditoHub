@@ -5,20 +5,23 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/dist/ScrollTrigger";
 import Image from "next/image";
 
-const STICKY_MOCK_DATA = [
+const PROCESS_STEPS = [
     {
-        title: "Precision Cutting",
-        description: "Every frame matters. Our editors meticulously craft each transition to maintain rhythm and flow, ensuring your message is delivered with maximum impact.",
+        step: "01",
+        title: "Upload Your Footage",
+        description: "Simply upload your raw footage through our secure platform. We accept all major formats and provide 256-bit encryption for your content.",
         image: "https://images.unsplash.com/photo-1542204172-3c1f81d05d70?q=80&w=2000"
     },
     {
-        title: "Color Science",
-        description: "Transform the mood and atmosphere of your visuals. We apply cinematic color science to give your footage a professional, high-end look that stands out.",
+        step: "02",
+        title: "Collaborate in Real-Time",
+        description: "Get matched with a dedicated editor who understands your style. Communicate directly, leave timestamped feedback, and request unlimited revisions.",
         image: "https://images.unsplash.com/photo-1621609764095-b32bbe35cf3a?q=80&w=2000"
     },
     {
-        title: "Auditory Immersive",
-        description: "The visual is only half the story. We layer bespoke soundscapes and precise audio engineering to create an immersive auditory experience.",
+        step: "03",
+        title: "Download & Publish",
+        description: "Receive your polished video in 24-48 hours. Download in any format, get platform-optimized exports, and start growing your audience immediately.",
         image: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=2000"
     }
 ];
@@ -90,23 +93,32 @@ export function StickyScroll() {
     }, []);
 
     return (
-        <section ref={sectionRef} className="relative bg-black py-40 px-6 overflow-hidden">
-            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start gap-12 lg:gap-24">
+        <section ref={sectionRef} className="relative bg-black py-32 px-6 overflow-hidden">
+            {/* Section Header */}
+            <div className="max-w-7xl mx-auto mb-20">
+                <span className="text-primary text-sm font-semibold uppercase tracking-wider mb-4 block">How It Works</span>
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                    Three simple steps to
+                    <span className="text-zinc-500"> professional videos</span>
+                </h2>
+                <p className="text-lg text-zinc-400 max-w-2xl">
+                    No complicated software. No lengthy contracts. Just upload, collaborate, and download.
+                </p>
+            </div>
+
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start gap-12 lg:gap-20">
                 
                 {/* Left Side: Scrolling Content */}
-                <div className="w-full md:w-1/2 space-y-[40vh] py-[20vh]">
-                    {STICKY_MOCK_DATA.map((item, i) => (
+                <div className="w-full md:w-1/2 space-y-[35vh] py-[15vh]">
+                    {PROCESS_STEPS.map((item, i) => (
                         <div key={i} className="sticky-content-item transition-all duration-500">
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="h-[1px] w-12 bg-primary/50" />
-                                <span className="text-primary font-black text-xs tracking-[0.3em] uppercase">Phase 0{i + 1}</span>
+                            <div className="flex items-center gap-4 mb-6">
+                                <span className="text-5xl font-bold text-primary/20">{item.step}</span>
                             </div>
-                            <h2 className="text-6xl md:text-8xl font-black uppercase text-white mb-10 tracking-tighter leading-[0.85]">
-                                {item.title.split(' ').map((word, idx) => (
-                                    <span key={idx} className={idx % 2 !== 0 ? "text-primary italic" : "block"}>{word} </span>
-                                ))}
-                            </h2>
-                            <p className="text-zinc-500 text-xl md:text-2xl max-w-xl leading-relaxed font-medium tracking-tight">
+                            <h3 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                                {item.title}
+                            </h3>
+                            <p className="text-zinc-400 text-lg max-w-lg leading-relaxed">
                                 {item.description}
                             </p>
                         </div>
@@ -114,26 +126,27 @@ export function StickyScroll() {
                 </div>
 
                 {/* Right Side: Pinned Media Container */}
-                <div className="hidden md:block w-1/2 h-screen flex items-center">
-                    <div ref={pinRef} className="relative w-full aspect-square max-h-[70vh] rounded-[3rem] overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.5)] bg-zinc-900 group">
-                        <div className="absolute inset-0 z-20 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
+                <div className="hidden md:block w-1/2 h-screen">
+                    <div ref={pinRef} className="relative w-full aspect-[4/3] max-h-[60vh] rounded-2xl overflow-hidden border border-white/10 bg-zinc-900">
+                        <div className="absolute inset-0 z-20 bg-linear-to-t from-black/40 via-transparent to-transparent" />
                         
-                        {STICKY_MOCK_DATA.map((item, i) => (
+                        {PROCESS_STEPS.map((item, i) => (
                             <div key={i} className="sticky-image-item absolute inset-0 w-full h-full">
                                 <Image 
                                     src={item.image} 
                                     alt={item.title} 
                                     fill 
                                     priority={i === 0}
-                                    className="object-cover transition-transform duration-1000"
+                                    className="object-cover"
                                 />
                             </div>
                         ))}
 
-                        {/* Visual Decorative Elements */}
-                        <div className="absolute top-8 left-8 z-30 flex gap-2">
-                            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                            <div className="w-20 h-[1px] bg-white/20 mt-[3px]" />
+                        {/* Step indicator */}
+                        <div className="absolute bottom-6 left-6 z-30 flex gap-2">
+                            {PROCESS_STEPS.map((_, i) => (
+                                <div key={i} className="w-8 h-1 rounded-full bg-white/20" />
+                            ))}
                         </div>
                     </div>
                 </div>

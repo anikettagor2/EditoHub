@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { 
@@ -790,7 +790,7 @@ export function AdminDashboard() {
                                         <ProjectStatusBadges project={project} />
                                     </td>
                                     <td className="px-6 py-5 text-muted-foreground text-[11px] font-medium uppercase tracking-tight" suppressHydrationWarning>
-                                        {new Date(project.updatedAt).toLocaleDateString()} — {new Date(project.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {new Date(project.updatedAt).toLocaleDateString()} â€” {new Date(project.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </td>
                                     <td className="px-6 py-5 text-right">
                                         <button 
@@ -869,7 +869,7 @@ export function AdminDashboard() {
                                                 </span>
                                                 {project.assignmentStatus === 'rejected' && project.editorDeclineReason && (
                                                     <span className="text-[9px] font-medium text-red-400/80 italic max-w-[120px] truncate" title={project.editorDeclineReason}>
-                                                        “{project.editorDeclineReason}”
+                                                        â€œ{project.editorDeclineReason}â€
                                                     </span>
                                                 )}
                                             </div>
@@ -1266,7 +1266,7 @@ export function AdminDashboard() {
                                             </Avatar>
                                             <div>
                                                 <div className="text-base font-bold text-foreground tracking-tight leading-tight">{u.displayName}</div>
-                                                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">{u.role} — UID: {u.uid.slice(0,8)}</div>
+                                                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">{u.role} â€” UID: {u.uid.slice(0,8)}</div>
                                             </div>
                                         </div>
 
@@ -1347,7 +1347,7 @@ export function AdminDashboard() {
                                             </Avatar>
                                             <div>
                                                 <div className="text-base font-bold text-foreground tracking-tight leading-tight">{u.displayName}</div>
-                                                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">Editor Request — {new Date(u.createdAt).toLocaleDateString()}</div>
+                                                <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">Editor Request â€” {new Date(u.createdAt).toLocaleDateString()}</div>
                                             </div>
                                         </div>
 
@@ -1635,7 +1635,7 @@ export function AdminDashboard() {
                                                         </Avatar>
                                                         <div>
                                                             <h3 className="text-lg font-bold text-foreground tracking-tight">{editor.displayName || 'Unknown Editor'}</h3>
-                                                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mt-1 text-blue-400/80">{editor.email}</p>
+                                                            <p className="text-xs text-blue-400/80 font-bold uppercase tracking-widest mt-1">{editor.email}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col md:items-end gap-3">
@@ -2345,7 +2345,7 @@ export function AdminDashboard() {
                                         <div className="text-[9px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
                                             <AlertCircle className="h-3.5 w-3.5" /> REJECTION_INCIDENT
                                         </div>
-                                        <p className="text-xs text-red-400 font-bold italic">“{inspectProject.editorDeclineReason}”</p>
+                                        <p className="text-xs text-red-400 font-bold italic">â€œ{inspectProject.editorDeclineReason}â€</p>
                                     </div>
                                 )}
                             </div>
@@ -2433,6 +2433,8 @@ export function AdminDashboard() {
                             </div>
                         </div>
                     </div>
+
+
                 </div>
             )}
         </Modal>

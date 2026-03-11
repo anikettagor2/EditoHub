@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Loader2, Film } from "lucide-react";
+import { Loader2, Film, AlertCircle, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { SnowBackground } from "@/components/snow-background";
 import { Input } from "@/components/ui/input";
@@ -14,22 +14,48 @@ import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { useBranding } from "@/lib/context/branding-context";
 
+// Validation helpers
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidPhone(phone: string): boolean {
+  // Indian phone number formats
+  const cleaned = phone.replace(/\D/g, '');
+  return cleaned.length >= 10 && cleaned.length <= 13;
+}
+
 export default function LoginPage() {
   const { signInWithGoogle, loginWithEmail, loading } = useAuth();
   const { logoUrl } = useBranding();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Email/Pass State
-  // Identification State
+  // Form state
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  
+  // Validation state
+  const [touched, setTouched] = useState({ identifier: false, password: false });
+
+  // Real-time validation
+  const identifierError = touched.identifier && !identifier.trim() 
+    ? "Email or phone is required" 
+    : touched.identifier && identifier.trim() && !isValidEmail(identifier) && !isValidPhone(identifier)
+    ? "Please enter a valid email or phone number"
+    : null;
+  
+  const passwordError = touched.password && !password 
+    ? "Password is required" 
+    : touched.password && password.length > 0 && password.length < 6
+    ? "Password must be at least 6 characters"
+    : null;
 
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
     setError(null);
     try {
-      await signInWithGoogle(); // No role arg = Login Mode
+      await signInWithGoogle();
     } catch (error: any) {
       console.error("Login failed", error);
       setError(error.message || "Login failed. Please try again.");
@@ -40,20 +66,38 @@ export default function LoginPage() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Touch all fields to show validation
+    setTouched({ identifier: true, password: true });
+    
     if (!identifier || !password) {
-        setError("Please enter both phone/email and password");
-        return;
+      setError("Please fill in all fields");
+      return;
+    }
+    
+    if (!isValidEmail(identifier) && !isValidPhone(identifier)) {
+      setError("Please enter a valid email or phone number");
+      return;
+    }
+    
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
     }
 
     setIsLoggingIn(true);
     setError(null);
     try {
-        await loginWithEmail(identifier, password);
+      await loginWithEmail(identifier, password);
     } catch (error: any) {
-        console.error("Email login failed", error);
-        setError("Invalid email or password");
+      console.error("Email login failed", error);
+      setError(error.code === "auth/user-not-found" 
+        ? "No account found with this email" 
+        : error.code === "auth/wrong-password"
+        ? "Incorrect password"
+        : "Invalid email or password");
     } finally {
-        setIsLoggingIn(false);
+      setIsLoggingIn(false);
     }
   };
 
@@ -72,8 +116,8 @@ export default function LoginPage() {
         </div>
       
       {/* Abstract Background Shapes */}
-      <div className="absolute top-[-20%] left-[-10%] h-[500px] w-[500px] rounded-full bg-primary/20 blur-[120px]" />
-      <div className="absolute bottom-[-20%] right-[-10%] h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
+      <div className="absolute top-[-20%] left-[-10%] h-125 w-125 rounded-full bg-primary/20 blur-[120px]" />
+      <div className="absolute bottom-[-20%] right-[-10%] h-125 w-125 rounded-full bg-blue-600/10 blur-[120px]" />
 
       <div className="z-10 w-full max-w-md space-y-8 px-6 py-12">
         <motion.div 
@@ -122,10 +166,17 @@ export default function LoginPage() {
                   <Input 
                       type="text" 
                       placeholder="Phone or you@example.com"
-                      className="bg-black/5 dark:bg-black/40 border-border text-foreground"
+                      className={`bg-black/5 dark:bg-black/40 border-border text-foreground ${identifierError ? 'border-red-500 focus:ring-red-500' : ''}`}
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
+                      onBlur={() => setTouched(t => ({ ...t, identifier: true }))}
                   />
+                  {identifierError && (
+                    <p className="text-xs text-red-400 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {identifierError}
+                    </p>
+                  )}
               </div>
               <div className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -135,10 +186,17 @@ export default function LoginPage() {
                   <Input 
                       type="password" 
                       placeholder="••••••••"
-                      className="bg-black/5 dark:bg-black/40 border-border text-foreground"
+                      className={`bg-black/5 dark:bg-black/40 border-border text-foreground ${passwordError ? 'border-red-500 focus:ring-red-500' : ''}`}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onBlur={() => setTouched(t => ({ ...t, password: true }))}
                   />
+                  {passwordError && (
+                    <p className="text-xs text-red-400 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {passwordError}
+                    </p>
+                  )}
               </div>
               
               <Button

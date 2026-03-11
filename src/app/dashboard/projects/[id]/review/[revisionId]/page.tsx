@@ -272,7 +272,9 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
   if(!revision && !loading) return <div className="text-foreground p-10 font-heading">We couldn't find this version.</div>;
 
   const isClientUser = user?.role === "client" || user?.uid === project?.ownerId;
+  const isEditorUser = user?.role === "editor" || user?.uid === project?.assignedEditorId;
   const showPaymentLock = isClientUser && project?.paymentStatus !== "full_paid";
+  const showDownloadButton = !isEditorUser; // Hide download for editors
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground overflow-hidden mesh-grid">
@@ -310,6 +312,8 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
                   </div>
               </div>
 
+              {/* Download button - hidden for editors */}
+              {showDownloadButton && (
               <button 
                 onClick={async () => {
                    if (!showPaymentLock) {
@@ -342,6 +346,7 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
                     ? ((revision?.downloadCount || 0) >= 3 ? "Max Reached" : `Download (${3 - (revision?.downloadCount || 0)} left)`)
                     : "Get Video File"}
               </button>
+              )}
 
               <button 
                 onClick={handleShareReview}

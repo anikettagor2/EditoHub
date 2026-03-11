@@ -201,7 +201,8 @@ export async function handleProjectCreated(projectId: string) {
 }
 
 /**
- * Assigns an editor to a project with a 10-minute validity
+ * Assigns an editor to a project with a 5-minute validity window
+ * Editor must accept within 5 minutes or assignment expires
  */
 export async function assignEditor(projectId: string, editorId: string, editorPrice: number, deadline?: string) {
     try {
@@ -218,13 +219,13 @@ export async function assignEditor(projectId: string, editorId: string, editorPr
         }
 
         const now = Date.now();
-        const tenMinutes = 10 * 60 * 1000;
+        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
 
         const updateData: any = {
             assignedEditorId: editorId,
             assignmentStatus: 'pending',
             assignmentAt: now,
-            assignmentExpiresAt: now + tenMinutes,
+            assignmentExpiresAt: now + fiveMinutes,
             status: 'pending_assignment',
             members: members,
             editorPrice: editorPrice,
@@ -263,10 +264,40 @@ export async function assignEditor(projectId: string, editorId: string, editorPr
 
 /**
  * Handles editor acceptance or rejection
+ * Checks if assignment has expired (5-minute window)
  */
 export async function respondToAssignment(projectId: string, response: 'accepted' | 'rejected', reason?: string) {
     try {
         const now = Date.now();
+        
+        // Check if assignment has expired
+        const projectRef = adminDb.collection('projects').doc(projectId);
+        const projectSnap = await projectRef.get();
+        
+        if (!projectSnap.exists) {
+            return { success: false, error: 'Project not found' };
+        }
+        
+        const projectData = projectSnap.data();
+        const expiresAt = projectData?.assignmentExpiresAt;
+        
+        if (expiresAt && now > expiresAt) {
+            // Assignment has expired - auto-reject and clear assignment
+            await projectRef.update({
+                assignmentStatus: 'expired',
+                status: 'pending_assignment',
+                editorDeclineReason: 'Assignment expired - no response within 5 minutes',
+                assignedEditorId: admin.firestore.FieldValue.delete(),
+                editorPrice: admin.firestore.FieldValue.delete(),
+                assignmentAt: admin.firestore.FieldValue.delete(),
+                assignmentExpiresAt: admin.firestore.FieldValue.delete(),
+                updatedAt: now
+            });
+            
+            revalidatePath('/dashboard');
+            return { success: false, error: 'Assignment has expired. The 5-minute acceptance window has passed.' };
+        }
+        
         const updateData: any = {
             assignmentStatus: response,
             status: response === 'accepted' ? 'active' : 'pending_assignment',

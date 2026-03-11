@@ -1,85 +1,131 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { motion } from "framer-motion";
-import { Button } from "./ui/button";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
-import gsap from "gsap";
+import { ArrowRight, MessageCircle, Clock, Shield, Users } from "lucide-react";
 
 export function FuturisticCTA() {
-  const glowRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!glowRef.current) return;
-    gsap.to(glowRef.current, {
-      scale: 1.5,
-      opacity: 0.4,
-      duration: 4,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut"
-    });
-  }, []);
-
   return (
-    <section className="py-24 md:py-40 relative overflow-hidden bg-transparent z-10">
-      <div className="max-w-[1400px] mx-auto px-6 relative flex flex-col items-center">
-        {/* The Card */}
-        <div className="relative w-full max-w-5xl rounded-[3rem] p-10 md:p-24 overflow-hidden border border-white/10 bg-white/[0.02] backdrop-blur-3xl text-center flex flex-col items-center">
+    <section className="py-24 md:py-32 relative overflow-hidden bg-black">
+      <div className="max-w-7xl mx-auto px-6">
+        {/* Main CTA Card */}
+        <div className="relative rounded-3xl p-8 md:p-16 overflow-hidden bg-linear-to-br from-zinc-900 to-zinc-950 border border-white/10">
+          {/* Background Accent */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
           
-          {/* Animated Glow */}
-          <div 
-            ref={glowRef}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] bg-primary/20 rounded-full blur-[120px] pointer-events-none z-0" 
-          />
-          
-          <div className="relative z-10 w-full flex flex-col items-center">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 text-primary font-black tracking-[0.4em] uppercase mb-10 text-xs"
-            >
-              <Sparkles className="w-4 h-4 fill-primary" />
-              JOIN THE ELITE
-            </motion.div>
+          <div className="relative z-10 grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left Content */}
+            <div>
+              <motion.span
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider mb-6"
+              >
+                Limited Availability
+              </motion.span>
 
-            <h2 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter mb-10 leading-[0.9] text-white">
-              Ready to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-indigo-400 italic">Ascend?</span>
-            </h2>
+              <motion.h2 
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+                className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6 leading-tight"
+              >
+                Ready to scale your content production?
+              </motion.h2>
 
-            <p className="text-lg md:text-xl text-gray-400 max-w-2xl mb-16 leading-relaxed font-medium text-center">
-              We only partner with creators who are ready to dominate. Limited slots available for monthly production.
-            </p>
+              <motion.p 
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="text-lg text-zinc-400 mb-8 leading-relaxed"
+              >
+                Join hundreds of creators and brands who trust us with their video editing. Start your first project today with no commitment.
+              </motion.p>
 
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link href="/login">
-                <Button size="lg" className="h-20 px-12 rounded-2xl text-xl font-black bg-primary hover:bg-primary/90 text-white shadow-[0_20px_60px_rgba(99,102,241,0.3)] transition-all flex items-center gap-4">
-                  START YOUR PROJECT
-                  <ArrowRight className="w-6 h-6" />
-                </Button>
-              </Link>
-            </motion.div>
-
-            <div className="mt-20 pt-16 border-t border-white/5 w-full grid grid-cols-2 md:grid-cols-4 gap-8">
-                <CTAStat label="Happy Clients" value="500+" />
-                <CTAStat label="Videos Edited" value="10k+" />
-                <CTAStat label="Views Gained" value="1B+" />
-                <CTAStat label="Growth Rate" value="300%" />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="flex flex-col sm:flex-row gap-4"
+              >
+                <Link href="/signup">
+                  <button className="group flex items-center justify-center gap-3 px-8 py-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-all w-full sm:w-auto">
+                    Get Started Free
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </Link>
+                <Link href="/about">
+                  <button className="flex items-center justify-center gap-3 px-8 py-4 bg-white/5 border border-white/10 text-white font-semibold rounded-xl hover:bg-white/10 transition-all w-full sm:w-auto">
+                    <MessageCircle className="w-4 h-4" />
+                    Talk to Us
+                  </button>
+                </Link>
+              </motion.div>
             </div>
+
+            {/* Right Side - Features */}
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="grid grid-cols-2 gap-4"
+            >
+              <FeatureCard 
+                icon={<Clock className="w-5 h-5" />}
+                title="Fast Delivery"
+                desc="24-48 hour turnaround on most projects"
+              />
+              <FeatureCard 
+                icon={<Shield className="w-5 h-5" />}
+                title="Secure Files"
+                desc="Enterprise-grade encryption for your content"
+              />
+              <FeatureCard 
+                icon={<Users className="w-5 h-5" />}
+                title="Dedicated Team"
+                desc="Same editor on every project for consistency"
+              />
+              <FeatureCard 
+                icon={<MessageCircle className="w-5 h-5" />}
+                title="Direct Chat"
+                desc="Real-time communication with your editor"
+              />
+            </motion.div>
           </div>
+        </div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-16 px-4">
+          <StatItem value="500+" label="Happy Clients" />
+          <StatItem value="10,000+" label="Videos Delivered" />
+          <StatItem value="1B+" label="Total Views Generated" />
+          <StatItem value="4.9/5" label="Average Rating" />
         </div>
       </div>
     </section>
   );
 }
 
-function CTAStat({ label, value }: { label: string, value: string }) {
-    return (
-        <div className="flex flex-col items-center">
-            <div className="text-2xl md:text-4xl font-black text-white mb-1 tracking-tighter">{value}</div>
-            <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-gray-500">{label}</div>
-        </div>
-    )
+function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+  return (
+    <div className="p-6 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all">
+      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-4">
+        {icon}
+      </div>
+      <h3 className="text-white font-semibold mb-2">{title}</h3>
+      <p className="text-sm text-zinc-500 leading-relaxed">{desc}</p>
+    </div>
+  );
+}
+
+function StatItem({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-2xl md:text-3xl font-bold text-white mb-1">{value}</div>
+      <div className="text-sm text-zinc-500">{label}</div>
+    </div>
+  );
 }

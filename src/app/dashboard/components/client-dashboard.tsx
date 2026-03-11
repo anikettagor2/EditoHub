@@ -9,37 +9,22 @@ import { cn } from "@/lib/utils";
 import { 
     Plus, 
     Search, 
-    Filter,
     Calendar,
-    Briefcase,
-    IndianRupee,
     MoreHorizontal,
-    FileText,
-    Download,
     Eye,
     ChevronDown,
-    ArrowUpRight,
-    ArrowDownLeft,
     CheckCircle2,
     AlertCircle,
     Clock,
     User as UserIcon,
-    RefreshCw,
-    Activity,
-    Monitor,
-    Layers,
-    Play,
-    Terminal,
-    Zap,
-    Cpu,
-    CreditCard,
-    PieChart,
-    BarChart3,
-    Timer,
-    ShieldCheck
+    Video,
+    TrendingUp,
+    Wallet,
+    MessageCircle,
+    ArrowRight,
+    FileVideo,
+    Sparkles
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { 
@@ -47,8 +32,7 @@ import {
     DropdownMenuContent, 
     DropdownMenuItem, 
     DropdownMenuTrigger,
-    DropdownMenuSeparator, 
-    DropdownMenuLabel 
+    DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -58,7 +42,6 @@ export function ClientDashboard() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [activeTab, setActiveTab] = useState<'overview' | 'finance'>('overview');
     const [assignedSE, setAssignedSE] = useState<any>(null);
     const [allUsers, setAllUsers] = useState<User[]>([]);
 
@@ -103,555 +86,396 @@ export function ClientDashboard() {
         return true;
     });
 
-    const totalRevenueGenerated = projects.reduce((acc, curr) => acc + (curr.totalCost || 0), 0);
-    const totalPaidAmount = projects.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0);
-    const totalPendingPayment = totalRevenueGenerated - totalPaidAmount;
-    const lifetimeValue = totalRevenueGenerated;
-    
-    const paidProjects = projects.filter(p => (p.amountPaid || 0) > 0);
-    let lastPaymentDate = "N/A";
-    if (paidProjects.length > 0) {
-        const maxTime = Math.max(...paidProjects.map(p => p.updatedAt || p.createdAt || 0));
-        if (maxTime > 0) lastPaymentDate = new Date(maxTime).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-
-    const overdueProjects = projects.filter(p => (p.status === 'completed' || p.status === 'approved') && ((p.totalCost || 0) > (p.amountPaid || 0)));
-    const overdueCount = overdueProjects.length;
-    const paymentDelayAverage = overdueCount > 0 ? "2.5 Days" : "On Time";
+    const totalSpent = projects.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0);
+    const pendingPayment = projects.reduce((acc, curr) => acc + ((curr.totalCost || 0) - (curr.amountPaid || 0)), 0);
+    const activeProjects = projects.filter(p => !['completed', 'approved', 'archived', 'delivered'].includes(p.status)).length;
+    const completedProjects = projects.filter(p => p.status === 'completed' || p.status === 'approved').length;
 
     const creditLimit = user?.creditLimit || 5000;
-    const isOverLimit = totalPendingPayment >= creditLimit && (user?.payLater || false);
+    const isOverLimit = pendingPayment >= creditLimit && (user?.payLater || false);
 
     return (
-        <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
-           {isOverLimit && (
-               <motion.div 
-                   initial={{ opacity: 0, y: -20 }}
-                   animate={{ opacity: 1, y: 0 }}
-                   className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 mb-6 flex items-center justify-between gap-4"
-               >
-                   <div className="flex items-center gap-3">
-                       <div className="h-10 w-10 rounded-lg bg-red-500/20 flex items-center justify-center">
-                           <AlertCircle className="h-6 w-6 text-red-500" />
-                       </div>
-                       <div>
-                           <h4 className="text-sm font-bold uppercase tracking-tight">Credit Limit Exceeded</h4>
-                           <p className="text-[11px] font-medium opacity-80 uppercase tracking-widest mt-0.5">Your outstanding dues (₹{totalPendingPayment.toLocaleString()}) have exceeded your credit limit of ₹{creditLimit.toLocaleString()}. Please clear pending payments to continue.</p>
-                       </div>
-                   </div>
-                   <Link href="/dashboard/finance">
-                       <button className="px-4 py-2 bg-red-500 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 transition-all active:scale-95">Settle Now</button>
-                   </Link>
-               </motion.div>
-           )}
-           {/* Header Section */}
-           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pb-8 border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+            {/* Credit Warning */}
+            {isOverLimit && (
                 <motion.div 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="space-y-2"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-between gap-4"
                 >
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
-                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Customer Hub</span>
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                            <AlertCircle className="h-5 w-5 text-red-500" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-red-500">Payment Required</p>
+                            <p className="text-xs text-red-400/80">Your outstanding balance (₹{pendingPayment.toLocaleString()}) exceeds your credit limit. Please clear your dues to continue.</p>
                         </div>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-heading font-bold tracking-tight text-foreground leading-tight">My <span className="text-muted-foreground">Portfolio</span></h1>
-                    <div className="flex items-center gap-6 pt-2">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <UserIcon className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Authenticated: {user?.displayName}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <Calendar className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Account Active</span>
-                        </div>
-                    </div>
-                </motion.div>
-                
-                <motion.div 
-                   initial={{ opacity: 0, x: 20 }}
-                   animate={{ opacity: 1, x: 0 }}
-                   className="flex flex-wrap items-center gap-3"
-                >
-                    <Link href="/dashboard/projects/new">
-                        <button className="h-10 px-6 rounded-lg bg-primary  text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-95 shadow-md shadow-primary/10 flex items-center gap-2.5">
-                            <Plus className="h-4 w-4" />
-                            Launch Project
+                    <Link href="/dashboard/payments">
+                        <button className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors whitespace-nowrap">
+                            Pay Now
                         </button>
                     </Link>
                 </motion.div>
-           </div>
-    
-           {/* Tabs Navigation */}
-           <div className="flex items-center gap-2 border-b border-border/50 pb-4">
-                <button 
-                    onClick={() => setActiveTab('overview')}
-                    className={cn(
-                        "px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all",
-                        activeTab === 'overview' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    )}
-                >
-                    Overview
-                </button>
-                <button 
-                    onClick={() => setActiveTab('finance')}
-                    className={cn(
-                        "px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-2",
-                        activeTab === 'finance' ? "bg-emerald-500 text-white shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    )}
-                >
-                    <CreditCard className="h-3.5 w-3.5" /> Finance
-                </button>
-           </div>
-    
-           {activeTab === 'overview' ? (
-            <>
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* Metrics Section */}
-                    <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                         <IndicatorCard 
-                             label="Total Projects" 
-                             value={projects.length} 
-                             icon={<PieChart className="h-4 w-4 text-emerald-500" />}
-                             subtext="Lifetime Projects Volume"
-                         />
-                         <IndicatorCard 
-                             label="Active Projects" 
-                             value={projects.filter(p => !['completed', 'approved', 'archived', 'delivered'].includes(p.status)).length} 
-                             icon={<Activity className="h-4 w-4 text-blue-500" />}
-                             subtext="Currently in operational phase"
-                         />
-                         <IndicatorCard 
-                             label="Completed" 
-                             value={projects.filter(p => p.status === 'completed' || p.status === 'approved').length} 
-                             icon={<CheckCircle2 className="h-4 w-4 text-primary" />}
-                             subtext="Successfully delivered projects"
-                         />
-                    </div>
+            )}
 
-                    {/* Sales Executive Card */}
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="bg-muted/30 border border-border rounded-2xl p-6 ring-1 ring-primary/10 shadow-xl overflow-hidden relative group"
-                    >
-                        <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
-                            <ShieldCheck className="h-16 w-16 text-primary" />
-                        </div>
-                        <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-                             <Briefcase className="h-3.5 w-3.5" /> Sales Executive
-                        </h4>
-                        
-                        {assignedSE ? (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="h-12 w-12 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-lg">
-                                        {assignedSE.displayName?.[0].toUpperCase() || "S"}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-black text-foreground truncate">{assignedSE.displayName}</p>
-                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Strategy & Growth Lead</p>
-                                    </div>
-                                </div>
-                                <div className="pt-4 border-t border-border space-y-2">
-                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tight">
-                                        <span className="text-muted-foreground">Status</span>
-                                        <span className="text-emerald-500 flex items-center gap-1.5"><div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" /> Active</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tight">
-                                        <span className="text-muted-foreground">Contact</span>
-                                        <span className="text-foreground">{assignedSE.phoneNumber || assignedSE.email || 'Verified'}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="py-6 flex flex-col items-center justify-center opacity-40 text-center gap-2">
-                                <Activity className="h-5 w-5 text-muted-foreground animate-pulse" />
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Assigning Growth Lead...</p>
-                            </div>
-                        )}
-                    </motion.div>
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+                        Welcome back, {user?.displayName?.split(' ')[0] || 'there'}
+                    </h1>
+                    <p className="text-muted-foreground mt-1">
+                        Here's what's happening with your projects
+                    </p>
                 </div>
+                <Link href="/dashboard/projects/new">
+                    <button className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-sm">
+                        <Plus className="h-4 w-4" />
+                        New Project
+                    </button>
+                </Link>
+            </div>
 
-                {/* Main Content Area */}
-                <motion.div 
-                     initial={{ opacity: 0, y: 20 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     className="enterprise-card bg-muted/30 backdrop-blur-sm overflow-hidden"
-                >
-                    <div className="p-6 border-b border-border/50 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full">
-                            <div className="relative w-full sm:w-80">
-                                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors" />
-                                 <input 
-                                    type="text" 
-                                    placeholder="Search projects..." 
-                                    className="h-10 w-full rounded-lg border border-border bg-muted/50 pl-11 pr-4 text-sm text-foreground focus:bg-background focus:border-primary/50 focus:outline-none transition-all placeholder:text-muted-foreground"
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatsCard 
+                    label="Total Projects"
+                    value={projects.length}
+                    icon={<Video className="h-5 w-5" />}
+                    color="blue"
+                />
+                <StatsCard 
+                    label="In Progress"
+                    value={activeProjects}
+                    icon={<Clock className="h-5 w-5" />}
+                    color="amber"
+                />
+                <StatsCard 
+                    label="Completed"
+                    value={completedProjects}
+                    icon={<CheckCircle2 className="h-5 w-5" />}
+                    color="green"
+                />
+                <StatsCard 
+                    label="Total Spent"
+                    value={`₹${totalSpent.toLocaleString()}`}
+                    icon={<Wallet className="h-5 w-5" />}
+                    color="purple"
+                />
+            </div>
+
+            {/* Main Content Grid */}
+            <div className="grid lg:grid-cols-3 gap-6">
+                {/* Projects List - Takes 2 columns */}
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-card border border-border rounded-xl overflow-hidden">
+                        {/* Search & Filter Header */}
+                        <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-3">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <input 
+                                    type="text"
+                                    placeholder="Search projects..."
+                                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                 />
+                                />
                             </div>
-                            
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <button className="h-10 px-5 rounded-lg bg-muted border border-border text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all flex items-center gap-2.5">
-                                        <Filter className="h-3.5 w-3.5" />
-                                        {statusFilter === 'all' ? 'All Status' : statusFilter.replace('_', ' ').toUpperCase()}
-                                        <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
+                                    <button className="h-10 px-4 rounded-lg border border-border bg-background text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors">
+                                        {statusFilter === 'all' ? 'All Status' : statusFilter.replace('_', ' ')}
+                                        <ChevronDown className="h-4 w-4" />
                                     </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="w-56 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
-                                    <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 py-2">Filter Status</DropdownMenuLabel>
-                                    <DropdownMenuSeparator className="my-1 bg-border" />
-                                    <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('all')}>All Projects</DropdownMenuItem>
-                                    <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('active')}>Active</DropdownMenuItem>
-                                    <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('in_review')}>In Review</DropdownMenuItem>
-                                    <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => setStatusFilter('completed')}>Completed</DropdownMenuItem>
+                                <DropdownMenuContent align="end" className="w-40">
+                                    <DropdownMenuItem onClick={() => setStatusFilter('all')}>All Status</DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setStatusFilter('pending')}>Pending</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setStatusFilter('active')}>In Progress</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setStatusFilter('in_review')}>In Review</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setStatusFilter('completed')}>Completed</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
-                    </div>
 
-                    <div className="overflow-x-auto overflow-y-hidden">
-                         <table className="w-full text-left">
-                             <thead>
-                                 <tr className="bg-muted/30">
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project Name</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Type</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Manager</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-center">Editor</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-right">Price</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-right">Status</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-right">Date</th>
-                                     <th className="px-6 py-4 border-b border-border w-[80px]"></th>
-                                 </tr>
-                             </thead>
-                             <tbody className="divide-y divide-border">
-                                  <AnimatePresence mode="wait">
-                                  {loading ? (
-                                     <tr key="loading-overview">
-                                         <td colSpan={7} className="px-6 py-24 text-center">
-                                             <div className="flex flex-col items-center gap-4">
-                                                 <RefreshCw className="h-6 w-6 text-emerald-500 animate-spin" />
-                                                 <p className="text-xs font-medium text-muted-foreground animate-pulse">Loading projects...</p>
-                                             </div>
-                                         </td>
-                                     </tr>
-                                  ) : filteredProjects.length === 0 ? (
-                                     <tr key="empty-overview">
-                                         <td colSpan={7} className="px-6 py-24 text-center">
-                                             <div className="flex flex-col items-center gap-4 opacity-40">
-                                                 <Layers className="h-12 w-12 text-muted-foreground" />
-                                                 <p className="text-sm font-medium text-muted-foreground">You haven't started any projects yet.</p>
-                                             </div>
-                                         </td>
-                                     </tr>
-                                  ) : (
-                                     filteredProjects.map((project, idx) => (
-                                         <motion.tr 
-                                             key={`over-${project.id}`}
-                                             initial={{ opacity: 0, y: 10 }}
-                                             animate={{ opacity: 1, y: 0 }}
-                                             transition={{ delay: idx * 0.05 }}
-                                             className="group hover:bg-muted/10 transition-all duration-200"
-                                         >
-                                             <td className="px-6 py-5 transition-colors">
-                                                 <div className="flex flex-col">
-                                                     <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-bold text-foreground hover:text-primary transition-colors tracking-tight leading-tight">
-                                                         {project.name}
-                                                     </Link>
-                                                 </div>
-                                             </td>
-                                             <td className="px-6 py-5 transition-colors">
-                                                 <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{project.videoType || 'N/A'}</span>
-                                             </td>
-                                             <td className="px-6 py-5 transition-colors">
-                                                 <div className="flex items-center gap-2">
-                                                     <div className="h-6 w-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[8px] font-bold text-primary">
-                                                         {allUsers.find(u => u.uid === project.assignedPMId)?.displayName?.[0] || 'A'}
-                                                     </div>
-                                                     <span className="text-[10px] text-foreground font-bold uppercase tracking-tight">{allUsers.find(u => u.uid === project.assignedPMId)?.displayName || 'Admin'}</span>
-                                                 </div>
-                                             </td>
-                                             <td className="px-6 py-5 text-center transition-colors">
-                                                 <Badge variant="outline" className="text-[9px] uppercase tracking-widest font-bold">
-                                                      {project.assignedEditorId ? "Assigned" : "Pending"}
-                                                 </Badge>
-                                             </td>
-                                             <td className="px-6 py-5 text-right transition-colors">
-                                                 <span className="text-sm font-black text-foreground tracking-tighter tabular-nums">₹{project.totalCost?.toLocaleString() || '0'}</span>
-                                             </td>
-                                             <td className="px-6 py-5 text-right transition-colors">
-                                                 <StatusIndicator status={project.status} />
-                                             </td>
-                                             <td className="px-6 py-5 text-right transition-colors">
-                                                 <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                                                      {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}
-                                                 </div>
-                                             </td>
-                                             <td className="px-6 py-5 text-right transition-colors">
-                                                 <DropdownMenu>
-                                                     <DropdownMenuTrigger asChild>
-                                                         <button className="h-8 w-8 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all active:scale-90">
-                                                             <MoreHorizontal className="h-4 w-4" />
-                                                         </button>
-                                                     </DropdownMenuTrigger>
-                                                     <DropdownMenuContent align="end" className="w-52 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
-                                                         <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 py-2">Options</DropdownMenuLabel>
-                                                         <DropdownMenuSeparator className="my-1 bg-border" />
-                                                         <DropdownMenuItem asChild className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg">
-                                                             <Link href={`/dashboard/projects/${project.id}`} className="flex items-center gap-3 w-full">
-                                                                 <Eye className="h-4 w-4" /> <span>View Details</span>
-                                                             </Link>
-                                                         </DropdownMenuItem>
-                                                     </DropdownMenuContent>
-                                                 </DropdownMenu>
-                                             </td>
-                                         </motion.tr>
-                                     ))
-                                  )}
-                                  </AnimatePresence>
-                             </tbody>
-                         </table>
-                    </div>
-                    <div className="p-6 border-t border-border bg-muted/30 flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                            Showing {filteredProjects.length} projects
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <button className="h-9 px-4 rounded-lg border border-border bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground hover:bg-muted/80 disabled:opacity-30 transition-all active:scale-95" disabled>Previous</button>
-                            <button className="h-9 px-4 rounded-lg border border-border bg-muted text-[10px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground hover:bg-muted/80 disabled:opacity-30 transition-all active:scale-95" disabled>Next</button>
-                        </div>
-                    </div>
-                </motion.div>
-            </>
-           ) : activeTab === 'finance' ? (
-            <>
-                {/* Billing Section */}
-                <div className="enterprise-card p-6 md:p-8 bg-muted/20 border-border mb-8 overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                        <CreditCard className="h-32 w-32 text-primary" />
-                    </div>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <span className="h-2 w-2 rounded-full bg-primary" />
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Account Billing Profile</h3>
-                            </div>
-                            <h2 className="text-2xl font-bold font-heading">Credit & Payment Status</h2>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 lg:gap-12 bg-muted/50 p-6 rounded-2xl border border-border">
-                            <div className="space-y-1">
-                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Pay Later Option</span>
-                                <div className={cn("text-sm font-black uppercase tracking-widest flex items-center gap-1.5", user?.payLater ? "text-emerald-500" : "text-amber-500")}>
-                                    {user?.payLater ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                                    {user?.payLater ? "Active" : "Disabled"}
+                        {/* Projects Table */}
+                        <div className="overflow-x-auto">
+                            {loading ? (
+                                <div className="p-12 text-center">
+                                    <div className="inline-flex items-center gap-2 text-muted-foreground">
+                                        <div className="h-4 w-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                        Loading your projects...
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Credit Limit</span>
-                                <div className="text-lg font-black text-foreground tabular-nums">
-                                    ₹{creditLimit.toLocaleString()}
+                            ) : filteredProjects.length === 0 ? (
+                                <div className="p-12 text-center">
+                                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                                        <FileVideo className="h-8 w-8 text-muted-foreground" />
+                                    </div>
+                                    <h3 className="font-semibold text-foreground mb-1">No projects yet</h3>
+                                    <p className="text-sm text-muted-foreground mb-4">Start your first video project today</p>
+                                    <Link href="/dashboard/projects/new">
+                                        <button className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                                            <Plus className="h-4 w-4" />
+                                            Create Project
+                                        </button>
+                                    </Link>
                                 </div>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block">Current Due</span>
-                                <div className={cn("text-lg font-black tabular-nums", isOverLimit ? "text-red-500" : "text-foreground")}>
-                                    ₹{totalPendingPayment.toLocaleString()}
-                                </div>
-                            </div>
+                            ) : (
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-border bg-muted/30">
+                                            <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Project</th>
+                                            <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">Type</th>
+                                            <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 hidden md:table-cell">Editor</th>
+                                            <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
+                                            <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3 hidden sm:table-cell">Price</th>
+                                            <th className="w-10"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <AnimatePresence mode="popLayout">
+                                            {filteredProjects.map((project, idx) => (
+                                                <motion.tr 
+                                                    key={project.id}
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    transition={{ delay: idx * 0.03 }}
+                                                    className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors group"
+                                                >
+                                                    <td className="px-4 py-3">
+                                                        <Link href={`/dashboard/projects/${project.id}`} className="block">
+                                                            <p className="font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                                                                {project.name}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                                {project.createdAt ? new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                                                            </p>
+                                                        </Link>
+                                                    </td>
+                                                    <td className="px-4 py-3 hidden sm:table-cell">
+                                                        <span className="text-sm text-muted-foreground capitalize">
+                                                            {project.videoType?.replace('_', ' ') || 'Video'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 hidden md:table-cell">
+                                                        {project.assignedEditorId ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                                                                    <span className="text-xs font-medium text-primary">
+                                                                        {allUsers.find(u => u.uid === project.assignedEditorId)?.displayName?.[0] || 'E'}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-sm text-muted-foreground">
+                                                                    {allUsers.find(u => u.uid === project.assignedEditorId)?.displayName?.split(' ')[0] || 'Editor'}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-sm text-muted-foreground">Assigning...</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <ProjectStatus status={project.status} />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right hidden sm:table-cell">
+                                                        <span className="font-medium text-foreground">
+                                                            ₹{(project.totalCost || 0).toLocaleString()}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-2 py-3">
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <button className="h-8 w-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+                                                                    <MoreHorizontal className="h-4 w-4" />
+                                                                </button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuItem asChild>
+                                                                    <Link href={`/dashboard/projects/${project.id}`} className="flex items-center gap-2">
+                                                                        <Eye className="h-4 w-4" />
+                                                                        View Details
+                                                                    </Link>
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </td>
+                                                </motion.tr>
+                                            ))}
+                                        </AnimatePresence>
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
                     </div>
                 </div>
-    
-                {/* Finance Tab Summary Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <IndicatorCard 
-                          label="Pending Outstanding" 
-                          value={`₹${totalPendingPayment.toLocaleString()}`} 
-                          icon={<AlertCircle className="h-4 w-4 text-orange-500" />}
-                          alert={isOverLimit}
-                          subtext="Unsettled balance"
-                      />
-                      <IndicatorCard 
-                          label="Credit Protocol" 
-                          value={`₹${creditLimit.toLocaleString()}`} 
-                          icon={<Zap className="h-4 w-4 text-primary" />}
-                          subtext={user?.payLater ? "Pay Later: Active" : "Pay Later: Inactive"}
-                          trend={user?.payLater ? "Authorized" : "Retail"}
-                          trendUp={user?.payLater}
-                      />
-                      <IndicatorCard 
-                          label="Lifetime Total" 
-                          value={`₹${lifetimeValue.toLocaleString()}`} 
-                          icon={<Activity className="h-4 w-4" />}
-                          subtext="Total order volume"
-                      />
-                      <IndicatorCard 
-                          label="Payment Health" 
-                          value={paymentDelayAverage} 
-                          icon={<Timer className="h-4 w-4" />}
-                          subtext="Collection speed"
-                      />
-                 </div>
-    
-                {/* Finance Details Table */}
-                <motion.div 
-                     initial={{ opacity: 0, y: 20 }}
-                     animate={{ opacity: 1, y: 0 }}
-                     className="enterprise-card bg-muted/30 backdrop-blur-sm overflow-hidden"
-                >
-                     <div className="p-6 border-b border-border/50 flex flex-col sm:flex-row justify-between gap-4">
-                         <div>
-                             <h3 className="text-xl font-bold font-heading">Financial Overview History</h3>
-                             <p className="text-sm text-muted-foreground mt-1">Review your invoices and ledger</p>
-                         </div>
-                     </div>
-    
-                     <div className="overflow-x-auto overflow-y-hidden">
-                         <table className="w-full text-left">
-                             <thead>
-                                 <tr className="bg-muted/30">
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Invoice ID</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project Name</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-right">Amount</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-center">Payment Status</th>
-                                     <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border text-right">Date</th>
-                                 </tr>
-                             </thead>
-                             <tbody className="divide-y divide-border">
-                                  <AnimatePresence mode="wait">
-                                  {loading ? (
-                                     <tr key="loading-finance">
-                                         <td colSpan={5} className="px-6 py-24 text-center">
-                                             <div className="flex flex-col items-center gap-4">
-                                                 <RefreshCw className="h-6 w-6 text-emerald-500 animate-spin" />
-                                                 <p className="text-xs font-medium text-muted-foreground animate-pulse">Loading financial records...</p>
-                                             </div>
-                                         </td>
-                                     </tr>
-                                  ) : projects.length === 0 ? (
-                                     <tr key="empty-finance">
-                                         <td colSpan={5} className="px-6 py-24 text-center">
-                                             <div className="flex flex-col items-center gap-4 opacity-40">
-                                                 <BarChart3 className="h-12 w-12 text-muted-foreground" />
-                                                 <p className="text-sm font-medium text-muted-foreground">No financial data available yet.</p>
-                                             </div>
-                                         </td>
-                                     </tr>
-                                  ) : (
-                                     projects.map((project, idx) => {
-                                         const isPaid = (project.amountPaid || 0) >= (project.totalCost || 0) && (project.totalCost || 0) > 0;
-                                         const isPartial = (project.amountPaid || 0) > 0 && (project.amountPaid || 0) < (project.totalCost || 0);
-                                         
-                                         return (
-                                         <motion.tr 
-                                             key={`fin-${project.id}`}
-                                             initial={{ opacity: 0, y: 10 }}
-                                             animate={{ opacity: 1, y: 0 }}
-                                             transition={{ delay: idx * 0.05 }}
-                                             className="group hover:bg-muted/10 transition-all duration-200"
-                                         >
-                                             <td className="px-6 py-5 transition-colors">
-                                                <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                                                    INV-{project.id.slice(0,6).toUpperCase()}
-                                                </div>
-                                             </td>
-                                             <td className="px-6 py-5 transition-colors">
-                                                 <div className="flex flex-col">
-                                                     <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-bold text-foreground hover:text-emerald-500 transition-colors tracking-tight leading-tight">
-                                                         {project.name}
-                                                     </Link>
-                                                 </div>
-                                             </td>
-                                             <td className="px-6 py-5 text-right transition-colors">
-                                                 <span className="text-sm font-black text-foreground tracking-tighter tabular-nums">₹{project.totalCost?.toLocaleString() || '0'}</span>
-                                             </td>
-                                             <td className="px-6 py-5 text-center transition-colors">
-                                                {isPaid ? (
-                                                    <Badge variant="outline" className="text-[9px] uppercase tracking-widest font-bold text-emerald-500 border-emerald-500/30 bg-emerald-500/10">Paid</Badge>
-                                                ) : isPartial ? (
-                                                    <Badge variant="outline" className="text-[9px] uppercase tracking-widest font-bold text-amber-500 border-amber-500/30 bg-amber-500/10">Partial</Badge>
-                                                ) : (
-                                                    <Badge variant="outline" className="text-[9px] uppercase tracking-widest font-bold text-red-500 border-red-500/30 bg-red-500/10">Pending</Badge>
-                                                )}
-                                             </td>
-                                             <td className="px-6 py-5 text-right transition-colors">
-                                                 <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                                                      {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}
-                                                 </div>
-                                             </td>
-                                         </motion.tr>
-                                     )})
-                                  )}
-                                  </AnimatePresence>
-                             </tbody>
-                         </table>
-                     </div>
-                </motion.div>
-            </>
-           ) : null}
+
+                {/* Sidebar */}
+                <div className="space-y-6">
+                    {/* Account Manager Card */}
+                    <div className="bg-card border border-border rounded-xl p-5">
+                        <h3 className="font-semibold text-foreground mb-4">Your Account Manager</h3>
+                        {assignedSE ? (
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                                        <span className="text-lg font-semibold text-primary">
+                                            {assignedSE.displayName?.[0]?.toUpperCase() || 'A'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-foreground">{assignedSE.displayName}</p>
+                                        <p className="text-sm text-muted-foreground">Account Manager</p>
+                                    </div>
+                                </div>
+                                <div className="pt-3 border-t border-border space-y-2">
+                                    {assignedSE.email && (
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-muted-foreground">Email</span>
+                                            <span className="text-foreground">{assignedSE.email}</span>
+                                        </div>
+                                    )}
+                                    {assignedSE.phoneNumber && (
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-muted-foreground">Phone</span>
+                                            <span className="text-foreground">{assignedSE.phoneNumber}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <a 
+                                    href={`mailto:${assignedSE.email}`}
+                                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-lg text-sm font-medium hover:bg-muted/80 transition-colors"
+                                >
+                                    <MessageCircle className="h-4 w-4" />
+                                    Send Message
+                                </a>
+                            </div>
+                        ) : (
+                            <div className="text-center py-6">
+                                <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-muted flex items-center justify-center">
+                                    <UserIcon className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    An account manager will be assigned to you shortly
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="bg-card border border-border rounded-xl p-5">
+                        <h3 className="font-semibold text-foreground mb-4">Quick Actions</h3>
+                        <div className="space-y-2">
+                            <Link href="/dashboard/projects/new" className="block">
+                                <button className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <Plus className="h-4 w-4 text-primary" />
+                                        </div>
+                                        <span className="text-sm font-medium text-foreground">Start New Project</span>
+                                    </div>
+                                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                </button>
+                            </Link>
+                            <Link href="/dashboard/payments" className="block">
+                                <button className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                                            <Wallet className="h-4 w-4 text-green-500" />
+                                        </div>
+                                        <span className="text-sm font-medium text-foreground">View Payments</span>
+                                    </div>
+                                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                </button>
+                            </Link>
+                            <Link href="/dashboard/invoices" className="block">
+                                <button className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-muted/50 hover:bg-muted text-left transition-colors group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                            <FileVideo className="h-4 w-4 text-blue-500" />
+                                        </div>
+                                        <span className="text-sm font-medium text-foreground">Download Invoices</span>
+                                    </div>
+                                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                </button>
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Pending Payment Notice */}
+                    {pendingPayment > 0 && !isOverLimit && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-5">
+                            <div className="flex items-start gap-3">
+                                <div className="h-8 w-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                                    <Wallet className="h-4 w-4 text-amber-500" />
+                                </div>
+                                <div>
+                                    <p className="font-medium text-amber-600 dark:text-amber-400">Outstanding Balance</p>
+                                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                                        ₹{pendingPayment.toLocaleString()}
+                                    </p>
+                                    <Link href="/dashboard/payments">
+                                        <button className="mt-3 text-sm text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1">
+                                            Make Payment <ArrowRight className="h-3 w-3" />
+                                        </button>
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
 
-function IndicatorCard({ label, value, subtext, trend, trendUp, alert, icon }: any) {
+// Stats Card Component
+function StatsCard({ label, value, icon, color }: { label: string; value: string | number; icon: React.ReactNode; color: 'blue' | 'amber' | 'green' | 'purple' }) {
+    const colorClasses = {
+        blue: 'bg-blue-500/10 text-blue-500',
+        amber: 'bg-amber-500/10 text-amber-500',
+        green: 'bg-green-500/10 text-green-500',
+        purple: 'bg-purple-500/10 text-purple-500'
+    };
+
     return (
         <motion.div 
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            whileHover={{ y: -4, transition: { duration: 0.2 } }}
-            className={cn(
-                "group relative enterprise-card p-6 md:p-8 transition-all duration-300",
-                alert && "after:absolute after:inset-0 after:rounded-xl after:ring-1 after:ring-primary/40 after:animate-pulse"
-            )}
+            className="bg-card border border-border rounded-xl p-4 sm:p-5"
         >
-            <div className="flex justify-between items-start mb-6">
-                <div className="h-10 w-10 bg-muted border border-border rounded-lg flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:border-primary/30 transition-all duration-300">
+            <div className="flex items-center justify-between mb-3">
+                <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center", colorClasses[color])}>
                     {icon}
                 </div>
-                {alert && <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />}
             </div>
-            
-            <div className="space-y-1.5">
-                <span className="text-[11px] uppercase font-bold tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">{label}</span>
-                <div className="flex items-end gap-3">
-                    <span className="text-3xl font-black tracking-tight text-foreground font-heading tabular-nums">{value}</span>
-                </div>
-                
-                <div className="flex items-center gap-3 pt-4 border-t border-border mt-4">
-                    {trend && (
-                        <span className={cn(
-                            "flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest", 
-                            trendUp ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-muted text-muted-foreground border border-border"
-                        )}>
-                            {trend}
-                        </span>
-                    )}
-                    <span className="text-muted-foreground/60 text-[10px] font-bold uppercase tracking-wider">{subtext}</span>
-                </div>
-            </div>
+            <p className="text-2xl sm:text-3xl font-bold text-foreground">{value}</p>
+            <p className="text-sm text-muted-foreground mt-1">{label}</p>
         </motion.div>
     );
 }
 
-function StatusIndicator({ status }: { status: string }) {
-    const config: any = {
-        active: { label: "Being Edited", color: "text-blue-400", bg: "bg-blue-400/5", border: "border-blue-400/20" },
-        in_review: { label: "Ready for Review", color: "text-purple-400", bg: "bg-purple-400/5", border: "border-purple-400/20" },
-        pending_assignment: { label: "Finding an Editor", color: "text-amber-400", bg: "bg-amber-400/5", border: "border-amber-400/20" },
-        approved: { label: "Approved", color: "text-emerald-400", bg: "bg-emerald-400/5", border: "border-emerald-400/20" },
-        completed: { label: "Completed", color: "text-muted-foreground", bg: "bg-zinc-500/5", border: "border-zinc-500/20" },
+// Project Status Badge Component
+function ProjectStatus({ status }: { status: string }) {
+    const config: Record<string, { label: string; className: string }> = {
+        pending: { label: 'Pending', className: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20' },
+        assigned: { label: 'Assigned', className: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+        active: { label: 'In Progress', className: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
+        in_review: { label: 'In Review', className: 'bg-purple-500/10 text-purple-500 border-purple-500/20' },
+        revision: { label: 'Revision', className: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
+        completed: { label: 'Completed', className: 'bg-green-500/10 text-green-500 border-green-500/20' },
+        approved: { label: 'Approved', className: 'bg-green-500/10 text-green-500 border-green-500/20' },
+        delivered: { label: 'Delivered', className: 'bg-green-500/10 text-green-500 border-green-500/20' }
     };
-    const s = config[status] || config.completed;
+
+    const { label, className } = config[status] || { label: status, className: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20' };
+
     return (
-        <span className={cn(
-            "inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-sm transition-all", 
-            s.bg, s.color, s.border
-        )}>
-            <div className={cn("w-1 h-1 rounded-full bg-current", status === 'active' && "animate-pulse shadow-[0_0_5px_currentColor]")} />
-            {s.label}
+        <span className={cn("inline-flex px-2.5 py-1 text-xs font-medium rounded-full border", className)}>
+            {label}
         </span>
     );
 }

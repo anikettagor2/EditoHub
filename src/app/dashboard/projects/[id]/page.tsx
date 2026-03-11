@@ -202,6 +202,58 @@ export default function ProjectDetailsPage() {
     const [isSubmittingRating, setIsSubmittingRating] = useState(false);
     const [pendingDownloadId, setPendingDownloadId] = useState<string | null>(null);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [assignmentTimeRemaining, setAssignmentTimeRemaining] = useState<number | null>(null);
+    const [isAssignmentExpired, setIsAssignmentExpired] = useState(false);
+
+    // Countdown timer for editor assignment acceptance
+    useEffect(() => {
+        if (!project) return;
+        
+        const expiresAt = (project as any).assignmentExpiresAt;
+        const isPendingAssignment = project.assignmentStatus === 'pending';
+        const isAssignedToMe = user?.role === 'editor' && project.assignedEditorId === user?.uid;
+        
+        if (!isPendingAssignment || !isAssignedToMe || !expiresAt) {
+            setAssignmentTimeRemaining(null);
+            return;
+        }
+        
+        const calculateTimeRemaining = () => {
+            const now = Date.now();
+            const remaining = expiresAt - now;
+            
+            if (remaining <= 0) {
+                setAssignmentTimeRemaining(0);
+                setIsAssignmentExpired(true);
+                return 0;
+            }
+            
+            setAssignmentTimeRemaining(remaining);
+            setIsAssignmentExpired(false);
+            return remaining;
+        };
+        
+        // Initial calculation
+        calculateTimeRemaining();
+        
+        // Update every second
+        const interval = setInterval(() => {
+            const remaining = calculateTimeRemaining();
+            if (remaining <= 0) {
+                clearInterval(interval);
+            }
+        }, 1000);
+        
+        return () => clearInterval(interval);
+    }, [project, user]);
+
+    // Format time remaining as MM:SS
+    const formatTimeRemaining = (ms: number) => {
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
 
     const initiateDownload = async (revisionId: string) => {
         setIsDownloading(true);
@@ -274,6 +326,14 @@ export default function ProjectDetailsPage() {
 
     const handleAssignmentResponse = async (response: 'accepted' | 'rejected') => {
         if (!id || typeof id !== 'string') return;
+        
+        // Check if assignment has expired
+        if (isAssignmentExpired) {
+            toast.error("This assignment has expired. The 5-minute acceptance window has passed.");
+            router.push('/dashboard');
+            return;
+        }
+        
         let reason: string | undefined;
         if (response === 'rejected') {
             const promptReason = window.prompt("Why are you declining this project? (Required)");
@@ -284,7 +344,18 @@ export default function ProjectDetailsPage() {
             reason = promptReason;
         }
         try {
-            await respondToAssignment(id, response, reason);
+            const result = await respondToAssignment(id, response, reason);
+            
+            if (!result.success) {
+                // Handle server-side expiration check
+                toast.error(result.error || "Failed to process response");
+                if (result.error?.includes('expired')) {
+                    setIsAssignmentExpired(true);
+                    setTimeout(() => router.push('/dashboard'), 2000);
+                }
+                return;
+            }
+            
             setProject(prev => prev ? ({ 
                 ...prev, 
                 assignmentStatus: response,
@@ -323,6 +394,37 @@ export default function ProjectDetailsPage() {
 
     // EDITOR OFFER VIEW
     if (isAssignedEditor && project.assignmentStatus === 'pending') {
+        // Check if expired
+        if (isAssignmentExpired) {
+            return (
+                <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6 mesh-grid">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="max-w-md w-full enterprise-card bg-card p-10 space-y-6 shadow-2xl relative overflow-hidden text-center"
+                    >
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-red-400 to-red-500/40" />
+                        
+                        <div className="mx-auto h-20 w-20 bg-red-500/10 rounded-2xl flex items-center justify-center border border-red-500/20">
+                            <Clock className="h-9 w-9 text-red-500" />
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <h1 className="text-2xl font-heading font-bold text-foreground">Assignment Expired</h1>
+                            <p className="text-muted-foreground">The 5-minute acceptance window has passed for this project.</p>
+                        </div>
+                        
+                        <Link 
+                            href="/dashboard"
+                            className="inline-flex items-center justify-center h-12 px-8 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all"
+                        >
+                            Return to Dashboard
+                        </Link>
+                    </motion.div>
+                </div>
+            );
+        }
+        
         return (
             <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6 mesh-grid">
                 <motion.div 
@@ -331,6 +433,29 @@ export default function ProjectDetailsPage() {
                     className="max-w-xl w-full enterprise-card bg-card p-10 space-y-8 shadow-2xl relative overflow-hidden"
                 >
                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-indigo-400 to-primary/40" />
+                     
+                     {/* Countdown Timer */}
+                     {assignmentTimeRemaining !== null && (
+                         <div className={cn(
+                             "mx-auto w-fit px-6 py-3 rounded-2xl border-2 flex items-center gap-3",
+                             assignmentTimeRemaining < 60000 
+                                 ? "bg-red-500/10 border-red-500/30 text-red-500" 
+                                 : assignmentTimeRemaining < 120000 
+                                     ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                                     : "bg-primary/10 border-primary/30 text-primary"
+                         )}>
+                             <Clock className={cn(
+                                 "h-5 w-5",
+                                 assignmentTimeRemaining < 60000 && "animate-pulse"
+                             )} />
+                             <div className="text-center">
+                                 <p className="text-[9px] font-bold uppercase tracking-widest opacity-70">Time Remaining</p>
+                                 <p className="text-2xl font-black tabular-nums tracking-wider">
+                                     {formatTimeRemaining(assignmentTimeRemaining)}
+                                 </p>
+                             </div>
+                         </div>
+                     )}
                      
                      <div className="text-center space-y-4">
                         <div className="mx-auto h-20 w-20 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 border border-primary/20 shadow-[0_0_20px_rgba(99,102,241,0.2)]">
@@ -586,7 +711,7 @@ export default function ProjectDetailsPage() {
                                     <FileVideo className="h-24 w-24 text-foreground" />
                                 </div>
                                 
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-500 backdrop-blur-sm">
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-500 backdrop-blur-sm">
                                     {showFeedbackTool ? (
                                         <Link href={`/dashboard/projects/${id}/review/${latestRevision.id}`}>
                                             <button className="h-20 w-20 bg-primary  rounded-full flex items-center justify-center hover:scale-110 transition-transform shadow-2xl active:scale-95">
@@ -598,7 +723,7 @@ export default function ProjectDetailsPage() {
                                             <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center border border-border opacity-50">
                                                 <Lock className="h-6 w-6 text-muted-foreground" />
                                             </div>
-                                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 border border-border rounded-lg">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-black/5 dark:bg-black/40 border border-border rounded-lg">
                                                 Awaiting Next Steps
                                             </span>
                                         </div>
@@ -850,7 +975,7 @@ export default function ProjectDetailsPage() {
                                                     value={editorRevenueShare}
                                                     onChange={(e) => setEditorRevenueShare(e.target.value)}
                                                     placeholder="e.g. 5000"
-                                                    className="w-full h-11 bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 border border-border rounded-lg px-4 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
+                                                    className="w-full h-11 bg-black/5 dark:bg-black/40 border border-border rounded-lg px-4 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
                                                 />
                                             </div>
                                             <button 
@@ -1200,7 +1325,7 @@ export default function ProjectDetailsPage() {
                             value={editorReview}
                             onChange={(e) => setEditorReview(e.target.value)}
                             placeholder="Share your thoughts about the video editing quality, speed, and communication..."
-                            className="w-full h-32 bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 border border-border rounded-xl p-4 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors resize-none"
+                            className="w-full h-32 bg-black/5 dark:bg-black/40 border border-border rounded-xl p-4 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors resize-none"
                         />
                     </div>
                     <button
@@ -1225,7 +1350,7 @@ function StatusIndicator({ status }: { status: string }) {
     };
     const c = config[status] || config.active;
     return (
-        <div className={cn("px-4 py-2 rounded-xl border text-[11px] font-black uppercase tracking-[0.1em] bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 dark:bg-black/5 dark:bg-black/40 shadow-lg", c.border, c.text)}>
+        <div className={cn("px-4 py-2 rounded-xl border text-[11px] font-black uppercase tracking-widest bg-black/5 dark:bg-black/40 shadow-lg", c.border, c.text)}>
             <div className="flex items-center gap-2">
                 <div className={cn("h-1.5 w-1.5 rounded-full bg-current", status !== 'completed' && "animate-pulse")} />
                 {c.label}

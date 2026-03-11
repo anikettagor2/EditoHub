@@ -5,59 +5,121 @@ const AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2";
 import { adminDb } from "@/lib/firebase/admin";
 import { Project, User } from "@/types/schema";
 
+// Configuration for retry logic
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
 
 /**
- * Sends a WhatsApp notification via AiSensy
+ * Helper to delay execution
+ */
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Validates and formats phone number for Indian numbers
+ */
+function formatPhoneNumber(phoneNumber: string): { valid: boolean; formatted: string; error?: string } {
+    if (!phoneNumber) {
+        return { valid: false, formatted: '', error: "Phone number is required" };
+    }
+
+    const sanitized = phoneNumber.replace(/\D/g, '');
+    
+    // Handle different formats
+    if (sanitized.length === 10) {
+        // Indian mobile without country code
+        return { valid: true, formatted: `91${sanitized}` };
+    } else if (sanitized.length === 12 && sanitized.startsWith('91')) {
+        // Indian mobile with country code
+        return { valid: true, formatted: sanitized };
+    } else if (sanitized.length === 11 && sanitized.startsWith('0')) {
+        // Indian mobile with leading 0
+        return { valid: true, formatted: `91${sanitized.slice(1)}` };
+    } else if (sanitized.length === 13 && sanitized.startsWith('091')) {
+        // Indian mobile with 0 + country code
+        return { valid: true, formatted: sanitized.slice(1) };
+    }
+    
+    return { valid: false, formatted: '', error: `Invalid phone format: ${phoneNumber}` };
+}
+
+/**
+ * Sends a WhatsApp notification via AiSensy with retry logic
  */
 export async function sendWhatsAppNotification(
     phoneNumber: string,
     params: string[],
-    campaignName: string
-) {
-    console.log(`[WhatsApp] Attempting send to ${phoneNumber} via campaign "${campaignName}"`);
+    campaignName: string,
+    retryCount = 0
+): Promise<{ success: boolean; error?: string; data?: any }> {
+    console.log(`[WhatsApp] Attempting send to ${phoneNumber} via campaign "${campaignName}" (attempt ${retryCount + 1})`);
 
-    const sanitized = phoneNumber.replace(/\D/g, '');
-    let finalPhone = sanitized;
-    if (sanitized.length === 10) {
-        finalPhone = `91${sanitized}`;
-    } else if (sanitized.length === 12 && sanitized.startsWith('91')) {
-        finalPhone = sanitized;
-    } else {
-        console.warn(`[WhatsApp] Invalid phone format: ${phoneNumber}`);
-        return { success: false, error: "Invalid phone format" };
+    // Validate phone number
+    const phoneResult = formatPhoneNumber(phoneNumber);
+    if (!phoneResult.valid) {
+        console.warn(`[WhatsApp] ${phoneResult.error}`);
+        return { success: false, error: phoneResult.error };
     }
 
+    // Check API key
     if (!AISENSY_API_KEY) {
-        console.error("[WhatsApp] AISENSY_API_KEY is missing");
-        return { success: false, error: "Service configuration error" };
+        console.error("[WhatsApp] AISENSY_API_KEY is missing from environment variables");
+        return { success: false, error: "WhatsApp service not configured. Please add AISENSY_API_KEY to environment." };
     }
 
     const payload = {
         apiKey: AISENSY_API_KEY,
         campaignName: campaignName,
-        destination: finalPhone,
-        userName: finalPhone, // Added to fix 'Invalid userName format' error
+        destination: phoneResult.formatted,
+        userName: phoneResult.formatted,
         templateParams: params,
-        source: "API"
+        source: "EditoHub-API"
     };
 
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         const response = await fetch(AISENSY_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
 
+        clearTimeout(timeoutId);
+
         const data = await response.json();
+        
         if (!response.ok) {
             console.error("[WhatsApp] AiSensy Error:", data);
-            return { success: false, error: data.message || "Failed to send WhatsApp" };
+            
+            // Retry on certain errors
+            if (retryCount < MAX_RETRIES && (response.status >= 500 || response.status === 429)) {
+                console.log(`[WhatsApp] Retrying in ${RETRY_DELAY}ms...`);
+                await delay(RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+                return sendWhatsAppNotification(phoneNumber, params, campaignName, retryCount + 1);
+            }
+            
+            return { success: false, error: data.message || `Request failed with status ${response.status}` };
         }
+        
         console.log("[WhatsApp] Success:", data);
         return { success: true, data };
+        
     } catch (error: any) {
         console.error("[WhatsApp] Network Error:", error);
-        return { success: false, error: error.message };
+        
+        // Retry on network errors
+        if (retryCount < MAX_RETRIES && (error.name === 'AbortError' || error.code === 'ECONNRESET')) {
+            console.log(`[WhatsApp] Network error, retrying in ${RETRY_DELAY}ms...`);
+            await delay(RETRY_DELAY * (retryCount + 1));
+            return sendWhatsAppNotification(phoneNumber, params, campaignName, retryCount + 1);
+        }
+        
+        return { success: false, error: error.message || "Network error occurred" };
     }
 }
 

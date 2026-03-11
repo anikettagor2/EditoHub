@@ -52,21 +52,21 @@ export function Navbar() {
                </div>
              ) : (
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center font-black text-[12px] text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]">E</div>
-                    <span className="text-[10px] font-black tracking-[0.2em] text-white uppercase group-hover:text-primary transition-colors">Edito<span className="italic text-primary">Hub</span></span>
+                    <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-sm text-white">E</div>
+                    <span className="text-sm font-semibold text-white">EditoHub</span>
                 </div>
              )}
           </Link>
 
           {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-8 h-full">
+          <div className="hidden md:flex items-center gap-6 h-full">
             {navLinks.map((link) => (
               <div key={link.name} className="relative group h-full flex items-center">
                 <Link
                   href={link.href}
                   className={cn(
-                    "text-[9px] font-black uppercase tracking-[0.2em] transition-all hover:text-primary py-4",
-                    pathname === link.href ? "text-primary" : "text-zinc-400"
+                    "text-sm font-medium transition-all hover:text-white py-4",
+                    pathname === link.href ? "text-white" : "text-zinc-400"
                   )}
                 >
                   {link.name}
@@ -78,14 +78,14 @@ export function Navbar() {
           <div className="flex items-center gap-4 ml-4">
             {user ? (
               <Link href="/dashboard">
-                <button className="flex items-center gap-2 px-5 py-2 bg-white text-black text-[9px] font-black uppercase tracking-widest rounded-full hover:bg-primary hover:text-white transition-all">
-                  Dashboard <ArrowUpRight className="h-3 w-3" />
+                <button className="flex items-center gap-2 px-5 py-2 bg-white text-black text-sm font-medium rounded-full hover:bg-primary hover:text-white transition-all">
+                  Dashboard <ArrowUpRight className="h-4 w-4" />
                 </button>
               </Link>
             ) : (
               <Link href="/login">
-                 <button className="flex items-center gap-2 px-5 py-2 bg-primary text-white text-[9px] font-black uppercase tracking-widest rounded-full hover:brightness-110 transition-all">
-                  Ignite <ArrowUpRight className="h-3 w-3" />
+                 <button className="flex items-center gap-2 px-5 py-2 bg-primary text-white text-sm font-medium rounded-full hover:brightness-110 transition-all">
+                  Get Started <ArrowUpRight className="h-4 w-4" />
                 </button>
               </Link>
             )}
@@ -125,13 +125,13 @@ export function Navbar() {
                 <X className="h-6 w-6" />
               </button>
 
-              <div className="space-y-10">
+              <div className="space-y-6">
                 {navLinks.map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}
                     onClick={() => setIsOpen(false)}
-                    className="block text-4xl font-black uppercase tracking-tighter text-zinc-500 hover:text-white transition-colors"
+                    className="block text-2xl font-semibold text-zinc-400 hover:text-white transition-colors"
                   >
                     {link.name}
                   </Link>
@@ -140,8 +140,8 @@ export function Navbar() {
 
               <div className="mt-auto">
                 <Link href="/login" onClick={() => setIsOpen(false)}>
-                  <button className="w-full py-6 bg-primary text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl shadow-2xl shadow-primary/20">
-                    Get Started Now
+                  <button className="w-full py-4 bg-primary text-white font-semibold text-sm rounded-xl">
+                    Get Started
                   </button>
                 </Link>
               </div>

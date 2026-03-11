@@ -12,7 +12,7 @@ import { FuturisticCTA } from "@/components/futuristic-cta";
 import { CustomCursor } from "@/components/home/custom-cursor";
 import { ImmersiveBackground } from "@/components/home/immersive-background";
 import { EditingTimeline } from "@/components/home/editing-timeline";
-
+// mke the most of the imapoet that we can take the here we as we can so that we can hcome here so that i can mke a oerfract decsion 
 export default function Home() {
   return (
     <LenisProvider>
