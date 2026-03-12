@@ -623,3 +623,237 @@ export async function updateSystemSettings(settings: any) {
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Gets auto-assign settings
+ */
+export async function getAutoAssignSettings() {
+    try {
+        const snap = await adminDb.collection('settings').doc('autoAssign').get();
+        if (!snap.exists) return { success: true, data: { editors: [], globalMaxProjects: 5, isEnabled: true } };
+        return { success: true, data: snap.data() };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Updates auto-assign settings
+ */
+export async function updateAutoAssignSettings(settings: any) {
+    try {
+        await adminDb.collection('settings').doc('autoAssign').set(settings, { merge: true });
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Auto-assigns an editor to a project based on priority and availability
+ * Called when PM selects "Auto Assign" option
+ */
+export async function autoAssignEditor(projectId: string, editorPrice: number, deadline?: string) {
+    try {
+        // 1. Get auto-assign settings
+        const settingsSnap = await adminDb.collection('settings').doc('autoAssign').get();
+        const settings = settingsSnap.data();
+        
+        if (!settings || !settings.isEnabled) {
+            return { success: false, error: "Auto-assign is not enabled" };
+        }
+
+        const editors = settings.editors || [];
+        if (editors.length === 0) {
+            return { success: false, error: "No editors in auto-assign pool" };
+        }
+
+        // 2. Get project data
+        const projectRef = adminDb.collection('projects').doc(projectId);
+        const projectSnap = await projectRef.get();
+        if (!projectSnap.exists) {
+            return { success: false, error: "Project not found" };
+        }
+        const projectData = projectSnap.data();
+
+        // 3. Get all active projects to check workload
+        const projectsSnap = await adminDb.collection('projects')
+            .where('status', 'not-in', ['completed', 'archived'])
+            .get();
+        
+        // Count active projects per editor
+        const editorWorkload: Record<string, number> = {};
+        projectsSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.assignedEditorId) {
+                editorWorkload[data.assignedEditorId] = (editorWorkload[data.assignedEditorId] || 0) + 1;
+            }
+        });
+
+        // 4. Get editor user data for status check
+        const editorIds = editors.map((e: any) => e.editorId);
+        const editorUsersSnap = await adminDb.collection('users')
+            .where(admin.firestore.FieldPath.documentId(), 'in', editorIds)
+            .get();
+        
+        const editorUsers: Record<string, any> = {};
+        editorUsersSnap.docs.forEach(doc => {
+            editorUsers[doc.id] = doc.data();
+        });
+
+        // 5. Sort by priority and find first available editor
+        const sortedEditors = [...editors]
+            .filter((e: any) => e.isActive !== false)
+            .sort((a: any, b: any) => a.priority - b.priority);
+
+        let selectedEditor = null;
+        for (const editorConfig of sortedEditors) {
+            const workload = editorWorkload[editorConfig.editorId] || 0;
+            const maxProjects = editorConfig.maxProjects || settings.globalMaxProjects || 5;
+            const editorUser = editorUsers[editorConfig.editorId];
+
+            // Check availability: not at capacity and not offline
+            if (workload < maxProjects) {
+                // Optional: Check if editor is not offline (if you want strict checking)
+                // const status = editorUser?.availabilityStatus || 'offline';
+                // if (status === 'offline') continue;
+                
+                selectedEditor = {
+                    ...editorConfig,
+                    displayName: editorUser?.displayName || 'Editor'
+                };
+                break;
+            }
+        }
+
+        if (!selectedEditor) {
+            return { success: false, error: "No available editors. All editors are at max capacity." };
+        }
+
+        // 6. Assign the editor (similar to assignEditor function)
+        let members = projectData?.members || [];
+        if (!members.includes(selectedEditor.editorId)) {
+            members.push(selectedEditor.editorId);
+        }
+
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        const updateData: any = {
+            assignedEditorId: selectedEditor.editorId,
+            assignmentStatus: 'pending',
+            assignmentAt: now,
+            assignmentExpiresAt: now + fiveMinutes,
+            status: 'pending_assignment',
+            members: members,
+            editorPrice: editorPrice,
+            autoAssigned: true,
+            updatedAt: now
+        };
+
+        if (deadline) {
+            updateData.deadline = deadline;
+        }
+
+        await projectRef.update(updateData);
+
+        // 7. Add log
+        const pmSnap = await adminDb.collection('users').doc(projectData?.assignedPMId || 'unknown').get();
+        const pmName = pmSnap.exists ? pmSnap.data()?.displayName : 'PM';
+
+        await addProjectLog(
+            projectId,
+            'PROJECT_ASSIGNED',
+            { uid: projectData?.assignedPMId || 'pm', displayName: pmName, designation: 'Project Manager' },
+            `Editor ${selectedEditor.displayName} auto-assigned to project (Priority ${selectedEditor.priority}).`
+        );
+
+        // 8. Send notifications
+        notifyClientEditorAssigned(projectId);
+        notifyEditorProjectAssigned(projectId, selectedEditor.editorId, pmName, deadline);
+
+        revalidatePath('/dashboard');
+        return { 
+            success: true, 
+            editorId: selectedEditor.editorId,
+            editorName: selectedEditor.displayName,
+            priority: selectedEditor.priority
+        };
+    } catch (error: any) {
+        console.error('Auto-assign error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Gets invoice template settings
+ */
+export async function getInvoiceSettings() {
+    try {
+        const snap = await adminDb.collection('settings').doc('invoice').get();
+        if (!snap.exists) {
+            return { 
+                success: true, 
+                data: {
+                    companyName: 'EditoHub Agency',
+                    companyAddress: '123 Creative Studio Blvd\nLos Angeles, CA 90012',
+                    companyEmail: 'billing@editohub.com',
+                    companyPhone: '',
+                    companyLogo: '',
+                    footerText: 'Thank you for your business.',
+                    bankDetails: '',
+                    gstNumber: '',
+                    termsAndConditions: ''
+                }
+            };
+        }
+        return { success: true, data: snap.data() };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Updates invoice template settings
+ */
+export async function updateInvoiceSettings(settings: any) {
+    try {
+        await adminDb.collection('settings').doc('invoice').set({
+            ...settings,
+            updatedAt: Date.now()
+        }, { merge: true });
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Updates an existing invoice
+ */
+export async function updateInvoice(invoiceId: string, data: any) {
+    try {
+        await adminDb.collection('invoices').doc(invoiceId).update({
+            ...data,
+            updatedAt: Date.now()
+        });
+        revalidatePath('/dashboard/invoices');
+        revalidatePath(`/invoices/${invoiceId}`);
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Deletes an invoice
+ */
+export async function deleteInvoice(invoiceId: string) {
+    try {
+        await adminDb.collection('invoices').doc(invoiceId).delete();
+        revalidatePath('/dashboard/invoices');
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}

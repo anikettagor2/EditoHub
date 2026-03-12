@@ -28,7 +28,7 @@ export default function ProjectsPage() {
 
   return (
     <div>
-        {(user.role === 'admin' || user.role === 'project_manager') && <AdminDashboard />}
+        {user.role === 'admin' && <AdminDashboard />}
         {user.role === 'client' && <ClientDashboard />}
         {user.role === 'editor' && <EditorDashboard />}
     </div>

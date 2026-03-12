@@ -1,11 +1,34 @@
 import { Invoice } from "@/types/schema";
 import { format } from "date-fns";
 
-interface InvoiceRendererProps {
-    invoice: Invoice;
+interface InvoiceSettings {
+    companyName?: string;
+    companyAddress?: string;
+    companyEmail?: string;
+    companyPhone?: string;
+    companyLogo?: string;
+    footerText?: string;
+    bankDetails?: string;
+    gstNumber?: string;
+    termsAndConditions?: string;
 }
 
-export function InvoiceRenderer({ invoice }: InvoiceRendererProps) {
+interface InvoiceRendererProps {
+    invoice: Invoice;
+    settings?: InvoiceSettings;
+}
+
+export function InvoiceRenderer({ invoice, settings }: InvoiceRendererProps) {
+    const companyName = settings?.companyName || 'EditoHub Agency';
+    const companyAddress = settings?.companyAddress || '123 Creative Studio Blvd\nLos Angeles, CA 90012';
+    const companyEmail = settings?.companyEmail || 'billing@editohub.com';
+    const companyPhone = settings?.companyPhone || '';
+    const companyLogo = settings?.companyLogo || '';
+    const footerText = settings?.footerText || 'Thank you for your business.';
+    const bankDetails = settings?.bankDetails || '';
+    const gstNumber = settings?.gstNumber || '';
+    const termsAndConditions = settings?.termsAndConditions || '';
+
     return (
         <div id="invoice-print-area" className="bg-white text-black p-10 max-w-[210mm] mx-auto min-h-[297mm] relative shadow-lg print:shadow-none print:p-0 print:m-0 print:w-full print:h-auto print:max-w-none">
             {/* Header */}
@@ -15,10 +38,14 @@ export function InvoiceRenderer({ invoice }: InvoiceRendererProps) {
                     <p className="text-zinc-500 mt-1">#{invoice.invoiceNumber}</p>
                 </div>
                 <div className="text-right">
-                    <h2 className="text-xl font-bold text-zinc-900">EditoHub Agency</h2>
-                    <p className="text-sm text-zinc-500">123 Creative Studio Blvd</p>
-                    <p className="text-sm text-zinc-500">Los Angeles, CA 90012</p>
-                    <p className="text-sm text-zinc-500">billing@editohub.com</p>
+                    {companyLogo ? (
+                        <img src={companyLogo} alt="Company Logo" className="h-16 w-auto object-contain ml-auto mb-2" />
+                    ) : null}
+                    <h2 className="text-xl font-bold text-zinc-900">{companyName}</h2>
+                    <p className="text-sm text-zinc-500 whitespace-pre-line">{companyAddress}</p>
+                    <p className="text-sm text-zinc-500">{companyEmail}</p>
+                    {companyPhone && <p className="text-sm text-zinc-500">{companyPhone}</p>}
+                    {gstNumber && <p className="text-sm text-zinc-500 mt-1">GST: {gstNumber}</p>}
                 </div>
             </div>
 
@@ -75,7 +102,7 @@ export function InvoiceRenderer({ invoice }: InvoiceRendererProps) {
                     </div>
                     {invoice.tax && invoice.tax > 0 && (
                         <div className="flex justify-between text-zinc-500">
-                            <span>Tax</span>
+                            <span>Tax ({invoice.tax}%)</span>
                             <span>₹{((invoice.subtotal * invoice.tax) / 100).toLocaleString()}</span>
                         </div>
                     )}
@@ -86,17 +113,33 @@ export function InvoiceRenderer({ invoice }: InvoiceRendererProps) {
                 </div>
             </div>
 
+            {/* Bank Details */}
+            {bankDetails && (
+                <div className="bg-zinc-50 p-6 rounded-lg mb-4 print:bg-transparent print:p-4 print:border print:border-zinc-200 print:rounded-none">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Bank Details</h3>
+                    <p className="text-zinc-600 text-sm whitespace-pre-wrap">{bankDetails}</p>
+                </div>
+            )}
+
             {/* Notes */}
             {invoice.notes && (
-                <div className="bg-zinc-50 p-6 rounded-lg mb-8 print:bg-transparent print:p-0 print:border-t print:border-zinc-200 print:rounded-none">
+                <div className="bg-zinc-50 p-6 rounded-lg mb-4 print:bg-transparent print:p-4 print:border print:border-zinc-200 print:rounded-none">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Notes</h3>
                     <p className="text-zinc-600 text-sm whitespace-pre-wrap">{invoice.notes}</p>
                 </div>
             )}
 
+            {/* Terms & Conditions */}
+            {termsAndConditions && (
+                <div className="bg-zinc-50 p-6 rounded-lg mb-8 print:bg-transparent print:p-4 print:border print:border-zinc-200 print:rounded-none">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Terms & Conditions</h3>
+                    <p className="text-zinc-600 text-sm whitespace-pre-wrap">{termsAndConditions}</p>
+                </div>
+            )}
+
             {/* Footer */}
             <div className="absolute bottom-10 left-10 right-10 text-center text-xs text-zinc-400 print:bottom-0">
-                <p>Thank you for your business. Please contact billing@editohub.com for any questions.</p>
+                <p>{footerText} Please contact {companyEmail} for any questions.</p>
             </div>
         </div>
     );

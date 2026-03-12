@@ -20,6 +20,8 @@ import {
   Cpu,
   Upload,
   Loader2,
+  Zap,
+  ReceiptText,
 } from "lucide-react";
 import { useAuth } from "@/lib/context/auth-context";
 import { motion } from "framer-motion";
@@ -118,14 +120,15 @@ export function DashboardSidebar() {
         return [
           { href: "/dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
           { href: "/dashboard/users", label: "Users", icon: Users },
+          { href: "/dashboard/auto-assign", label: "Auto Assign", icon: Zap },
           { href: "/dashboard/invoices", label: "Invoices", icon: FileText },
+          { href: "/dashboard/invoice-settings", label: "Invoice Settings", icon: ReceiptText },
           { href: "/dashboard/settings", label: "Settings", icon: Settings },
         ];
       case 'project_manager':
         return [
           { href: "/dashboard", label: "PM Dashboard", icon: Cpu },
           { href: "/dashboard/team", label: "Team Management", icon: Users },
-          { href: "/dashboard/projects", label: "All Projects", icon: FolderOpen },
           { href: "/dashboard/invoices", label: "Invoices", icon: FileText },
           { href: "/dashboard/settings", label: "Settings", icon: Settings },
         ];

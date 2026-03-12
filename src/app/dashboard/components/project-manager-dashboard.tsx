@@ -29,13 +29,15 @@ import {
     Settings,
     ChevronRight,
     Download,
-    Star
+    Star,
+    Sparkles
 } from "lucide-react";
 import { db } from "@/lib/firebase/config";
 import { collection, query, orderBy, onSnapshot, updateDoc, doc, where } from "firebase/firestore";
 import { Project, User } from "@/types/schema";
 import { 
     assignEditor,
+    autoAssignEditor,
     setEditorPrice, 
     toggleProjectAutoPay,
     settleProjectPayment,
@@ -162,6 +164,7 @@ export function ProjectManagerDashboard() {
     const [isManageModalOpen, setIsManageModalOpen] = useState(false);
     const [editorPriceInput, setEditorPriceInput] = useState("");
     const [assignDeadline, setAssignDeadline] = useState("");
+    const [isAutoAssigning, setIsAutoAssigning] = useState(false);
     
     // Project Detail Modal
     const [inspectProject, setInspectProject] = useState<Project | null>(null);
@@ -217,6 +220,37 @@ export function ProjectManagerDashboard() {
             }
         } catch (err) { 
             toast.error("Something went wrong. Please try again."); 
+        }
+    };
+
+    const handleAutoAssign = async () => {
+        if (!selectedProject) return;
+        if (!editorPriceInput || isNaN(Number(editorPriceInput)) || Number(editorPriceInput) <= 0) {
+            toast.error("Please enter a valid editor payment amount.");
+            return;
+        }
+
+        if (Number(editorPriceInput) > (selectedProject.totalCost || 0)) {
+            toast.error(`Editor payment cannot exceed project cost (₹${selectedProject.totalCost || 0}).`);
+            return;
+        }
+
+        setIsAutoAssigning(true);
+        try {
+            const res = await autoAssignEditor(selectedProject.id, Number(editorPriceInput), assignDeadline);
+            if (res.success) {
+                toast.success(`Auto-assigned to ${res.editorName} (Priority ${res.priority})`);
+                setIsAssignModalOpen(false);
+                setSelectedProject(null);
+                setEditorPriceInput("");
+                setAssignDeadline("");
+            } else {
+                toast.error(res.error || "Auto-assign failed");
+            }
+        } catch (err) {
+            toast.error("Something went wrong. Please try again.");
+        } finally {
+            setIsAutoAssigning(false);
         }
     };
 
@@ -818,6 +852,48 @@ export function ProjectManagerDashboard() {
                                 className="w-full h-11 px-4 rounded-xl bg-muted/50 border border-border focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium transition-all"
                             />
                         </div>
+                    </div>
+
+                    {/* Auto Assign Option */}
+                    <div className="relative overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-5">
+                        <div className="absolute top-0 right-0 p-3 opacity-30">
+                            <Sparkles className="w-16 h-16 text-primary" />
+                        </div>
+                        <div className="relative z-10 flex items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <Zap className="w-5 h-5 text-primary" />
+                                    <h3 className="font-bold text-foreground">Auto Assign</h3>
+                                </div>
+                                <p className="text-xs text-muted-foreground max-w-sm">
+                                    Automatically assign to the best available editor based on priority and workload
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleAutoAssign}
+                                disabled={isAutoAssigning || !editorPriceInput}
+                                className="px-6 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
+                            >
+                                {isAutoAssigning ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Finding Best Editor...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Zap className="w-4 h-4" />
+                                        Auto Assign
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* OR Divider */}
+                    <div className="flex items-center gap-4">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">or choose manually</span>
+                        <div className="flex-1 h-px bg-border" />
                     </div>
 
                     {/* Editors List */}

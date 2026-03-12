@@ -154,7 +154,7 @@ function ProjectStatusBadges({ project }: { project: any }) {
 
     // Overall Status
     if (project.status === 'completed' || project.status === 'archived') {
-        badges.push({ label: "Completed", color: "text-muted-foreground", bg: "bg-zinc-500/10", border: "border-zinc-500/20" });
+        badges.push({ label: "Completed", color: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-emerald-400/20" });
     } else if (project.status === 'in_review') {
         badges.push({ label: "In Review", color: "text-purple-400", bg: "bg-purple-400/10", border: "border-purple-400/20" });
     } else if (project.status === 'active') {
@@ -211,6 +211,7 @@ export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [projectFilter, setProjectFilter] = useState<'all' | 'completed' | 'active' | 'in_review' | 'pending' | 'pay_later' | 'payment_pending'>('all');
   
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignEditorPrice, setAssignEditorPrice] = useState<string>("");
@@ -545,15 +546,34 @@ export function AdminDashboard() {
 
 
   const filteredProjects = projects.filter(p => {
+      // Text search filter
       const sq = searchQuery.toLowerCase();
-      if (!sq) return true;
-      const editorName = users.find(u => u.uid === p.assignedEditorId)?.displayName?.toLowerCase() || '';
-      const pmName = users.find(u => u.uid === p.assignedPMId)?.displayName?.toLowerCase() || '';
-      return p.name?.toLowerCase().includes(sq) || 
+      const matchesSearch = !sq || 
+             p.name?.toLowerCase().includes(sq) || 
              p.clientName?.toLowerCase().includes(sq) || 
              p.id?.toLowerCase().includes(sq) ||
-             editorName.includes(sq) ||
-             pmName.includes(sq);
+             users.find(u => u.uid === p.assignedEditorId)?.displayName?.toLowerCase().includes(sq) ||
+             users.find(u => u.uid === p.assignedPMId)?.displayName?.toLowerCase().includes(sq);
+      
+      if (!matchesSearch) return false;
+      
+      // Status filter
+      switch (projectFilter) {
+          case 'completed':
+              return p.status === 'completed' || p.status === 'archived';
+          case 'active':
+              return p.status === 'active';
+          case 'in_review':
+              return p.status === 'in_review';
+          case 'pending':
+              return p.status === 'pending_assignment' || !p.assignedEditorId;
+          case 'pay_later':
+              return (p as any).isPayLaterRequest === true || (p as any).paymentOption === 'pay_later';
+          case 'payment_pending':
+              return p.paymentStatus !== 'full_paid' && (p.totalCost || 0) > (p.amountPaid || 0);
+          default:
+              return true;
+      }
   });
 
   const filteredUsers = users.filter(u => {
@@ -728,6 +748,32 @@ export function AdminDashboard() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {activeTab === 'projects' && (
+                        <div className="flex bg-muted/50 border border-border rounded-lg p-1 flex-wrap">
+                            {[
+                                { key: 'all', label: 'All' },
+                                { key: 'active', label: 'Editing' },
+                                { key: 'in_review', label: 'In Review' },
+                                { key: 'pending', label: 'Pending' },
+                                { key: 'completed', label: 'Completed' },
+                                { key: 'pay_later', label: 'Pay Later' },
+                                { key: 'payment_pending', label: 'Payment Due' }
+                            ].map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setProjectFilter(f.key as any)}
+                                    className={cn(
+                                        "px-3 py-1 text-[9px] font-bold uppercase tracking-widest rounded transition-all",
+                                        projectFilter === f.key 
+                                            ? "bg-background text-foreground shadow-sm" 
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     {activeTab === 'users' && (
                          <div className="flex bg-muted/50 border border-border rounded-lg p-1">
                             {['all', 'admin', 'editor', 'client'].map(r => (
@@ -830,6 +876,7 @@ export function AdminDashboard() {
                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Client Name</th>
                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">SE / PM</th>
                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor</th>
                                <th className="px-6 py-4 border-b border-border w-[80px]"></th>
                            </tr>
@@ -860,6 +907,24 @@ export function AdminDashboard() {
                                     </td>
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border"><ProjectStatusBadges project={project} /></td>
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border text-lg font-bold text-foreground tracking-tighter tabular-nums">₹{project.totalCost?.toLocaleString()}</td>
+                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
+                                        <div className="flex flex-col gap-1.5">
+                                            {/* Sales Executive */}
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest w-6">SE</span>
+                                                <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[90px]">
+                                                    {users.find(u => u.uid === project.assignedSEId)?.displayName || '—'}
+                                                </span>
+                                            </div>
+                                            {/* Project Manager */}
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest w-6">PM</span>
+                                                <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[90px]">
+                                                    {project.assignedPMId ? (users.find(u => u.uid === project.assignedPMId)?.displayName || '—') : '—'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
                                    <td className="px-6 py-6">
                                         {project.assignedEditorId ? (
                                             <div className="flex flex-col gap-1.5">

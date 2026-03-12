@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/context/auth-context";
 import { Invoice } from "@/types/schema";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, FileText, ArrowUpRight } from "lucide-react";
+import { Plus, Search, FileText, ArrowUpRight, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
@@ -120,11 +120,20 @@ export default function InvoicesPage() {
                                     <p className="text-sm font-bold text-foreground">₹{invoice.total.toLocaleString()}</p>
                                     <p className="text-xs text-muted-foreground">Total Amount</p>
                                 </div>
-                                <Link href={`/invoices/${invoice.id}`}>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-card">
-                                        <ArrowUpRight className="h-4 w-4" />
-                                    </Button>
-                                </Link>
+                                <div className="flex items-center gap-1">
+                                    {isAdmin && (
+                                        <Link href={`/dashboard/invoices/${invoice.id}/edit`}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-card">
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                        </Link>
+                                    )}
+                                    <Link href={`/invoices/${invoice.id}`}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-card">
+                                            <ArrowUpRight className="h-4 w-4" />
+                                        </Button>
+                                    </Link>
+                                </div>
                             </div>
                         </div>
                     ))}
