@@ -877,13 +877,19 @@ export function AdminDashboard() {
                      >
                         <thead>
                            <tr className="bg-muted/30">
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project Name</th>
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Client Name</th>
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Assignment Flow</th>
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor / Payout</th>
-                               <th className="px-6 py-4 border-b border-border w-[80px]"></th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">S.No</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Type</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Client</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">PM</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Created</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Final Date</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor Share</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Payment</th>
+                               <th className="px-3 py-3 border-b border-border w-[64px]"></th>
                            </tr>
                        </thead>
                        <tbody className="divide-y divide-border">
@@ -895,95 +901,77 @@ export function AdminDashboard() {
                                     transition={{ delay: idx * 0.05 }}
                                     className="hover:bg-muted/50 transition-colors group"
                                >
-                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
-                                        <Link href={`/dashboard/projects/${project.id}`} className="text-base font-bold text-foreground tracking-tight leading-tight hover:text-primary transition-colors cursor-pointer">{project.name}</Link>
-                                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">ID: {project.id.slice(0,12)}</span>
-                                             <span className={cn(
-                                                "text-[8px] px-1.5 py-0.5 rounded uppercase font-bold tracking-widest border",
-                                                (project as any).isPayLaterRequest
+                                    <td className="px-3 py-3 text-xs font-bold text-foreground/80 tabular-nums">{idx + 1}</td>
+                                    <td className="px-3 py-3">
+                                        <Link href={`/dashboard/projects/${project.id}`} className="text-xs font-bold text-foreground hover:text-primary transition-colors block leading-tight">{project.name}</Link>
+                                        <div className="text-[9px] mt-1 text-muted-foreground font-bold uppercase tracking-widest">ID: {project.id.slice(0,10)}</div>
+                                    </td>
+                                    <td className="px-3 py-3 text-xs text-foreground font-semibold whitespace-nowrap">{project.videoType || project.videoFormat || 'N/A'}</td>
+                                    <td className="px-3 py-3 text-xs text-foreground font-semibold whitespace-nowrap">{project.clientName || 'N/A'}</td>
+                                    <td className="px-3 py-3 text-xs text-foreground font-semibold whitespace-nowrap">
+                                        {project.assignedPMId ? (users.find(u => u.uid === project.assignedPMId)?.displayName || 'Unknown PM') : 'Not Assigned'}
+                                    </td>
+                                    <td className="px-3 py-3">
+                                        <span className={cn(
+                                            "text-[9px] px-2 py-1 rounded border uppercase font-bold tracking-widest whitespace-nowrap",
+                                            project.status === 'completed' || project.status === 'approved'
+                                                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                : project.status === 'in_review'
+                                                ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                                                : project.status === 'active'
+                                                ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                                : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                        )}>
+                                            {project.status.replace('_', ' ')}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-3 text-[11px] text-foreground/80 font-semibold whitespace-nowrap" suppressHydrationWarning>
+                                        {project.createdAt ? new Date(project.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                                    </td>
+                                    <td className="px-3 py-3 text-[11px] font-semibold whitespace-nowrap" suppressHydrationWarning>
+                                        {project.clientHasDownloaded
+                                            ? (
+                                                <span className="text-emerald-500">
+                                                    {new Date(project.downloadUnlockedAt || project.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </span>
+                                            )
+                                            : <span className="text-amber-500">Pending</span>
+                                        }
+                                    </td>
+                                    <td className="px-3 py-3 text-xs text-foreground font-semibold whitespace-nowrap">
+                                        {project.assignedEditorId ? (users.find(u => u.uid === project.assignedEditorId)?.displayName || 'Unknown Editor') : 'Not Assigned'}
+                                    </td>
+                                    <td className="px-3 py-3 text-xs font-black text-foreground tabular-nums whitespace-nowrap">₹{(project.totalCost || 0).toLocaleString()}</td>
+                                    <td className="px-3 py-3 text-xs font-black text-blue-400 tabular-nums whitespace-nowrap">₹{(project.editorPrice || 0).toLocaleString()}</td>
+                                    <td className="px-3 py-3">
+                                        <div className="flex flex-col gap-1 min-w-[140px]">
+                                            <span className={cn(
+                                                "text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-widest w-fit",
+                                                project.paymentStatus === 'full_paid'
                                                     ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                    : "bg-red-500/10 text-red-400 border-red-500/20"
+                                            )}>
+                                                Client: {project.paymentStatus === 'full_paid' ? 'Paid' : 'Pending'}
+                                            </span>
+                                            <span className={cn(
+                                                "text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-widest w-fit",
+                                                project.assignedEditorId
+                                                    ? (project.editorPaid ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20")
                                                     : "bg-zinc-500/10 text-muted-foreground border-zinc-500/20"
-                                             )}>
+                                            )}>
+                                                Editor: {project.assignedEditorId ? (project.editorPaid ? 'Paid' : 'Pending') : 'N/A'}
+                                            </span>
+                                            <span className={cn(
+                                                "text-[8px] px-1.5 py-0.5 rounded uppercase font-bold tracking-widest border w-fit",
+                                                (project as any).isPayLaterRequest
+                                                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                                    : "bg-zinc-500/10 text-muted-foreground border-zinc-500/20"
+                                            )}>
                                                 Pay Later {(project as any).isPayLaterRequest ? 'Enabled' : 'Disabled'}
-                                             </span>
-                                         </div>
-                                    </td>
-                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
-                                         <div className="flex items-center gap-2">
-                                             <div className="h-6 w-6 rounded bg-muted border border-border flex items-center justify-center text-[10px] text-muted-foreground font-bold uppercase">{project.clientName?.[0]}</div>
-                                             <span className="text-xs text-foreground font-bold truncate max-w-[100px]">{project.clientName}</span>
-                                         </div>
-                                    </td>
-                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border"><ProjectStatusBadges project={project} /></td>
-                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border text-lg font-bold text-foreground tracking-tighter tabular-nums">₹{project.totalCost?.toLocaleString()}</td>
-                                    <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
-                                        <div className="min-w-[190px] space-y-2 rounded-xl border border-border bg-muted/20 p-3">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Sales Executive</span>
-                                                <span className="text-[11px] text-foreground font-semibold text-right max-w-[120px] truncate">
-                                                    {users.find(u => u.uid === project.assignedSEId)?.displayName || 'Not linked'}
-                                                </span>
-                                            </div>
-                                            <div className="h-px bg-border" />
-                                            <div className="flex items-start justify-between gap-3">
-                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Project Manager</span>
-                                                <span className="text-[11px] text-foreground font-semibold text-right max-w-[120px] truncate">
-                                                    {project.assignedPMId ? (users.find(u => u.uid === project.assignedPMId)?.displayName || 'Unknown PM') : 'Not assigned'}
-                                                </span>
-                                            </div>
+                                            </span>
                                         </div>
                                     </td>
-                                   <td className="px-6 py-6">
-                                        {project.assignedEditorId ? (
-                                            <div className="min-w-[190px] space-y-2 rounded-xl border border-border bg-muted/20 p-3">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="text-foreground/90 text-xs font-bold truncate max-w-[120px]">
-                                                        {users.find(u => u.uid === project.assignedEditorId)?.displayName || 'Unknown Editor'}
-                                                    </span>
-                                                    <span className={cn(
-                                                        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border w-fit transition-all",
-                                                        project.assignmentStatus === 'accepted' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]" :
-                                                        project.assignmentStatus === 'rejected' ? "bg-red-500/10 text-red-500 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]" :
-                                                        "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
-                                                    )}>
-                                                        <div className={cn("w-1 h-1 rounded-full bg-current", project.assignmentStatus === 'pending' && "animate-pulse")} />
-                                                        {project.assignmentStatus || 'AUTHORIZED'}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Editor Payment</span>
-                                                    <span className={cn(
-                                                        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border",
-                                                        project.editorPaid
-                                                            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                                                            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                                    )}>
-                                                        {project.editorPaid ? 'Paid' : 'Pending'}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Payout</span>
-                                                    <span className="text-[11px] font-semibold text-foreground tabular-nums">
-                                                        ₹{(project.editorPrice || 0).toLocaleString()}
-                                                    </span>
-                                                </div>
-                                                {project.assignmentStatus === 'rejected' && project.editorDeclineReason && (
-                                                    <span className="text-[9px] font-medium text-red-400/80 italic max-w-[120px] truncate" title={project.editorDeclineReason}>
-                                                        â€œ{project.editorDeclineReason}â€
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <button 
-                                                onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}
-                                                className="text-amber-500/70 hover:text-amber-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 transition-all group-hover:scale-105"
-                                            >
-                                                <AlertCircle className="w-3.5 h-3.5" /> NOT ASSIGNED
-                                            </button>
-                                        )}
-                                   </td>
-                                   <td className="px-6 py-6 text-right">
+                                   <td className="px-3 py-3 text-right">
                                        <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <button className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-all active:scale-[0.98]"><MoreHorizontal className="h-3.5 w-3.5" /></button>

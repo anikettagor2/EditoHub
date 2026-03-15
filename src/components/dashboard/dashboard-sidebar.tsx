@@ -18,6 +18,7 @@ import {
   Activity,
   Layers,
   Cpu,
+  IndianRupee,
   Upload,
   Loader2,
   Zap,
@@ -129,6 +130,7 @@ export function DashboardSidebar() {
         return [
           { href: "/dashboard", label: "PM Dashboard", icon: Cpu },
           { href: "/dashboard/team", label: "Team Management", icon: Users },
+          { href: "/dashboard/finance", label: "Finance", icon: IndianRupee },
           { href: "/dashboard/invoices", label: "Invoices", icon: FileText },
           { href: "/dashboard/settings", label: "Settings", icon: Settings },
         ];
