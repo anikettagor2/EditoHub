@@ -38,7 +38,7 @@ export default function EditInvoicePage(props: { params: Promise<{ id: string }>
     const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, rate: 0, amount: 0 }]);
     const [taxRate, setTaxRate] = useState(0);
     const [notes, setNotes] = useState("");
-    const [status, setStatus] = useState<'draft' | 'sent' | 'paid' | 'overdue'>('sent');
+    const [status, setStatus] = useState<Invoice['status']>('sent');
 
     useEffect(() => {
         if (user?.role !== 'admin' && user?.role !== 'sales_executive' && user?.role !== 'manager') {
@@ -68,7 +68,7 @@ export default function EditInvoicePage(props: { params: Promise<{ id: string }>
                 setItems(invoice.items);
                 setTaxRate(invoice.tax || 0);
                 setNotes(invoice.notes || "");
-                setStatus(invoice.status);
+                setStatus(invoice.status || 'sent');
 
                 // Fetch clients
                 const q = query(collection(db, "users"), where("role", "==", "client"));
@@ -258,7 +258,7 @@ export default function EditInvoicePage(props: { params: Promise<{ id: string }>
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Invoice Status</h3>
                         <div className="flex gap-2">
-                            {(['draft', 'sent', 'paid', 'overdue'] as const).map(s => (
+                            {(['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const).map(s => (
                                 <button
                                     key={s}
                                     onClick={() => setStatus(s)}
@@ -267,6 +267,7 @@ export default function EditInvoicePage(props: { params: Promise<{ id: string }>
                                         status === s 
                                             ? s === 'paid' ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30"
                                             : s === 'overdue' ? "bg-red-500/20 text-red-500 border border-red-500/30"
+                                            : s === 'cancelled' ? "bg-zinc-500/20 text-zinc-300 border border-zinc-500/30"
                                             : s === 'sent' ? "bg-blue-500/20 text-blue-500 border border-blue-500/30"
                                             : "bg-zinc-500/20 text-zinc-400 border border-zinc-500/30"
                                             : "bg-muted text-muted-foreground border border-transparent hover:border-border"

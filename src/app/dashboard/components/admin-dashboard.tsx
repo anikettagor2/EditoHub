@@ -876,8 +876,8 @@ export function AdminDashboard() {
                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Client Name</th>
                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">SE / PM</th>
-                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor</th>
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Assignment Flow</th>
+                               <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor / Payout</th>
                                <th className="px-6 py-4 border-b border-border w-[80px]"></th>
                            </tr>
                        </thead>
@@ -892,11 +892,16 @@ export function AdminDashboard() {
                                >
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
                                         <Link href={`/dashboard/projects/${project.id}`} className="text-base font-bold text-foreground tracking-tight leading-tight hover:text-primary transition-colors cursor-pointer">{project.name}</Link>
-                                         <div className="flex items-center gap-2 mt-1">
+                                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">ID: {project.id.slice(0,12)}</span>
-                                             {(project as any).isPayLaterRequest && (
-                                                <span className="text-[8px] bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-widest">Deferred Pay</span>
-                                             )}
+                                             <span className={cn(
+                                                "text-[8px] px-1.5 py-0.5 rounded uppercase font-bold tracking-widest border",
+                                                (project as any).isPayLaterRequest
+                                                    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                    : "bg-zinc-500/10 text-muted-foreground border-zinc-500/20"
+                                             )}>
+                                                Pay Later {(project as any).isPayLaterRequest ? 'Enabled' : 'Disabled'}
+                                             </span>
                                          </div>
                                     </td>
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
@@ -908,40 +913,56 @@ export function AdminDashboard() {
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border"><ProjectStatusBadges project={project} /></td>
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border text-lg font-bold text-foreground tracking-tighter tabular-nums">₹{project.totalCost?.toLocaleString()}</td>
                                     <td className="px-6 py-6 border-b border-transparent group-hover:border-border">
-                                        <div className="flex flex-col gap-1.5">
-                                            {/* Sales Executive */}
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest w-6">SE</span>
-                                                <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[90px]">
-                                                    {users.find(u => u.uid === project.assignedSEId)?.displayName || '—'}
+                                        <div className="min-w-[190px] space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Sales Executive</span>
+                                                <span className="text-[11px] text-foreground font-semibold text-right max-w-[120px] truncate">
+                                                    {users.find(u => u.uid === project.assignedSEId)?.displayName || 'Not linked'}
                                                 </span>
                                             </div>
-                                            {/* Project Manager */}
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest w-6">PM</span>
-                                                <span className="text-[10px] text-foreground/80 font-medium truncate max-w-[90px]">
-                                                    {project.assignedPMId ? (users.find(u => u.uid === project.assignedPMId)?.displayName || '—') : '—'}
+                                            <div className="h-px bg-border" />
+                                            <div className="flex items-start justify-between gap-3">
+                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Project Manager</span>
+                                                <span className="text-[11px] text-foreground font-semibold text-right max-w-[120px] truncate">
+                                                    {project.assignedPMId ? (users.find(u => u.uid === project.assignedPMId)?.displayName || 'Unknown PM') : 'Not assigned'}
                                                 </span>
                                             </div>
                                         </div>
                                     </td>
                                    <td className="px-6 py-6">
                                         {project.assignedEditorId ? (
-                                            <div className="flex flex-col gap-1.5">
-                                                <div className="flex items-center gap-2">
+                                            <div className="min-w-[190px] space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+                                                <div className="flex items-center justify-between gap-3">
                                                     <span className="text-foreground/90 text-xs font-bold truncate max-w-[120px]">
                                                         {users.find(u => u.uid === project.assignedEditorId)?.displayName || 'Unknown Editor'}
                                                     </span>
+                                                    <span className={cn(
+                                                        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border w-fit transition-all",
+                                                        project.assignmentStatus === 'accepted' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]" :
+                                                        project.assignmentStatus === 'rejected' ? "bg-red-500/10 text-red-500 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]" :
+                                                        "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                                                    )}>
+                                                        <div className={cn("w-1 h-1 rounded-full bg-current", project.assignmentStatus === 'pending' && "animate-pulse")} />
+                                                        {project.assignmentStatus || 'AUTHORIZED'}
+                                                    </span>
                                                 </div>
-                                                <span className={cn(
-                                                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border w-fit transition-all",
-                                                    project.assignmentStatus === 'accepted' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]" :
-                                                    project.assignmentStatus === 'rejected' ? "bg-red-500/10 text-red-500 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]" :
-                                                    "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
-                                                )}>
-                                                    <div className={cn("w-1 h-1 rounded-full bg-current", project.assignmentStatus === 'pending' && "animate-pulse")} />
-                                                    {project.assignmentStatus || 'AUTHORIZED'}
-                                                </span>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Editor Payment</span>
+                                                    <span className={cn(
+                                                        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold tracking-widest uppercase border",
+                                                        project.editorPaid
+                                                            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                                    )}>
+                                                        {project.editorPaid ? 'Paid' : 'Pending'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Payout</span>
+                                                    <span className="text-[11px] font-semibold text-foreground tabular-nums">
+                                                        ₹{(project.editorPrice || 0).toLocaleString()}
+                                                    </span>
+                                                </div>
                                                 {project.assignmentStatus === 'rejected' && project.editorDeclineReason && (
                                                     <span className="text-[9px] font-medium text-red-400/80 italic max-w-[120px] truncate" title={project.editorDeclineReason}>
                                                         â€œ{project.editorDeclineReason}â€
