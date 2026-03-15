@@ -286,6 +286,25 @@ export function SalesDashboard() {
         }
     };
 
+    const [assigningPM, setAssigningPM] = useState<string | null>(null);
+
+    const handleAssignPM = async (clientId: string, pmId: string) => {
+        if (!pmId) return;
+        setAssigningPM(clientId);
+        try {
+            await updateDoc(doc(db, "users", clientId), {
+                managedByPM: pmId,
+                updatedAt: Date.now()
+            });
+            const pm = projectManagers.find(p => p.uid === pmId);
+            toast.success(`Assigned ${pm?.displayName || 'PM'} to client`);
+        } catch (err) {
+            toast.error("Failed to assign project manager");
+        } finally {
+            setAssigningPM(null);
+        }
+    };
+
     const handleRequestDeletion = async (uid: string) => {
         if (!confirm("Are you sure you want to request deletion of this client?")) return;
         try {
@@ -659,9 +678,24 @@ export function SalesDashboard() {
                                                     {(() => {
                                                         const pm = projectManagers.find(p => p.uid === client.managedByPM);
                                                         if (!pm) return (
-                                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
-                                                                <UserCog className="h-3 w-3" /> Not assigned
-                                                            </span>
+                                                            <div className="relative">
+                                                                <select
+                                                                    defaultValue=""
+                                                                    disabled={assigningPM === client.id}
+                                                                    onChange={(e) => handleAssignPM(client.id, e.target.value)}
+                                                                    className="appearance-none h-8 pl-3 pr-8 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 text-xs font-medium text-amber-500 focus:outline-none focus:border-amber-500/70 cursor-pointer disabled:opacity-50 transition-colors hover:border-amber-500/60"
+                                                                >
+                                                                    <option value="" disabled>
+                                                                        {assigningPM === client.id ? 'Assigning...' : '+ Assign PM'}
+                                                                    </option>
+                                                                    {projectManagers.map(p => (
+                                                                        <option key={p.uid} value={p.uid}>
+                                                                            {p.displayName}{p.availabilityStatus === 'online' ? ' ●' : p.availabilityStatus === 'sleep' ? ' ◐' : ' ○'}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-amber-500 pointer-events-none" />
+                                                            </div>
                                                         );
                                                         const statusIcon = pm.availabilityStatus === 'online'
                                                             ? <Wifi className="h-3 w-3 text-emerald-500" />
