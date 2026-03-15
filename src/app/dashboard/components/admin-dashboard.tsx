@@ -590,6 +590,11 @@ export function AdminDashboard() {
       return uPending >= (u.creditLimit || 5000);
   });
 
+  const adminTransactions = projects
+      .flatMap(project => (project.logs || []).map(log => ({ project, log })))
+      .filter(({ log }) => ['PAYMENT_SETTLED', 'PAYMENT_MARKED'].includes(log.event))
+      .sort((a, b) => b.log.timestamp - a.log.timestamp);
+
   return (
     <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
        {clientsOverLimit.length > 0 && (
@@ -1934,6 +1939,60 @@ export function AdminDashboard() {
                                 icon={<Calendar className="h-4 w-4" />}
                                 subtext="Recent activity"
                             />
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 px-1">
+                                <div className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">All Transaction History</h3>
+                            </div>
+                            <div className="enterprise-card bg-muted/50 border border-border rounded-xl overflow-hidden">
+                                <div className="p-4 md:p-5 border-b border-border bg-muted/40 flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-foreground">Settlement Ledger</h4>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">All payment settlements across projects</p>
+                                    </div>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{adminTransactions.length} Transactions</span>
+                                </div>
+
+                                <div className="max-h-[320px] overflow-y-auto custom-scrollbar divide-y divide-border bg-card/40">
+                                    {adminTransactions.length === 0 ? (
+                                        <div className="p-8 text-center text-muted-foreground text-xs font-bold uppercase tracking-widest">
+                                            No payment transactions found
+                                        </div>
+                                    ) : adminTransactions.map(({ project, log }) => {
+                                        const amount = log.event === 'PAYMENT_SETTLED' ? (project.totalCost || 0) : (project.editorPrice || 0);
+                                        const label = log.event === 'PAYMENT_SETTLED' ? 'Client Payment Settled' : 'Editor Payout Settled';
+                                        const badgeClass = log.event === 'PAYMENT_SETTLED'
+                                            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                            : 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+
+                                        return (
+                                            <div key={`${project.id}-${log.timestamp}-${log.event}`} className="p-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/50 transition-colors">
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-bold text-foreground hover:text-primary transition-colors truncate">
+                                                            {project.name}
+                                                        </Link>
+                                                        <span className={cn('text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 border rounded', badgeClass)}>{label}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1 text-[9px] text-muted-foreground font-bold uppercase tracking-widest flex-wrap">
+                                                        <span>ID: {project.id.slice(0,8)}</span>
+                                                        <div className="h-1 w-1 rounded-full bg-muted-foreground" />
+                                                        <span>By: {log.userName || 'System'}</span>
+                                                        <div className="h-1 w-1 rounded-full bg-muted-foreground" />
+                                                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-sm font-black text-foreground tabular-nums">₹{amount.toLocaleString()}</div>
+                                                    <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">{(log as any).designation || 'System'}</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                         
                         <div className="grid gap-8">
