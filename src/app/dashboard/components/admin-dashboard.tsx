@@ -1515,153 +1515,129 @@ export function AdminDashboard() {
                             </p>
                         </div>
 
-                        {/* Campaign Status Overview */}
+                        {/* ── Campaign Status Panel ────────────────────────────── */}
                         {(() => {
-                            const globalEnabled = whatsappTemplates.enabled !== false;
-                            const notifs = whatsappTemplates.notifications || {};
+                            const globalOn = whatsappTemplates.enabled !== false;
 
                             const campaigns = [
                                 {
+                                    key: 'CLIENT',
                                     label: 'Client Campaign',
-                                    role: 'Clients',
-                                    icon: Users,
                                     color: 'blue',
-                                    campaignKey: 'client',
-                                    defaultName: 'CLIENT',
-                                    keys: [
-                                        'client_project_created', 'client_pm_assigned', 'client_editor_assigned',
-                                        'client_editor_accepted', 'client_draft_submitted', 'client_new_comment', 'client_project_completed'
+                                    icon: <Users className="h-4 w-4" />,
+                                    notifications: [
+                                        { key: 'client_project_created',   label: 'Project Created' },
+                                        { key: 'client_pm_assigned',        label: 'PM Assigned' },
+                                        { key: 'client_editor_assigned',    label: 'Editor Assigned' },
+                                        { key: 'client_editor_accepted',    label: 'Production Started' },
+                                        { key: 'client_draft_submitted',    label: 'Draft Ready' },
+                                        { key: 'client_new_comment',        label: 'New Comment' },
+                                        { key: 'client_project_completed',  label: 'Project Completed' },
                                     ],
                                 },
                                 {
+                                    key: 'EDITOR',
                                     label: 'Editor Campaign',
-                                    role: 'Editors',
-                                    icon: Film,
                                     color: 'green',
-                                    campaignKey: 'editor',
-                                    defaultName: 'EDITOR',
-                                    keys: ['editor_project_assigned', 'editor_new_comment', 'editor_feedback_received'],
+                                    icon: <Film className="h-4 w-4" />,
+                                    notifications: [
+                                        { key: 'editor_project_assigned',   label: 'New Assignment' },
+                                        { key: 'editor_new_comment',        label: 'New Comment' },
+                                        { key: 'editor_feedback_received',  label: 'Feedback Received' },
+                                    ],
                                 },
                                 {
+                                    key: 'PROJECT_MANAGER',
                                     label: 'PM Campaign',
-                                    role: 'Project Managers',
-                                    icon: Briefcase,
                                     color: 'purple',
-                                    campaignKey: 'pm',
-                                    defaultName: 'PROJECT_MANAGER',
-                                    keys: ['pm_project_assigned', 'pm_editor_accepted', 'pm_editor_rejected', 'pm_new_comment', 'pm_project_completed'],
+                                    icon: <Briefcase className="h-4 w-4" />,
+                                    notifications: [
+                                        { key: 'pm_project_assigned',       label: 'New Project' },
+                                        { key: 'pm_editor_accepted',        label: 'Editor Accepted' },
+                                        { key: 'pm_editor_rejected',        label: 'Editor Rejected' },
+                                        { key: 'pm_new_comment',            label: 'New Comment' },
+                                        { key: 'pm_project_completed',      label: 'Project Completed' },
+                                    ],
                                 },
                             ];
 
-                            const colorMap: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-                                blue:   { bg: 'bg-blue-500/10',   text: 'text-blue-400',   border: 'border-blue-500/20',   dot: 'bg-blue-400' },
-                                green:  { bg: 'bg-emerald-500/10',text: 'text-emerald-400',border: 'border-emerald-500/20',dot: 'bg-emerald-400' },
-                                purple: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20', dot: 'bg-purple-400' },
+                            const colorMap: Record<string, { bg: string; text: string; border: string; dot: string; badgeOn: string; badgeOff: string }> = {
+                                blue:   { bg: 'bg-blue-500/10',   text: 'text-blue-400',   border: 'border-blue-500/20',   dot: 'bg-blue-400',   badgeOn: 'bg-blue-500/15 text-blue-400 border-blue-500/25',   badgeOff: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20' },
+                                green:  { bg: 'bg-green-500/10',  text: 'text-green-400',  border: 'border-green-500/20',  dot: 'bg-green-400',  badgeOn: 'bg-green-500/15 text-green-400 border-green-500/25',  badgeOff: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20' },
+                                purple: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20', dot: 'bg-purple-400', badgeOn: 'bg-purple-500/15 text-purple-400 border-purple-500/25', badgeOff: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20' },
                             };
 
                             return (
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2 px-1">
-                                        <Activity className="h-4 w-4 text-primary" />
-                                        Campaign Status
-                                        <span className={cn(
-                                            "ml-auto inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border",
-                                            globalEnabled
-                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                                : "bg-red-500/10 text-red-400 border-red-500/20"
+                                <div className="rounded-2xl border border-border bg-muted/20 overflow-hidden">
+                                    {/* Header */}
+                                    <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/40">
+                                        <div className="flex items-center gap-2.5">
+                                            <Activity className="h-4 w-4 text-primary" />
+                                            <span className="text-sm font-bold text-foreground">Campaign Status</span>
+                                            <span className="text-[9px] font-mono text-muted-foreground bg-card border border-border px-2 py-0.5 rounded">AiSensy</span>
+                                        </div>
+                                        <div className={cn(
+                                            "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
+                                            globalOn
+                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+                                                : "bg-red-500/10 text-red-400 border-red-500/25"
                                         )}>
-                                            <span className={cn("w-1.5 h-1.5 rounded-full", globalEnabled ? "bg-emerald-400 animate-pulse" : "bg-red-400")} />
-                                            {globalEnabled ? 'Service Active' : 'Service Paused'}
-                                        </span>
-                                    </h3>
+                                            <div className={cn("w-1.5 h-1.5 rounded-full", globalOn ? "bg-emerald-400 animate-pulse" : "bg-red-400")} />
+                                            {globalOn ? 'Active' : 'Paused'}
+                                        </div>
+                                    </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        {campaigns.map((c) => {
-                                            const C = c.icon;
-                                            const col = colorMap[c.color];
-                                            const enabledCount = c.keys.filter(k => notifs[k]?.enabled !== false).length;
-                                            const total = c.keys.length;
-                                            const allOn = enabledCount === total;
-                                            const noneOn = enabledCount === 0;
-                                            const campaignName = whatsappTemplates.campaigns?.[c.campaignKey] || c.defaultName;
+                                    {/* Campaign Cards */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border">
+                                        {campaigns.map(campaign => {
+                                            const c = colorMap[campaign.color];
+                                            const enabledCount = campaign.notifications.filter(n => whatsappTemplates.notifications?.[n.key]?.enabled !== false).length;
+                                            const total = campaign.notifications.length;
+                                            const allOn = globalOn && enabledCount === total;
+                                            const someOff = enabledCount < total;
 
                                             return (
-                                                <div key={c.label} className={cn(
-                                                    "rounded-2xl border p-4 space-y-3 transition-all",
-                                                    globalEnabled && enabledCount > 0
-                                                        ? `${col.border} bg-muted/30`
-                                                        : "border-border bg-muted/20 opacity-70"
-                                                )}>
-                                                    {/* Header */}
+                                                <div key={campaign.key} className="p-5 space-y-4">
+                                                    {/* Campaign Info */}
                                                     <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", col.bg)}>
-                                                                <C className={cn("h-4 w-4", col.text)} />
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", c.bg, c.text)}>
+                                                                {campaign.icon}
                                                             </div>
                                                             <div>
-                                                                <p className="text-xs font-bold text-foreground leading-tight">{c.label}</p>
-                                                                <p className="text-[9px] text-muted-foreground">{c.role}</p>
+                                                                <p className="text-xs font-bold text-foreground leading-tight">{campaign.label}</p>
+                                                                <p className="text-[9px] font-mono text-muted-foreground">{campaign.key}</p>
                                                             </div>
                                                         </div>
-                                                        <span className={cn(
-                                                            "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border",
-                                                            globalEnabled && !noneOn
-                                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                                                : "bg-zinc-500/10 text-muted-foreground border-zinc-700"
-                                                        )}>
-                                                            {globalEnabled && !noneOn ? 'Active' : 'Inactive'}
-                                                        </span>
+                                                        <div className="text-right">
+                                                            <span className={cn("text-lg font-black tabular-nums", c.text)}>{enabledCount}</span>
+                                                            <span className="text-xs text-muted-foreground">/{total}</span>
+                                                            <p className="text-[9px] text-muted-foreground uppercase tracking-widest">active</p>
+                                                        </div>
                                                     </div>
 
-                                                    {/* AiSensy Campaign Name */}
-                                                    <div className="flex items-center gap-2 bg-black/20 rounded-lg px-2 py-1.5">
-                                                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold shrink-0">Campaign</span>
-                                                        <input
-                                                            className="flex-1 bg-transparent text-[10px] font-mono text-primary/80 outline-none min-w-0"
-                                                            value={campaignName}
-                                                            onChange={(e) => setWhatsappTemplates({
-                                                                ...whatsappTemplates,
-                                                                campaigns: {
-                                                                    ...whatsappTemplates.campaigns,
-                                                                    [c.campaignKey]: e.target.value
-                                                                }
-                                                            })}
-                                                            placeholder={c.defaultName}
+                                                    {/* Progress bar */}
+                                                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                                        <div
+                                                            className={cn("h-full rounded-full transition-all", c.dot)}
+                                                            style={{ width: `${(enabledCount / total) * 100}%` }}
                                                         />
                                                     </div>
 
-                                                    {/* Progress Bar */}
-                                                    <div className="space-y-1.5">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Messages Enabled</span>
-                                                            <span className="text-[10px] font-bold text-foreground tabular-nums">{enabledCount}/{total}</span>
-                                                        </div>
-                                                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                                                            <div
-                                                                className={cn("h-full rounded-full transition-all", col.dot)}
-                                                                style={{ width: `${(enabledCount / total) * 100}%` }}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Per-message status dots */}
+                                                    {/* Per-notification pills */}
                                                     <div className="flex flex-wrap gap-1.5">
-                                                        {c.keys.map((k) => {
-                                                            const on = notifs[k]?.enabled !== false;
-                                                            const label = k.replace(/^(client|editor|pm)_/, '').replace(/_/g, ' ');
+                                                        {campaign.notifications.map(n => {
+                                                            const on = globalOn && whatsappTemplates.notifications?.[n.key]?.enabled !== false;
                                                             return (
                                                                 <span
-                                                                    key={k}
-                                                                    title={k}
+                                                                    key={n.key}
                                                                     className={cn(
-                                                                        "inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-md border capitalize",
-                                                                        on
-                                                                            ? `${col.bg} ${col.text} ${col.border}`
-                                                                            : "bg-zinc-800/50 text-zinc-500 border-zinc-700/50"
+                                                                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border tracking-wide",
+                                                                        on ? c.badgeOn : c.badgeOff
                                                                     )}
                                                                 >
-                                                                    <span className={cn("w-1 h-1 rounded-full shrink-0", on ? col.dot : "bg-zinc-600")} />
-                                                                    {label}
+                                                                    <div className={cn("w-1 h-1 rounded-full", on ? c.dot : "bg-zinc-500", on && "animate-pulse")} />
+                                                                    {n.label}
                                                                 </span>
                                                             );
                                                         })}
@@ -1669,6 +1645,26 @@ export function AdminDashboard() {
                                                 </div>
                                             );
                                         })}
+                                    </div>
+
+                                    {/* Footer summary */}
+                                    <div className="px-5 py-3 border-t border-border bg-muted/40 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            {[
+                                                { label: 'Total Campaigns', value: '3' },
+                                                { label: 'Total Triggers', value: `${campaigns.reduce((s, c) => s + c.notifications.length, 0)}` },
+                                                {
+                                                    label: 'Active Triggers',
+                                                    value: `${globalOn ? campaigns.reduce((s, c) => s + c.notifications.filter(n => whatsappTemplates.notifications?.[n.key]?.enabled !== false).length, 0) : 0}`,
+                                                },
+                                            ].map(stat => (
+                                                <div key={stat.label} className="flex items-center gap-1.5">
+                                                    <span className="text-[9px] text-muted-foreground uppercase tracking-widest">{stat.label}:</span>
+                                                    <span className="text-[11px] font-bold text-foreground tabular-nums">{stat.value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <span className="text-[9px] font-mono text-muted-foreground">via backend.aisensy.com</span>
                                     </div>
                                 </div>
                             );
