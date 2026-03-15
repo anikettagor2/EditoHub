@@ -17,7 +17,11 @@ import {
     Key,
     Trash2,
     Clock,
-    CheckCircle2
+    CheckCircle2,
+    UserCog,
+    Wifi,
+    WifiOff,
+    Moon
 } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase/config";
@@ -577,6 +581,7 @@ export function SalesDashboard() {
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Client</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Email</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Password</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Project Manager</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                                         <th className="px-4 py-3 w-12"></th>
                                     </tr>
@@ -584,7 +589,7 @@ export function SalesDashboard() {
                                 <tbody className="divide-y divide-border">
                                     {displayedClients.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} className="px-4 py-16 text-center">
+                                            <td colSpan={6} className="px-4 py-16 text-center">
                                                 <div className="flex flex-col items-center gap-3">
                                                     <Users className="h-10 w-10 text-muted-foreground/30" />
                                                     <p className="text-sm text-muted-foreground">No clients yet</p>
@@ -649,6 +654,45 @@ export function SalesDashboard() {
                                                     )}
                                                 </td>
                                                 
+                                                {/* Project Manager */}
+                                                <td className="px-4 py-4">
+                                                    {(() => {
+                                                        const pm = projectManagers.find(p => p.uid === client.managedByPM);
+                                                        if (!pm) return (
+                                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border">
+                                                                <UserCog className="h-3 w-3" /> Not assigned
+                                                            </span>
+                                                        );
+                                                        const statusIcon = pm.availabilityStatus === 'online'
+                                                            ? <Wifi className="h-3 w-3 text-emerald-500" />
+                                                            : pm.availabilityStatus === 'sleep'
+                                                            ? <Moon className="h-3 w-3 text-amber-400" />
+                                                            : <WifiOff className="h-3 w-3 text-muted-foreground" />;
+                                                        const dotColor = pm.availabilityStatus === 'online'
+                                                            ? 'bg-emerald-500'
+                                                            : pm.availabilityStatus === 'sleep'
+                                                            ? 'bg-amber-400'
+                                                            : 'bg-zinc-500';
+                                                        return (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="relative flex-shrink-0">
+                                                                    <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                                                                        <span className="text-[10px] font-bold text-primary">{pm.displayName?.[0]?.toUpperCase()}</span>
+                                                                    </div>
+                                                                    <span className={cn("absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-background", dotColor)} />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-semibold text-foreground leading-tight">{pm.displayName}</p>
+                                                                    <div className="flex items-center gap-1 mt-0.5">
+                                                                        {statusIcon}
+                                                                        <span className="text-[10px] text-muted-foreground capitalize">{pm.availabilityStatus || 'offline'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </td>
+
                                                 {/* Status */}
                                                 <td className="px-4 py-4">
                                                     {client.isPending ? (
