@@ -158,25 +158,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
       }
 
-      let email = normalizedIdentifier;
+        let email = normalizedIdentifier;
 
-      // Handle Phone Number Login
-      if (!normalizedIdentifier.includes("@")) {
+        // Handle Phone Number or Username Login
+        if (!normalizedIdentifier.includes("@")) {
           try {
               const { collection, query, where, getDocs } = await import("firebase/firestore");
-              const q = query(collection(db, "users"), where("phoneNumber", "==", identifier.trim()));
-              const querySnapshot = await getDocs(q);
-              
-              if (!querySnapshot.empty) {
-                  const userData = querySnapshot.docs[0].data() as User;
-                  if (userData.email) {
-                      email = userData.email;
-                  }
-              } else {
-                  throw new Error("No account found with this phone number.");
+            const rawIdentifier = identifier.trim();
+            const digits = rawIdentifier.replace(/\D/g, '');
+
+            // Try phone lookup first (supports +91XXXXXXXXXX, 91XXXXXXXXXX, XXXXXXXXXX)
+            const phoneCandidates = new Set<string>();
+            if (digits.length >= 10) {
+              const lastTen = digits.slice(-10);
+              phoneCandidates.add(`+91${lastTen}`);
+              phoneCandidates.add(lastTen);
+              phoneCandidates.add(`91${lastTen}`);
+            }
+            phoneCandidates.add(rawIdentifier);
+
+            let resolvedUser: User | null = null;
+
+            for (const candidate of phoneCandidates) {
+              const qPhone = query(collection(db, "users"), where("phoneNumber", "==", candidate));
+              const phoneSnap = await getDocs(qPhone);
+              if (!phoneSnap.empty) {
+                resolvedUser = phoneSnap.docs[0].data() as User;
+                break;
               }
+            }
+
+            // If not phone, treat as username (displayName)
+            if (!resolvedUser) {
+              const qUsername = query(collection(db, "users"), where("displayName", "==", rawIdentifier));
+              const usernameSnap = await getDocs(qUsername);
+              if (!usernameSnap.empty) {
+                resolvedUser = usernameSnap.docs[0].data() as User;
+              }
+            }
+
+            if (resolvedUser?.email) {
+              email = resolvedUser.email.toLowerCase();
+            } else {
+              throw new Error("No account found with this phone number or username.");
+            }
           } catch (err: any) {
-              console.error("Phone number lookup failed", err);
+            console.error("Identifier lookup failed", err);
               throw err;
           }
       }

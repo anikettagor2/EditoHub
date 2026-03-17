@@ -39,10 +39,8 @@ export default function LoginPage() {
   const [touched, setTouched] = useState({ identifier: false, password: false });
 
   // Real-time validation
-  const identifierError = touched.identifier && !identifier.trim() 
-    ? "Email or phone is required" 
-    : touched.identifier && identifier.trim() && !isValidEmail(identifier) && !isValidPhone(identifier)
-    ? "Please enter a valid email or phone number"
+  const identifierError = touched.identifier && !identifier.trim()
+    ? "Email, username or phone is required"
     : null;
   
   const passwordError = touched.password && !password 
@@ -75,11 +73,6 @@ export default function LoginPage() {
       return;
     }
     
-    if (!isValidEmail(identifier) && !isValidPhone(identifier)) {
-      setError("Please enter a valid email or phone number");
-      return;
-    }
-    
     if (password.length < 6) {
       setError("Password must be at least 6 characters");
       return;
@@ -91,11 +84,11 @@ export default function LoginPage() {
       await loginWithEmail(identifier, password);
     } catch (error: any) {
       console.error("Email login failed", error);
-      setError(error.code === "auth/user-not-found" 
-        ? "No account found with this email" 
+      setError(error.code === "auth/user-not-found"
+        ? "No account found with this email, username or phone"
         : error.code === "auth/wrong-password"
         ? "Incorrect password"
-        : "Invalid email or password");
+        : "Invalid credentials");
     } finally {
       setIsLoggingIn(false);
     }
@@ -162,10 +155,10 @@ export default function LoginPage() {
           {/* Email Login Form */}
           <form onSubmit={handleEmailLogin} className="space-y-4">
               <div className="space-y-2">
-                  <Label className="text-foreground/80">Phone Number or Email</Label>
+                    <Label className="text-foreground/80">Email, Username or Phone</Label>
                   <Input 
                       type="text" 
-                      placeholder="Phone or you@example.com"
+                      placeholder="username, phone or you@example.com"
                       className={`bg-black/5 dark:bg-black/40 border-border text-foreground ${identifierError ? 'border-red-500 focus:ring-red-500' : ''}`}
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}

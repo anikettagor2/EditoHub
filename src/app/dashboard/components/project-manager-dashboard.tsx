@@ -1408,6 +1408,29 @@ export function ProjectManagerDashboard() {
                                 </div>
                             )}
 
+                            {/* Client Raw Files */}
+                            <div className="bg-muted/30 border border-border rounded-lg p-4">
+                                <p className="text-xs text-muted-foreground mb-3">Client Raw Files</p>
+                                {inspectProject.rawFiles && inspectProject.rawFiles.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {inspectProject.rawFiles.map((file: any, idx: number) => (
+                                            <a
+                                                key={`${file.url}-${idx}`}
+                                                href={file.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border hover:border-primary/40 transition-colors"
+                                            >
+                                                <span className="text-xs font-medium text-foreground truncate">{file.name || `Raw File ${idx + 1}`}</span>
+                                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground">No raw files uploaded by client yet.</p>
+                                )}
+                            </div>
+
                             {/* Review Button */}
                             <button
                                 onClick={() => handleOpenReview(inspectProject.id)}
