@@ -814,6 +814,15 @@ export function ProjectManagerDashboard() {
                                             
                                             {/* Actions */}
                                             <td className="px-4 py-3">
+                                                <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleOpenReview(project.id)}
+                                                    disabled={reviewLoading}
+                                                    className="h-8 flex items-center gap-1.5 px-3 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors disabled:opacity-50"
+                                                >
+                                                    {reviewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquare className="h-3 w-3" />}
+                                                    Review
+                                                </button>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <button className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
@@ -867,6 +876,7 @@ export function ProjectManagerDashboard() {
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
+                                                </div>
                                             </td>
                                         </motion.tr>
                                     );
