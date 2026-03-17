@@ -1354,18 +1354,6 @@ export function ProjectManagerDashboard() {
                                         </span>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => handleOpenReview(inspectProject.id)}
-                                    disabled={reviewLoading}
-                                    className="shrink-0 flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                                >
-                                    {reviewLoading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <MessageSquare className="h-4 w-4" />
-                                    )}
-                                    Review
-                                </button>
                             </div>
 
                             {/* Specs Grid */}
@@ -1401,6 +1389,20 @@ export function ProjectManagerDashboard() {
                                     </p>
                                 </div>
                             </div>
+
+                            {/* Review Button */}
+                            <button
+                                onClick={() => handleOpenReview(inspectProject.id)}
+                                disabled={reviewLoading}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {reviewLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <MessageSquare className="h-4 w-4" />
+                                )}
+                                Open Review & Comments
+                            </button>
 
                             {/* Description */}
                             {inspectProject.description && (
