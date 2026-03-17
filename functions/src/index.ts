@@ -1,13 +1,43 @@
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import * as path from "path";
+import * as os from "os";
+import * as fs from "fs";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 
 admin.initializeApp();
 
+// Point fluent-ffmpeg at the bundled binary
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
+// ---------------------------------------------------------------------------
+// Helper – run an ffmpeg command and return a Promise
+// ---------------------------------------------------------------------------
+function runFfmpeg(command: ffmpeg.FfmpegCommand): Promise<void> {
+    return new Promise((resolve, reject) => {
+        command.on("end", () => resolve()).on("error", reject).run();
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Helper – download a GCS object to /tmp and return the local path
+// ---------------------------------------------------------------------------
+async function downloadToTmp(gsPath: string): Promise<string> {
+    // gsPath format: "projects/{id}/revisions/{sid}/{filename}"
+    const bucket = admin.storage().bucket();
+    const localPath = path.join(os.tmpdir(), path.basename(gsPath));
+    await bucket.file(gsPath).download({ destination: localPath });
+    return localPath;
+}
+
+// ---------------------------------------------------------------------------
 // Trigger: When a new comment is added
+// ---------------------------------------------------------------------------
 export const onCommentCreated = functions.firestore
     .document("projects/{projectId}/comments/{commentId}")
-    .onCreate(async (snap, context) => {
+    .onCreate(async (snap: any, context: any) => {
         const comment = snap.data();
         const projectId = context.params.projectId;
 
@@ -44,10 +74,12 @@ export const onCommentCreated = functions.firestore
         await batch.commit();
     });
 
+// ---------------------------------------------------------------------------
 // Trigger: When a project status changes
+// ---------------------------------------------------------------------------
 export const onProjectStatusChanged = functions.firestore
     .document("projects/{projectId}")
-    .onUpdate(async (change, context) => {
+    .onUpdate(async (change: any, context: any) => {
         const newData = change.after.data();
         const oldData = change.before.data();
 
@@ -56,3 +88,201 @@ export const onProjectStatusChanged = functions.firestore
             console.log(`Project ${context.params.projectId} status changed to ${newData.status}`);
         }
     });
+
+// ---------------------------------------------------------------------------
+// Trigger: When a new revision is created – generate thumbnail + queue HLS
+// ---------------------------------------------------------------------------
+export const onRevisionCreated = functions
+    .runWith({ timeoutSeconds: 300, memory: "1GB" })
+    .firestore
+    .document("revisions/{revisionId}")
+    .onCreate(async (snap: any, context: any) => {
+        const revisionId = context.params.revisionId;
+        const revision = snap.data();
+        if (!revision?.videoUrl || !revision?.projectId) return;
+
+        const projectId: string = revision.projectId;
+        const videoUrl: string = revision.videoUrl;
+
+        // Create the VideoJob tracking document
+        const jobRef = admin.firestore().collection("video_jobs").doc(revisionId);
+        await jobRef.set({
+            id: revisionId,
+            projectId,
+            revisionId,
+            status: "pending",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        });
+
+        // ── Extract storage path from download URL ──────────────────────────
+        // Firebase Storage download URLs contain the encoded object path after "/o/"
+        let gcsPath: string;
+        try {
+            const urlObj = new URL(videoUrl);
+            // e.g. /v0/b/<bucket>/o/projects%2F...
+            const encoded = urlObj.pathname.split("/o/")[1];
+            gcsPath = decodeURIComponent(encoded);
+        } catch {
+            console.error("Could not parse storage URL:", videoUrl);
+            await jobRef.update({ status: "error", errorMessage: "Invalid video URL", updatedAt: Date.now() });
+            return;
+        }
+
+        // ── Step 1: Generate thumbnail ───────────────────────────────────────
+        await jobRef.update({ status: "processing_thumbnail", updatedAt: Date.now() });
+
+        let localVideo: string | null = null;
+        const localThumb = path.join(os.tmpdir(), `${revisionId}_thumb.jpg`);
+
+        try {
+            localVideo = await downloadToTmp(gcsPath);
+
+            await runFfmpeg(
+                ffmpeg(localVideo)
+                    .seekInput(5)            // seek to 5 seconds
+                    .frames(1)               // capture 1 frame
+                    .outputOptions("-q:v", "3")
+                    .output(localThumb)
+            );
+
+            const thumbGcsPath = `projects/${projectId}/thumbnails/${revisionId}.jpg`;
+            await admin.storage().bucket().upload(localThumb, {
+                destination: thumbGcsPath,
+                metadata: { contentType: "image/jpeg" },
+            });
+
+            const [thumbUrl] = await admin
+                .storage()
+                .bucket()
+                .file(thumbGcsPath)
+                .getSignedUrl({ action: "read", expires: "03-01-2500" });
+
+            await Promise.all([
+                jobRef.update({ status: "thumbnail_done", thumbnailUrl: thumbUrl, updatedAt: Date.now() }),
+                snap.ref.update({ thumbnailUrl: thumbUrl }),
+            ]);
+
+            console.log(`Thumbnail generated for revision ${revisionId}`);
+        } catch (err) {
+            console.error("Thumbnail generation failed:", err);
+            await jobRef.update({
+                status: "error",
+                errorMessage: `Thumbnail failed: ${(err as Error).message}`,
+                updatedAt: Date.now(),
+            });
+            return;
+        } finally {
+            if (localThumb && fs.existsSync(localThumb)) fs.unlinkSync(localThumb);
+        }
+
+        // ── Step 2: HLS Transcode ────────────────────────────────────────────
+        if (!localVideo) return;
+
+        await jobRef.update({ status: "transcoding", updatedAt: Date.now() });
+
+        const hlsOutDir = path.join(os.tmpdir(), `hls_${revisionId}`);
+        fs.mkdirSync(hlsOutDir, { recursive: true });
+
+        // Define renditions: [label, width, height, videoBitrate]
+        const renditions: Array<[string, number, number, string]> = [
+            ["1080p", 1920, 1080, "4000k"],
+            ["720p",  1280, 720,  "2000k"],
+            ["480p",  854,  480,  "1000k"],
+        ];
+
+        const variantPaths: string[] = [];
+
+        try {
+            for (const [label, w, h, vbr] of renditions) {
+                const renditionDir = path.join(hlsOutDir, label);
+                fs.mkdirSync(renditionDir, { recursive: true });
+                const m3u8Path = path.join(renditionDir, "index.m3u8");
+
+                await runFfmpeg(
+                    ffmpeg(localVideo!)
+                        .outputOptions(
+                            "-vf",          `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2`,
+                            "-c:v",         "libx264",
+                            "-b:v",         vbr,
+                            "-c:a",         "aac",
+                            "-b:a",         "128k",
+                            "-hls_time",    "6",
+                            "-hls_list_size", "0",
+                            "-hls_segment_filename", path.join(renditionDir, "seg_%03d.ts"),
+                            "-f",           "hls"
+                        )
+                        .output(m3u8Path)
+                );
+
+                // Upload all segment files and the playlist
+                const segFiles = fs.readdirSync(renditionDir);
+                for (const seg of segFiles) {
+                    const localSeg = path.join(renditionDir, seg);
+                    const gcsSeg = `projects/${projectId}/hls/${revisionId}/${label}/${seg}`;
+                    await admin.storage().bucket().upload(localSeg, {
+                        destination: gcsSeg,
+                        metadata: {
+                            contentType: seg.endsWith(".m3u8")
+                                ? "application/vnd.apple.mpegurl"
+                                : "video/MP2T",
+                        },
+                    });
+                }
+
+                variantPaths.push(`${label}/index.m3u8`);
+            }
+
+            // Build master playlist locally and upload
+            const masterContent = [
+                "#EXTM3U",
+                "#EXT-X-VERSION:3",
+                "",
+                `#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080`,
+                `1080p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720`,
+                `720p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=854x480`,
+                `480p/index.m3u8`,
+            ].join("\n");
+
+            const masterLocalPath = path.join(hlsOutDir, "master.m3u8");
+            fs.writeFileSync(masterLocalPath, masterContent);
+
+            const masterGcsPath = `projects/${projectId}/hls/${revisionId}/master.m3u8`;
+            await admin.storage().bucket().upload(masterLocalPath, {
+                destination: masterGcsPath,
+                metadata: { contentType: "application/vnd.apple.mpegurl" },
+            });
+
+            const [masterUrl] = await admin
+                .storage()
+                .bucket()
+                .file(masterGcsPath)
+                .getSignedUrl({ action: "read", expires: "03-01-2500" });
+
+            await Promise.all([
+                jobRef.update({
+                    status: "ready",
+                    hlsUrl: masterUrl,
+                    resolutions: renditions.map(([label]) => label),
+                    updatedAt: Date.now(),
+                }),
+                snap.ref.update({ hlsUrl: masterUrl }),
+            ]);
+
+            console.log(`HLS transcoding complete for revision ${revisionId}`);
+        } catch (err) {
+            console.error("HLS transcoding failed:", err);
+            await jobRef.update({
+                status: "error",
+                errorMessage: `Transcode failed: ${(err as Error).message}`,
+                updatedAt: Date.now(),
+            });
+        } finally {
+            // Clean up temp files
+            if (localVideo && fs.existsSync(localVideo)) fs.unlinkSync(localVideo);
+            fs.rmSync(hlsOutDir, { recursive: true, force: true });
+        }
+    });
+

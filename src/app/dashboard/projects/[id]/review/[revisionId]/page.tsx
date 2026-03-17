@@ -379,7 +379,7 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
                 {revision && (
                     <VideoPlayer 
                         ref={playerRef}
-                        src={revision.videoUrl} 
+                        src={(revision as any).hlsUrl || revision.videoUrl} 
                         onTimeUpdate={handleTimeUpdate}
                         onDurationChange={setDuration}
                     />

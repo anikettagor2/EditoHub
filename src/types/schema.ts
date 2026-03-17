@@ -237,3 +237,42 @@ export interface ProjectMessage {
     text: string;
     createdAt: number;
 }
+
+export interface UploadSession {
+    sessionId: string;
+    projectId: string;
+    fileName: string;
+    fileSize: number;
+    totalChunks: number;
+    completedChunks: number[];
+    chunkPaths: Record<number, string>;
+    status: 'uploading' | 'assembling' | 'done' | 'error';
+    finalUrl?: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export type VideoJobStatus =
+    | 'pending'
+    | 'processing_thumbnail'
+    | 'thumbnail_done'
+    | 'transcoding'
+    | 'ready'
+    | 'error';
+
+export interface VideoJob {
+    id: string;
+    projectId: string;
+    revisionId: string;
+    sessionId?: string;
+    status: VideoJobStatus;
+    thumbnailUrl?: string;
+    hlsUrl?: string;          // .m3u8 playlist URL
+    resolutions?: string[];   // e.g. ['1080p', '720p', '480p']
+    durationSeconds?: number;
+    widthPx?: number;
+    heightPx?: number;
+    errorMessage?: string;
+    createdAt: number;
+    updatedAt: number;
+}

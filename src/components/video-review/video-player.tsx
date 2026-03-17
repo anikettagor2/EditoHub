@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useRef, useEffect } from "react";
+import Hls from "hls.js";
 
 export interface VideoPlayerHandle {
   seekTo: (time: number) => void;
@@ -17,6 +18,7 @@ interface VideoPlayerProps {
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
   ({ src, onTimeUpdate, onDurationChange }, ref) => {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const hlsRef = useRef<Hls | null>(null);
 
     useImperativeHandle(ref, () => ({
       seekTo: (time: number) => {
@@ -53,10 +55,50 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         };
     }, [onTimeUpdate, onDurationChange]);
 
+    useEffect(() => {
+      const video = videoRef.current;
+      if (!video || !src) return;
+
+      // Cleanup previous hls instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+
+      const isHls = src.endsWith(".m3u8");
+      if (!isHls) {
+        video.src = src;
+        return;
+      }
+
+      // Native HLS (Safari)
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = src;
+        return;
+      }
+
+      // hls.js fallback (Chrome/Firefox/Edge)
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hlsRef.current = hls;
+        hls.loadSource(src);
+        hls.attachMedia(video);
+      } else {
+        // Final fallback
+        video.src = src;
+      }
+
+      return () => {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+      };
+    }, [src]);
+
     return (
       <video 
         ref={videoRef}
-        src={src} 
         controls 
         controlsList="nodownload"
         onContextMenu={(e) => e.preventDefault()}
