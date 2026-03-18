@@ -149,6 +149,32 @@ export default function ProjectDetailsPage() {
         }
     };
 
+    const handleDirectDownload = async (url: string, fileName?: string) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Failed to fetch file");
+
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = fileName || "download";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            // Fallback for CORS-restricted files.
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName || "download";
+            link.target = "_blank";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+    };
+
     useEffect(() => {
         if (!id || typeof id !== 'string' || authLoading) return;
 
@@ -1211,9 +1237,13 @@ export default function ProjectDetailsPage() {
                                                         <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex items-center gap-2">
                                                             <Eye className="h-3.5 w-3.5" /> Preview
                                                         </button>
-                                                        <a href={file.url} download={file.name} target="_blank" className="h-8 w-8 rounded bg-muted hover:bg-zinc-800 flex items-center justify-center text-muted-foreground transition-all">
+                                                        <button
+                                                            onClick={() => handleDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded bg-muted hover:bg-zinc-800 flex items-center justify-center text-muted-foreground transition-all"
+                                                            title="Download file"
+                                                        >
                                                             <Download className="h-3.5 w-3.5" />
-                                                        </a>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1306,16 +1336,13 @@ export default function ProjectDetailsPage() {
                                                                             Preview
                                                                         </button>
                                                                     )}
-                                                                    <a 
-                                                                        href={file.url} 
-                                                                        download={file.name}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
+                                                                    <button 
+                                                                        onClick={() => handleDirectDownload(file.url, file.name)}
                                                                         className="h-8 w-8 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
                                                                         title="Download file"
                                                                     >
                                                                         <Download className="h-3.5 w-3.5" />
-                                                                    </a>
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>
