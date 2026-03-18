@@ -1112,6 +1112,20 @@ export default function NewProjectPage() {
 
                         <div className="bg-[#0b0c0f] border border-border rounded-2xl p-6 md:p-8 space-y-6">
                             <div className="space-y-4">
+                                {availablePrices.length > 1 && (
+                                    <div className="flex justify-between items-center pb-4 border-b border-border bg-amber-500/5 -m-6 p-6 border-b-border">
+                                        <div>
+                                            <span className="text-xs text-muted-foreground font-bold uppercase tracking-widest block mb-1">Selected Pricing Tier</span>
+                                            <span className="text-sm text-amber-600 font-semibold">{availablePrices[selectedPriceIndex].label || `Option ${selectedPriceIndex + 1}`}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setCurrentStep(2)}
+                                            className="text-xs px-3 py-1 rounded-lg border border-amber-500/30 text-amber-600 hover:bg-amber-500/10 transition-colors font-medium"
+                                        >
+                                            Change
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center pb-4 border-b border-border">
                                     <span className="text-sm text-muted-foreground font-bold uppercase tracking-widest">Base Project Cost</span>
                                     <div className="flex items-center font-bold text-foreground">
