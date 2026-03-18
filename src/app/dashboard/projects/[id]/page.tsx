@@ -316,12 +316,10 @@ export default function ProjectDetailsPage() {
         try {
             const res = await registerDownload(id as string, revisionId);
             if (res.success && res.downloadUrl) {
-                const anchor = document.createElement('a');
-                anchor.href = res.downloadUrl;
-                anchor.download = `${project?.name || 'video'}_v${revisions.find(r => r.id===revisionId)?.version || 1}.mp4`;
-                document.body.appendChild(anchor);
-                anchor.click();
-                document.body.removeChild(anchor);
+                await handleDirectDownload(
+                    res.downloadUrl,
+                    `${project?.name || 'video'}_v${revisions.find(r => r.id===revisionId)?.version || 1}.mp4`
+                );
                 toast.success(`Download initiated.`);
                 
                 const isPayLaterMode = user?.payLater || (project as any).isPayLaterRequest;

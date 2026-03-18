@@ -61,6 +61,32 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
 
   const waitingForGuest = useRef(false);
 
+    const directDownload = async (url: string, fileName?: string) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Failed to fetch file");
+
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = blobUrl;
+            anchor.download = fileName || "download";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch {
+            // Fallback for CORS-restricted URLs.
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = fileName || "download";
+            anchor.target = "_blank";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+        }
+    };
+
   useEffect(() => {
     if (!params.id || !params.revisionId) return;
 
@@ -88,7 +114,7 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
           setIsUnlockModalOpen(true);
       } else {
           if (revision?.videoUrl) {
-              window.open(revision.videoUrl, '_blank');
+              directDownload(revision.videoUrl, `${project?.name || 'video'}_v${revision?.version || 1}.mp4`);
           }
       }
   };
@@ -328,8 +354,11 @@ export default function ReviewPage(props: { params: Promise<{ id: string; revisi
                                return;
                            }
                            if (revision) setRevision({ ...revision, downloadCount: (revision.downloadCount || 0) + 1 });
-                           if (res.downloadUrl) window.location.href = res.downloadUrl;
-                           else if (revision?.videoUrl) window.open(revision.videoUrl, '_blank');
+                           if (res.downloadUrl) {
+                               await directDownload(res.downloadUrl, `${project?.name || 'video'}_v${revision?.version || 1}.mp4`);
+                           } else if (revision?.videoUrl) {
+                               await directDownload(revision.videoUrl, `${project?.name || 'video'}_v${revision?.version || 1}.mp4`);
+                           }
                        } catch (e) {
                            toast.error("Download failed.");
                        }

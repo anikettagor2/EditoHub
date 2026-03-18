@@ -393,6 +393,31 @@ export function ProjectManagerDashboard() {
         }
     };
 
+    const handleDirectDownload = async (url: string, fileName?: string) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Failed to fetch file");
+
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = blobUrl;
+            anchor.download = fileName || "download";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch {
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = fileName || "download";
+            anchor.target = "_blank";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+        }
+    };
+
     // Stats calculations
     const unassignedCount = projects.filter(p => !p.assignedEditorId).length;
     const activeCount = projects.filter(p => !['completed', 'approved', 'archived', 'delivered'].includes(p.status)).length;
@@ -1408,16 +1433,19 @@ export function ProjectManagerDashboard() {
                                 {inspectProject.rawFiles && inspectProject.rawFiles.length > 0 ? (
                                     <div className="space-y-2">
                                         {inspectProject.rawFiles.map((file: any, idx: number) => (
-                                            <a
+                                            <div
                                                 key={`${file.url}-${idx}`}
-                                                href={file.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
                                                 className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border hover:border-primary/40 transition-colors"
                                             >
                                                 <span className="text-xs font-medium text-foreground truncate">{file.name || `Raw File ${idx + 1}`}</span>
-                                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                                            </a>
+                                                <button
+                                                    onClick={() => handleDirectDownload(file.url, file.name || `raw-file-${idx + 1}`)}
+                                                    className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
+                                                    title="Download file"
+                                                >
+                                                    <Download className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 ) : (
@@ -1435,11 +1463,8 @@ export function ProjectManagerDashboard() {
                                 {inspectProject.referenceFiles && inspectProject.referenceFiles.length > 0 ? (
                                     <div className="space-y-2 mb-3">
                                         {inspectProject.referenceFiles.map((file: any, idx: number) => (
-                                            <a
+                                            <div
                                                 key={`${file.url}-${idx}`}
-                                                href={file.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
                                                 className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border hover:border-primary/40 transition-colors group"
                                             >
                                                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1451,8 +1476,14 @@ export function ProjectManagerDashboard() {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
-                                            </a>
+                                                <button
+                                                    onClick={() => handleDirectDownload(file.url, file.name || `pm-reference-${idx + 1}`)}
+                                                    className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                    title="Download file"
+                                                >
+                                                    <Download className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 ) : (
