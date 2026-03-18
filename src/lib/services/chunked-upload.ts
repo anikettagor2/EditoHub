@@ -161,28 +161,35 @@ export async function startChunkedUpload(
 
   // ── Load or create Firestore session ──────────────────────────────────────
   const sessionRef = doc(db, "upload_sessions", sessionId);
-  const existingSnap = await getDoc(sessionRef);
+  let canPersistSession = true;
+  let session: PersistedSession = {
+    sessionId,
+    projectId,
+    fileName: file.name,
+    fileSize: file.size,
+    totalChunks,
+    completedChunks: [],
+    chunkPaths: {},
+    status: "uploading",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
 
-  let session: PersistedSession;
-  if (
-    existingSnap.exists() &&
-    (existingSnap.data() as PersistedSession).status === "uploading"
-  ) {
-    session = existingSnap.data() as PersistedSession;
-  } else {
-    session = {
-      sessionId,
-      projectId,
-      fileName: file.name,
-      fileSize: file.size,
-      totalChunks,
-      completedChunks: [],
-      chunkPaths: {},
-      status: "uploading",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    await setDoc(sessionRef, session);
+  try {
+    const existingSnap = await getDoc(sessionRef);
+    if (
+      existingSnap.exists() &&
+      (existingSnap.data() as PersistedSession).status === "uploading"
+    ) {
+      session = existingSnap.data() as PersistedSession;
+    } else {
+      await setDoc(sessionRef, session);
+    }
+  } catch (err) {
+    // If Firestore upload_sessions is blocked by rules, continue without
+    // persistence so draft upload still works.
+    canPersistSession = false;
+    console.warn("upload_sessions persistence unavailable; continuing upload without resume state", err);
   }
 
   const done = new Set<number>(session.completedChunks);
@@ -243,11 +250,18 @@ export async function startChunkedUpload(
     session.completedChunks = [...done];
     session.chunkPaths[chunkIdx] = chunkPath;
 
-    await updateDoc(sessionRef, {
-      completedChunks: session.completedChunks,
-      [`chunkPaths.${chunkIdx}`]: chunkPath,
-      updatedAt: Date.now(),
-    });
+    if (canPersistSession) {
+      try {
+        await updateDoc(sessionRef, {
+          completedChunks: session.completedChunks,
+          [`chunkPaths.${chunkIdx}`]: chunkPath,
+          updatedAt: Date.now(),
+        });
+      } catch (err) {
+        canPersistSession = false;
+        console.warn("Failed to persist chunk state; continuing upload", err);
+      }
+    }
   });
 
   await withConcurrency(uploadFns, MAX_CONCURRENT);
@@ -303,11 +317,17 @@ export async function startChunkedUpload(
       async () => {
         try {
           const url = await getDownloadURL(task.snapshot.ref);
-          await updateDoc(sessionRef, {
-            status: "done",
-            finalUrl: url,
-            updatedAt: Date.now(),
-          });
+          if (canPersistSession) {
+            try {
+              await updateDoc(sessionRef, {
+                status: "done",
+                finalUrl: url,
+                updatedAt: Date.now(),
+              });
+            } catch (err) {
+              console.warn("Failed to persist final upload session state", err);
+            }
+          }
           onProgress({
             overallPct: 100,
             bytesUploaded: file.size,

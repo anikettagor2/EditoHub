@@ -235,7 +235,6 @@ export function AdminDashboard() {
   const [isAddEditorModalOpen, setIsAddEditorModalOpen] = useState(false);
   const [isCreatingEditor, setIsCreatingEditor] = useState(false);
   const [newEditor, setNewEditor] = useState<{name: string, email: string, password: string, whatsapp: string, portfolio: string, location: string, skills: string[], skillPrices: Record<string, string>}>({ name: '', email: '', password: '', whatsapp: '', portfolio: '', location: '', skills: [], skillPrices: {} });
-    const [assigningClientManagerId, setAssigningClientManagerId] = useState<string | null>(null);
 
   const [editForm, setEditForm] = useState({
       totalCost: 0,
@@ -531,23 +530,6 @@ export function AdminDashboard() {
       else toast.error("Status error");
   }
 
-  const handleAssignClientManager = async (clientUid: string, managerUid: string) => {
-      setAssigningClientManagerId(clientUid);
-      try {
-          await updateDoc(doc(db, "users", clientUid), {
-              managedByPM: managerUid,
-              updatedAt: Date.now()
-          });
-          const pmName = users.find(u => u.uid === managerUid)?.displayName || "Manager";
-          toast.success(`Assigned ${pmName} to client`);
-      } catch (err) {
-          console.error(err);
-          toast.error("Failed to assign manager");
-      } finally {
-          setAssigningClientManagerId(null);
-      }
-  };
-
   const handleUpdateWhatsAppTemplates = async () => {
       setIsUpdatingTemplates(true);
       try {
@@ -601,8 +583,6 @@ export function AdminDashboard() {
              u.email?.toLowerCase().includes(q) || 
              u.role?.toLowerCase().includes(q);
   });
-
-    const projectManagers = users.filter(u => u.role === 'project_manager');
 
   const clientsOverLimit = users.filter(u => u.role === 'client' && u.payLater).filter(u => {
       const uProjects = projects.filter(p => p.clientId === u.uid);
@@ -1130,12 +1110,6 @@ export function AdminDashboard() {
                                                      ))}
                                                  </div>
                                              )}
-
-                                             {u.role === 'client' && (
-                                                 <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
-                                                     PM: {users.find(pm => pm.uid === (u as any).managedByPM)?.displayName || 'Not Assigned'}
-                                                 </div>
-                                             )}
                                          </div>
                                      </td>
                                     <td className="px-6 py-4">
@@ -1174,28 +1148,6 @@ export function AdminDashboard() {
                                                             <IndianRupee className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> {u.payLater ? "Revoke Pay Later" : "Allow Pay Later"}
                                                         </DropdownMenuItem>
                                                     )}
-
-                                                    {u.role === 'client' && projectManagers.length > 0 && (
-                                                        <>
-                                                            <DropdownMenuSeparator className="my-1 bg-border" />
-                                                            <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-widest px-2 py-1">Assign Manager</DropdownMenuLabel>
-                                                            {projectManagers.map(pm => (
-                                                                <DropdownMenuItem
-                                                                    key={pm.uid}
-                                                                    className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg"
-                                                                    onClick={() => handleAssignClientManager(u.uid, pm.uid)}
-                                                                    disabled={assigningClientManagerId === u.uid}
-                                                                >
-                                                                    <UserIcon className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                                                                    {pm.displayName}
-                                                                    {(u as any).managedByPM === pm.uid && (
-                                                                        <span className="ml-auto text-[9px] font-bold text-emerald-500 uppercase">Current</span>
-                                                                    )}
-                                                                </DropdownMenuItem>
-                                                            ))}
-                                                        </>
-                                                    )}
-
                                                     <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => handleToggleUserStatus(u.uid, (u as any).status !== 'inactive')}>
                                                         <Shield className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> {(u as any).status === 'inactive' ? "Enable Account" : "Disable Account"}
                                                     </DropdownMenuItem>

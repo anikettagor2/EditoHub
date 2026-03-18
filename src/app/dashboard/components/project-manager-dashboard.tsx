@@ -405,10 +405,11 @@ export function ProjectManagerDashboard() {
                             value={pmStatus}
                             onChange={(e) => handleStatusUpdate(e.target.value as any)}
                             className="bg-transparent border-none text-sm font-medium text-foreground focus:ring-0 cursor-pointer appearance-none pr-6"
+                            style={{ colorScheme: "dark" }}
                         >
-                            <option value="online">Available</option>
-                            <option value="sleep">Away</option>
-                            <option value="offline">Offline</option>
+                            <option value="online" className="bg-card text-foreground">Available</option>
+                            <option value="sleep" className="bg-card text-foreground">Away</option>
+                            <option value="offline" className="bg-card text-foreground">Offline</option>
                         </select>
                         <ChevronDown className="h-4 w-4 text-muted-foreground -ml-4" />
                     </div>

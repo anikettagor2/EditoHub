@@ -12,6 +12,114 @@ admin.initializeApp();
 // Point fluent-ffmpeg at the bundled binary
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
+const AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2";
+
+function sanitizeFileName(fileName: string): string {
+    return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+async function composeManyParts(params: {
+    bucket: any;
+    sourcePaths: string[];
+    destinationPath: string;
+    tempPrefix: string;
+}): Promise<void> {
+    const { bucket, sourcePaths, destinationPath, tempPrefix } = params;
+
+    // GCS compose accepts max 32 source objects per request.
+    let currentPaths = [...sourcePaths];
+    const tempPaths: string[] = [];
+    let round = 0;
+
+    while (currentPaths.length > 32) {
+        const nextRound: string[] = [];
+
+        for (let i = 0; i < currentPaths.length; i += 32) {
+            const batch = currentPaths.slice(i, i + 32).map((p) => bucket.file(p));
+            const tempPath = `${tempPrefix}/round_${round}_batch_${Math.floor(i / 32)}.tmp`;
+            await bucket.file(tempPath).compose(batch);
+            nextRound.push(tempPath);
+            tempPaths.push(tempPath);
+        }
+
+        currentPaths = nextRound;
+        round += 1;
+    }
+
+    await bucket.file(destinationPath).compose(currentPaths.map((p) => bucket.file(p)));
+
+    // Best-effort cleanup of temporary and part objects.
+    await Promise.all([
+        ...sourcePaths.map((p) => bucket.file(p).delete().catch(() => undefined)),
+        ...tempPaths.map((p) => bucket.file(p).delete().catch(() => undefined)),
+    ]);
+}
+
+function normalizePhone(phone?: string): string | null {
+    if (!phone) return null;
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length === 10) return `91${digits}`;
+    if (digits.length === 12 && digits.startsWith("91")) return digits;
+    return null;
+}
+
+function campaignByRole(role?: string): string {
+    if (role === "client") return "CLIENT";
+    if (role === "editor") return "EDITOR";
+    return "PROJECT_MANAGER";
+}
+
+async function sendAccountCreatedWhatsApp(params: {
+    name: string;
+    role: string;
+    phone: string;
+}): Promise<void> {
+    const apiKey = process.env.AISENSY_API_KEY;
+    if (!apiKey) {
+        console.warn("[WhatsApp] AISENSY_API_KEY missing; skipping account-created notification");
+        return;
+    }
+
+    const settingsSnap = await admin.firestore().collection("settings").doc("whatsapp").get();
+    const settings = settingsSnap.exists ? settingsSnap.data() : null;
+    if (settings && settings.enabled === false) return;
+
+    const notif = settings?.notifications?.user_account_created;
+    if (notif && notif.enabled === false) return;
+
+    const message = (notif?.message as string) ||
+        `Your ${params.role.replace(/_/g, " ")} account has been created successfully. You can now log in to EditoHub.`;
+    const campaignName = settings?.campaigns?.[params.role === "editor" ? "editor" : params.role === "client" ? "client" : "pm"]
+        || campaignByRole(params.role);
+
+    const payload = {
+        apiKey,
+        campaignName,
+        destination: params.phone,
+        userName: params.phone,
+        templateParams: [
+            params.name || "User",
+            message,
+            "EditoHub Account",
+        ],
+        source: "EditoHub-Functions",
+    };
+
+    const response = await fetch(AISENSY_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        console.error("[WhatsApp] account-created send failed:", response.status, text);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helper – run an ffmpeg command and return a Promise
 // ---------------------------------------------------------------------------
@@ -86,6 +194,112 @@ export const onProjectStatusChanged = functions.firestore
         if (newData.status !== oldData.status) {
             // Status changed logic (e.g., if Approved, generate final download link)
             console.log(`Project ${context.params.projectId} status changed to ${newData.status}`);
+        }
+    });
+
+// ---------------------------------------------------------------------------
+// Trigger: When a new user is created – send account-created WhatsApp
+// ---------------------------------------------------------------------------
+export const onUserCreated = functions.firestore
+    .document("users/{userId}")
+    .onCreate(async (snap: any) => {
+        const user = snap.data() || {};
+        const role = (user.role || "user") as string;
+        const displayName = (user.displayName || "User") as string;
+        const normalized = normalizePhone(user.whatsappNumber || user.phoneNumber);
+
+        if (!normalized) {
+            console.log("[WhatsApp] No valid phone for new user; skipping", snap.id);
+            return;
+        }
+
+        await sendAccountCreatedWhatsApp({
+            name: displayName,
+            role,
+            phone: normalized,
+        });
+    });
+
+// ---------------------------------------------------------------------------
+// Callable: Compose multipart raw upload into a single file
+// ---------------------------------------------------------------------------
+export const composeRawUpload = functions
+    .runWith({ timeoutSeconds: 540, memory: "1GB" })
+    .https
+    .onCall(async (data: any, context: any) => {
+        if (!context.auth?.uid) {
+            throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+        }
+
+        const uid: string = context.auth.uid;
+        const projectId = String(data?.projectId || "");
+        const ownerId = String(data?.ownerId || "");
+        const uploadId = String(data?.uploadId || "");
+        const fileName = String(data?.fileName || "");
+        const contentType = String(data?.contentType || "application/octet-stream");
+        const partsCount = Number(data?.partsCount || 0);
+
+        if (!projectId || !ownerId || !uploadId || !fileName || !Number.isInteger(partsCount) || partsCount <= 0) {
+            throw new functions.https.HttpsError("invalid-argument", "Invalid compose request payload.");
+        }
+
+        if (partsCount > 2000) {
+            throw new functions.https.HttpsError("invalid-argument", "Too many upload parts.");
+        }
+
+        const projectSnap = await admin.firestore().collection("projects").doc(projectId).get();
+        if (!projectSnap.exists) {
+            throw new functions.https.HttpsError("not-found", "Project not found.");
+        }
+
+        const project = projectSnap.data() || {};
+        const userSnap = await admin.firestore().collection("users").doc(uid).get();
+        const role = userSnap.exists ? String(userSnap.data()?.role || "") : "";
+        const isStaff = ["admin", "manager", "project_manager", "sales_executive"].includes(role);
+
+        const canUpload = isStaff ||
+            uid === project.ownerId ||
+            uid === project.clientId ||
+            uid === project.assignedPMId ||
+            uid === project.assignedEditorId;
+
+        if (!canUpload) {
+            throw new functions.https.HttpsError("permission-denied", "You do not have access to upload files for this project.");
+        }
+
+        const bucket = admin.storage().bucket();
+        const sourcePaths = Array.from({ length: partsCount }, (_, index) => (
+            `raw_footage/${ownerId}/multipart/${uploadId}/parts/part_${String(index).padStart(5, "0")}`
+        ));
+
+        const safeName = sanitizeFileName(fileName);
+        const destinationPath = `raw_footage/${ownerId}/${uploadId}_${safeName}`;
+
+        try {
+            await composeManyParts({
+                bucket,
+                sourcePaths,
+                destinationPath,
+                tempPrefix: `raw_footage/${ownerId}/multipart/${uploadId}/tmp`,
+            });
+
+            await bucket.file(destinationPath).setMetadata({
+                contentType,
+                metadata: {
+                    uploadId,
+                    projectId,
+                    uploadedBy: uid,
+                    uploadedAt: String(Date.now()),
+                },
+            });
+
+            return {
+                success: true,
+                destinationPath,
+            };
+        } catch (error: any) {
+            console.error("composeRawUpload failed:", error);
+            throw new functions.https.HttpsError("internal", error?.message || "Failed to compose uploaded parts.");
         }
     });
 

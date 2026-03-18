@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
-import { db, storage } from "@/lib/firebase/config";
+import { db } from "@/lib/firebase/config";
 import { doc, collection, query, where, orderBy, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Project, Revision } from "@/types/schema";
 import { 
     Loader2, 
@@ -47,6 +46,7 @@ import { PaymentButton } from "@/components/payment-button";
 import { ProjectChat } from "@/components/project-chat";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { uploadRawFileParallel } from "@/lib/services/parallel-raw-upload";
 
 interface ExtendedProject extends Project {
     brand?: string;
@@ -84,21 +84,15 @@ export default function ProjectDetailsPage() {
         
         setIsUploadingAsset(true);
         try {
-            const storageRef = ref(storage, `raw_footage/${project.ownerId}/${Date.now()}_${file.name}`);
-            const uploadTask = uploadBytesResumable(storageRef, file);
-
-            await new Promise<void>((resolve, reject) => {
-                uploadTask.on('state_changed', 
-                    (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        setUploadAssetProgress(progress);
-                    }, 
-                    (error) => reject(error), 
-                    () => resolve()
-                );
+            const downloadURL = await uploadRawFileParallel({
+                projectId: project.id,
+                ownerId: project.ownerId || project.clientId || user?.uid || "unknown",
+                file,
+                onProgress: (progress) => {
+                    setUploadAssetProgress(progress.overallPct);
+                },
             });
 
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
             const newFileMetadata = {
                 name: file.name,
                 url: downloadURL,
@@ -187,13 +181,6 @@ export default function ProjectDetailsPage() {
                     if (project.assignedEditorId) {
                         const ed = allUsers.find(u => u.uid === project.assignedEditorId);
                         if (ed) setAssignedEditor(ed);
-                    }
-
-                    // Resolve Assigned Sales Executive
-                    const seId = project.assignedSEId || user?.managedBy;
-                    if (seId) {
-                        const se = allUsers.find(u => u.uid === seId);
-                        if (se) setAssignedSE(se);
                     }
                 }
             });
@@ -1074,6 +1061,7 @@ export default function ProjectDetailsPage() {
                             <DetailRow label="Client Account" value={project.brand || project.clientName || 'N/A'} />
                             {assignedPM && <DetailRow label="Project Manager" value={assignedPM.displayName || "Assigned PM"} />}
                             {assignedSE && <DetailRow label="Sales Executive" value={assignedSE.displayName || "Assigned SE"} />}
+                            {assignedSE && <DetailRow label="Sales Executive" value={assignedSE.displayName || "Assigned SE"} />}
                             {assignedEditor && <DetailRow label="Primary Editor" value={assignedEditor.displayName || "Assigned Editor"} />}
                             {(project as any).videoFormat && <DetailRow label="Video Format" value={(project as any).videoFormat} />}
                             {(project as any).aspectRatio && <DetailRow label="Aspect Ratio" value={(project as any).aspectRatio} />}
@@ -1289,15 +1277,7 @@ export default function ProjectDetailsPage() {
                     <div className="enterprise-card p-6 md:p-8 space-y-8">
                         <div className="flex justify-between items-center">
                             <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Project Timeline</h3>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setIsTimelineModalOpen(true)}
-                                    className="h-8 px-3 rounded-lg bg-muted/50 border border-border text-[9px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
-                                >
-                                    View Timeline
-                                </button>
-                                <Activity className="h-3 w-3 text-muted-foreground" />
-                            </div>
+                            <Activity className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <div className="space-y-8 relative px-2">
                             <div className="absolute left-[13px] top-4 bottom-4 w-[1px] bg-muted/50" />
