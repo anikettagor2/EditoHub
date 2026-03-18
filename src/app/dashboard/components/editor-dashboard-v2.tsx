@@ -37,6 +37,7 @@ export function EditorDashboardV2() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [selectedUploadProject, setSelectedUploadProject] = useState<Project | null>(null);
     const [projectRevisions, setProjectRevisions] = useState<Record<string, any>>({});
+    const [projectTimers, setProjectTimers] = useState<Record<string, number>>({});
 
     useEffect(() => {
         if (!user) return;
@@ -113,6 +114,47 @@ export function EditorDashboardV2() {
         };
     }, [user]);
 
+    // Timer countdown for pending assignments
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setProjectTimers(prev => {
+                const updated = { ...prev };
+                let hasActive = false;
+                
+                for (const projectId in updated) {
+                    if (updated[projectId] > 0) {
+                        updated[projectId] -= 1;
+                        hasActive = true;
+                    }
+                }
+                
+                return hasActive ? updated : {};
+            });
+        }, 1000);
+        
+        return () => clearInterval(interval);
+    }, []);
+
+    const startProjectTimer = (projectId: string) => {
+        setProjectTimers(prev => ({
+            ...prev,
+            [projectId]: 900 // 15 minutes in seconds
+        }));
+    };
+
+    // Start timer when details modal opens for pending projects
+    useEffect(() => {
+        if (selectedProjectDetails?.assignmentStatus === "pending" && !projectTimers[selectedProjectDetails.id]) {
+            startProjectTimer(selectedProjectDetails.id);
+        }
+    }, [selectedProjectDetails?.id, selectedProjectDetails?.assignmentStatus]);
+
+    const formatTimeRemaining = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
     const editorStatus = userData?.availabilityStatus || "offline";
 
     const buildWhatsAppLink = (phoneNumber: string | null | undefined) => {
@@ -131,6 +173,12 @@ export function EditorDashboardV2() {
                 assignmentStatus: "accepted"
             });
             toast.success("Project accepted! You can now upload draft files.");
+            setSelectedProjectDetails(null);
+            setProjectTimers(prev => {
+                const updated = { ...prev };
+                delete updated[projectId];
+                return updated;
+            });
         } catch (error) {
             toast.error("Failed to accept project");
             console.error(error);
@@ -146,6 +194,12 @@ export function EditorDashboardV2() {
                 updatedAt: Date.now()
             });
             toast.success("Project rejected. PM will be notified.");
+            setSelectedProjectDetails(null);
+            setProjectTimers(prev => {
+                const updated = { ...prev };
+                delete updated[projectId];
+                return updated;
+            });
         } catch (error) {
             toast.error("Failed to reject project");
             console.error(error);
@@ -511,6 +565,35 @@ export function EditorDashboardV2() {
                                 </div>
 
                                 <div className="space-y-4">
+                                    {selectedProjectDetails.assignmentStatus === "pending" && (
+                                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-3">
+                                            <div className="space-y-2">
+                                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Decision Required</p>
+                                                {projectTimers[selectedProjectDetails.id] ? (
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-sm font-semibold text-amber-500">Time Remaining:</span>
+                                                        <span className="text-2xl font-black text-amber-500 tabular-nums">{formatTimeRemaining(projectTimers[selectedProjectDetails.id])}</span>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <button
+                                                    onClick={() => handleAcceptProject(selectedProjectDetails.id)}
+                                                    className="w-full h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/30 text-[10px] font-bold uppercase tracking-widest transition-all"
+                                                >
+                                                    <Check className="h-4 w-4" />
+                                                    Accept Project
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRejectProject(selectedProjectDetails.id)}
+                                                    className="w-full h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-500 hover:bg-red-500/30 text-[10px] font-bold uppercase tracking-widest transition-all"
+                                                >
+                                                    <XIcon className="h-4 w-4" />
+                                                    Reject Project
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="bg-muted/30 border border-border rounded-lg p-4">
                                         <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-3">Assigned Manager</p>
                                         <p className="text-sm font-semibold text-foreground">
