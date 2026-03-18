@@ -731,25 +731,29 @@ export default function NewProjectPage() {
                             </div>
 
                             {availablePrices.length > 1 && (
-                                <div className="space-y-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                                    <Label className="text-xs font-bold uppercase tracking-widest text-amber-600 ml-1">Select Pricing Tier</Label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                <div className="space-y-3 border border-border rounded-lg p-4">
+                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Select Pricing Tier</Label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         {availablePrices.map((option, idx) => (
                                             <button
                                                 key={idx}
                                                 type="button"
                                                 onClick={() => setSelectedPriceIndex(idx)}
                                                 className={cn(
-                                                    "flex flex-col items-center p-3 rounded-lg border transition-all text-sm font-medium",
+                                                    "flex flex-col items-center p-3 rounded-lg border-2 transition-all text-sm font-bold",
                                                     selectedPriceIndex === idx
-                                                        ? "bg-amber-500 border-amber-600 text-white shadow-lg" 
-                                                        : "bg-background border-border text-foreground hover:border-amber-500/50"
+                                                        ? "bg-amber-500/20 border-amber-500 text-amber-600" 
+                                                        : "bg-muted/50 border-border text-muted-foreground hover:border-muted-foreground/50"
                                                 )}
                                             >
-                                                <span className="text-xs opacity-75">{option.label || `Option ${idx + 1}`}</span>
-                                                <span className="text-lg font-bold mt-1">₹{option.price}</span>
+                                                <span className="text-xs font-semibold">{option.label || `Tier ${idx + 1}`}</span>
+                                                <span className="text-base mt-1">₹{option.price}</span>
                                             </button>
                                         ))}
+                                    </div>
+                                    <div className="text-center pt-2 border-t border-border">
+                                        <p className="text-xs text-muted-foreground">Selected Price:</p>
+                                        <p className="text-lg font-bold text-amber-600">₹{availablePrices[selectedPriceIndex].price.toLocaleString()}</p>
                                     </div>
                                 </div>
                             )}
