@@ -18,14 +18,35 @@ import { revalidatePath } from "next/cache";
  */
 export async function handleRevisionUploaded(projectId: string) {
     try {
-        // 1. Update project status to 'in_review'
+        // 1. Get the latest revision to get version number and ID
+        const revisionsQuery = adminDb
+            .collection('revisions')
+            .where('projectId', '==', projectId)
+            .orderBy('version', 'desc')
+            .limit(1);
+        
+        const revisionsSnap = await revisionsQuery.get();
+        let versionNumber = 1;
+        let revisionId = '';
+        
+        if (!revisionsSnap.empty) {
+            const latestRevision = revisionsSnap.docs[0];
+            versionNumber = latestRevision.data().version;
+            revisionId = latestRevision.id;
+        }
+
+        // 2. Update project status to 'in_review'
         await adminDb.collection('projects').doc(projectId).update({
             status: 'in_review',
             updatedAt: Date.now()
         });
 
-        // 2. Notify client about new draft
-        notifyClientDraftSubmitted(projectId);
+        // 3. Build shareable link for review
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://editohub.io';
+        const reviewLink = `${baseUrl}/review/${projectId}/${revisionId}`;
+
+        // 4. Notify client about new draft with version number and link
+        notifyClientDraftSubmitted(projectId, versionNumber, reviewLink);
 
         revalidatePath(`/dashboard/projects/${projectId}`);
         return { success: true };

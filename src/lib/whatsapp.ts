@@ -49,7 +49,7 @@ const DEFAULT_MESSAGES: Record<NotificationType, string> = {
     client_pm_assigned: "{pm} has been assigned as your Project Manager. They'll coordinate your project.",
     client_editor_assigned: "An expert editor has been assigned and is reviewing your requirements.",
     client_editor_accepted: "Production has officially started! We'll notify you when the first draft is ready.",
-    client_draft_submitted: "A new draft is ready for your review! Check your dashboard to provide feedback.",
+    client_draft_submitted: "🎬 Draft Version {version} is ready! Review it here: {link}",
     client_new_comment: "You have a new message from {name}. Please check the review tool to respond.",
     client_project_completed: "Congratulations! Your project is complete. Thank you for choosing EditoHub!",
     
@@ -408,8 +408,18 @@ export function notifyClientEditorAccepted(projectId: string) {
 }
 
 /** Notify client about new draft */
-export function notifyClientDraftSubmitted(projectId: string) {
-    notifyClient(projectId, 'client_draft_submitted').catch(console.error);
+export function notifyClientDraftSubmitted(projectId: string, versionNumber?: number, reviewLink?: string) {
+    const extraData: Record<string, string> = {};
+    
+    if (versionNumber !== undefined) {
+        extraData.version = `v${versionNumber}`;
+    }
+    
+    if (reviewLink) {
+        extraData.link = reviewLink;
+    }
+    
+    notifyClient(projectId, 'client_draft_submitted', extraData).catch(console.error);
 }
 
 /** Notify client about new comment */
