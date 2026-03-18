@@ -1187,7 +1187,12 @@ export default function ProjectDetailsPage() {
                             {/* Local Asset Grid */}
                             {project.rawFiles && project.rawFiles.length > 0 && (
                                 <div className="space-y-3 pt-2">
-                                    <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest ml-1">Embedded Assets</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Embedded Assets</p>
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 text-[8px] font-bold uppercase tracking-widest border border-blue-500/20">
+                                            Client Upload
+                                        </span>
+                                    </div>
                                     <div className="grid gap-2">
                                         {project.rawFiles.map((file, idx) => (
                                             <div 
@@ -1220,9 +1225,14 @@ export default function ProjectDetailsPage() {
                             {/* Reference Section */}
                             {((project as any).referenceLink || ((project as any).referenceFiles && (project as any).referenceFiles.length > 0)) && (
                                 <div className="space-y-4 pt-4 border-t border-border">
-                                    <p className="text-[9px] text-primary/70 font-black uppercase tracking-widest ml-1 flex items-center gap-2">
-                                        <Zap className="h-3 w-3" /> Style Reference Components
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-[9px] text-primary/70 font-black uppercase tracking-widest ml-1 flex items-center gap-2">
+                                            <Zap className="h-3 w-3" /> Style Reference Components
+                                        </p>
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 text-[8px] font-bold uppercase tracking-widest border border-purple-500/20">
+                                            PM Upload
+                                        </span>
+                                    </div>
                                     <div className="grid gap-3">
                                         {(project as any).referenceLink && (
                                             <a 
@@ -1246,13 +1256,14 @@ export default function ProjectDetailsPage() {
                                             <div className="grid gap-2">
                                                 {(project as any).referenceFiles.map((file: any, idx: number) => (
                                                     <div key={idx} className="flex items-center justify-between p-3.5 bg-background/50 border border-border rounded-xl transition-all group">
-                                                        <div className="flex items-center gap-3 min-w-0">
-                                                            <Eye className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                            <Eye className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
                                                             <div className="flex-1 min-w-0 text-left">
                                                                 <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground">{file.name}</p>
+                                                                <p className="text-[10px] text-muted-foreground/60 mt-0.5">Uploaded by: Project Manager</p>
                                                             </div>
                                                         </div>
-                                                        <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex-shrink-0">Preview</button>
                                                     </div>
                                                 ))}
                                             </div>
