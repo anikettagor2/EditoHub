@@ -1254,18 +1254,61 @@ export default function ProjectDetailsPage() {
                                         
                                         {(project as any).referenceFiles && (project as any).referenceFiles.length > 0 && (
                                             <div className="grid gap-2">
-                                                {(project as any).referenceFiles.map((file: any, idx: number) => (
-                                                    <div key={idx} className="flex items-center justify-between p-3.5 bg-background/50 border border-border rounded-xl transition-all group">
-                                                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                            <Eye className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
-                                                            <div className="flex-1 min-w-0 text-left">
-                                                                <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground">{file.name}</p>
-                                                                <p className="text-[10px] text-muted-foreground/60 mt-0.5">Uploaded by: Project Manager</p>
+                                                {(project as any).referenceFiles.map((file: any, idx: number) => {
+                                                    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name);
+                                                    const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(file.name);
+                                                    
+                                                    return (
+                                                        <div key={idx} className="flex flex-col gap-2">
+                                                            {/* Image Preview */}
+                                                            {isImage && (
+                                                                <div className="relative rounded-xl overflow-hidden border border-border bg-black/20 group cursor-pointer">
+                                                                    <img 
+                                                                        src={file.url} 
+                                                                        alt={file.name} 
+                                                                        className="max-h-[200px] w-full object-cover group-hover:opacity-80 transition-opacity"
+                                                                        onClick={() => setPreviewFileUrl(file.url)}
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                                                        <div className="text-white text-xs font-bold uppercase tracking-widest bg-black/60 px-3 py-1.5 rounded-full">
+                                                                            View
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Video Thumbnail */}
+                                                            {isVideo && (
+                                                                <div className="relative rounded-xl overflow-hidden border border-border bg-black/40 group cursor-pointer aspect-video">
+                                                                    <video 
+                                                                        src={file.url}
+                                                                        className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
+                                                                        onClick={() => setPreviewFileUrl(file.url)}
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                                                        <Play className="h-10 w-10 text-white opacity-90" />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* File Info */}
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground">{file.name}</p>
+                                                                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">Uploaded by: Project Manager</p>
+                                                                </div>
+                                                                {!isImage && !isVideo && (
+                                                                    <button 
+                                                                        onClick={() => setPreviewFileUrl(file.url)} 
+                                                                        className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex-shrink-0"
+                                                                    >
+                                                                        Preview
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                        <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex-shrink-0">Preview</button>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
