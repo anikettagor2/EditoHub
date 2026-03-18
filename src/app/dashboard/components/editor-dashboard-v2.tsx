@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { Project } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import { 
@@ -13,7 +13,12 @@ import {
     IndianRupee,
     CheckCircle2,
     Clock,
-    AlertCircle
+    AlertCircle,
+    MessageCircle,
+    Film,
+    Check,
+    X as XIcon,
+    Upload
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,11 +30,15 @@ export function EditorDashboardV2() {
     const [loading, setLoading] = useState(true);
     const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [userData, setUserData] = useState<any>(null);
+    const [selectedProjectAssets, setSelectedProjectAssets] = useState<any>(null);
+    const [allUsers, setAllUsers] = useState<any>({});
 
     useEffect(() => {
         if (!user) return;
         setLoading(true);
 
+        // Fetch assigned projects
         const projectsRef = collection(db, "projects");
         const q = query(
             projectsRef, 
@@ -46,8 +55,94 @@ export function EditorDashboardV2() {
             setLoading(false);
         });
 
-        return () => { unsubscribe(); };
+        // Fetch user data
+        const userRef = doc(db, "users", user.uid);
+        const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setUserData(docSnap.data());
+            }
+        });
+
+        // Fetch all users for PM contact info
+        const usersRef = collection(db, "users");
+        const usersQuery = query(usersRef);
+        const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+            const usersMap: any = {};
+            snapshot.forEach((doc) => {
+                usersMap[doc.id] = doc.data();
+            });
+            setAllUsers(usersMap);
+        });
+
+        return () => { 
+            unsubscribe(); 
+            unsubscribeUser();
+            unsubscribeUsers();
+        };
     }, [user]);
+
+    const editorStatus = userData?.availabilityStatus || "offline";
+
+    const buildWhatsAppLink = (phoneNumber: string | null | undefined) => {
+        if (!phoneNumber) return null;
+        // Clean and normalize phone number for WhatsApp
+        const cleaned = phoneNumber.replace(/\D/g, '');
+        const isIndia = cleaned.length === 10;
+        const formatted = isIndia ? `91${cleaned}` : cleaned;
+        return `https://wa.me/${formatted}`;
+    };
+
+    const handleAcceptProject = async (projectId: string) => {
+        if (!user?.uid) return;
+        try {
+            await updateDoc(doc(db, "projects", projectId), {
+                assignmentStatus: "accepted"
+            });
+            toast.success("Project accepted! You can now upload draft files.");
+        } catch (error) {
+            toast.error("Failed to accept project");
+            console.error(error);
+        }
+    };
+
+    const handleRejectProject = async (projectId: string) => {
+        if (!user?.uid) return;
+        try {
+            await updateDoc(doc(db, "projects", projectId), {
+                assignmentStatus: "rejected",
+                assignedEditorId: null,
+                updatedAt: Date.now()
+            });
+            toast.success("Project rejected. PM will be notified.");
+        } catch (error) {
+            toast.error("Failed to reject project");
+            console.error(error);
+        }
+    };
+
+    const getPMWhatsAppNumber = (project: any) => {
+        const pmId = project.assignedPMId;
+        if (!pmId || !allUsers[pmId]) return null;
+        const pmData = allUsers[pmId];
+        return pmData.whatsappNumber || pmData.phoneNumber;
+    };
+
+    const getIsProjectPending = (project: any) => {
+        return project.assignmentStatus === "pending";
+    };
+
+    const handleStatusUpdate = async (newStatus: "online" | "offline" | "sleep") => {
+        if (!user?.uid) return;
+        try {
+            await updateDoc(doc(db, "users", user.uid), {
+                availabilityStatus: newStatus,
+                updatedAt: Date.now(),
+            });
+            toast.success(`Status updated to ${newStatus}`);
+        } catch {
+            toast.error("Failed to update status");
+        }
+    };
 
     // Filter projects based on search
     const filteredProjects = projects.filter(p => 
@@ -142,11 +237,115 @@ export function EditorDashboardV2() {
                 )}
             </AnimatePresence>
 
+            {/* Assets Modal - Upload/Client Videos */}
+            <AnimatePresence>
+                {selectedProjectAssets && (
+                    <motion.div 
+                        key="assets-modal"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 pointer-events-auto" 
+                        onClick={() => setSelectedProjectAssets(null)}
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.95, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 20 }}
+                            className="relative w-full max-w-4xl bg-card border border-border rounded-2xl overflow-hidden shadow-2xl max-h-[85vh] overflow-y-auto" 
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="sticky top-0 bg-card border-b border-border p-6 flex items-center justify-between z-50">
+                                <div>
+                                    <h2 className="text-xl font-bold text-foreground">{selectedProjectAssets.name}</h2>
+                                    <p className="text-sm text-muted-foreground mt-1">Client Uploaded Video Assets</p>
+                                </div>
+                                <button 
+                                    onClick={() => setSelectedProjectAssets(null)} 
+                                    className="h-10 w-10 bg-muted/30 hover:bg-muted/50 text-foreground rounded-lg flex items-center justify-center transition-colors"
+                                >
+                                    <XIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                {selectedProjectAssets.rawFiles && selectedProjectAssets.rawFiles.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {selectedProjectAssets.rawFiles.map((file: any, idx: number) => (
+                                            <motion.div 
+                                                key={idx}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: idx * 0.05 }}
+                                                className="group border border-border rounded-lg overflow-hidden bg-muted/20 hover:bg-muted/40 transition-all"
+                                            >
+                                                <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
+                                                    <video 
+                                                        src={file.url} 
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                                                    />
+                                                    <button
+                                                        onClick={() => setPreviewVideoUrl(file.url)}
+                                                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                                                    >
+                                                        <Eye className="h-8 w-8 text-white" />
+                                                    </button>
+                                                </div>
+                                                <div className="p-3">
+                                                    <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        {file.size ? `${(file.size / (1024*1024)).toFixed(2)} MB` : 'N/A'}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => setPreviewVideoUrl(file.url)}
+                                                        className="mt-2 w-full px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-colors flex items-center justify-center gap-1"
+                                                    >
+                                                        <Eye className="h-3 w-3" />
+                                                        Play
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <Film className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                                        <p className="text-muted-foreground">No video assets uploaded yet</p>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="space-y-6 max-w-[1600px] mx-auto pb-16">
                 {/* Header */}
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-foreground">My Projects</h1>
-                    <p className="text-muted-foreground mt-1">All projects assigned to you with payment and status information.</p>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold text-foreground">My Projects</h1>
+                        <p className="text-muted-foreground mt-1">All projects assigned to you with payment and status information.</p>
+                    </div>
+                    <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-2 w-fit">
+                        <div className={cn(
+                            "h-2.5 w-2.5 rounded-full",
+                            editorStatus === "online"
+                                ? "bg-emerald-500"
+                                : editorStatus === "sleep"
+                                    ? "bg-amber-500"
+                                    : "bg-red-500"
+                        )} />
+                        <select
+                            value={editorStatus}
+                            onChange={(e) => handleStatusUpdate(e.target.value as "online" | "offline" | "sleep")}
+                            className="bg-transparent border-none text-sm font-medium text-foreground focus:ring-0 cursor-pointer appearance-none pr-2"
+                            style={{ colorScheme: "dark" }}
+                        >
+                            <option value="online" className="bg-card text-foreground">Online</option>
+                            <option value="sleep" className="bg-card text-foreground">Away</option>
+                            <option value="offline" className="bg-card text-foreground">Offline</option>
+                        </select>
+                    </div>
                 </div>
 
                 {/* Stats Cards */}
@@ -211,6 +410,11 @@ export function EditorDashboardV2() {
                                 ) : (
                                     filteredProjects.map((project, index) => {
                                         const paymentStatus = getPaymentStatus(project);
+                                        const isPending = getIsProjectPending(project);
+                                        const pmWhatsApp = getPMWhatsAppNumber(project);
+                                        const hasAssets = project.rawFiles && project.rawFiles.length > 0;
+                                        const isAccepted = project.assignmentStatus === "accepted";
+
                                         return (
                                             <tr key={project.id} className="hover:bg-muted/20 transition-colors">
                                                 <td className="px-4 py-4">
@@ -253,21 +457,94 @@ export function EditorDashboardV2() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 space-y-2">
-                                                    <Link
-                                                        href={`/dashboard/projects/${project.id}`}
-                                                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-colors"
-                                                    >
-                                                        View Details
-                                                    </Link>
-                                                    {project.rawFiles && project.rawFiles.length > 0 && (
-                                                        <button
-                                                            onClick={() => setPreviewVideoUrl(project.rawFiles?.[0]?.url || '')}
-                                                            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-xs font-semibold transition-colors"
-                                                            title={project.rawFiles?.[0]?.name || 'Preview'}
-                                                        >
-                                                            <Eye className="h-3.5 w-3.5" />
-                                                            Preview
-                                                        </button>
+                                                    {isPending ? (
+                                                        <div className="space-y-2">
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => handleAcceptProject(project.id)}
+                                                                    className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-colors"
+                                                                    title="Accept this project assignment"
+                                                                >
+                                                                    <Check className="h-3.5 w-3.5" />
+                                                                    Accept
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleRejectProject(project.id)}
+                                                                    className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 text-xs font-semibold transition-colors"
+                                                                    title="Reject this project assignment"
+                                                                >
+                                                                    <XIcon className="h-3.5 w-3.5" />
+                                                                    Reject
+                                                                </button>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (pmWhatsApp) {
+                                                                        const link = buildWhatsAppLink(pmWhatsApp);
+                                                                        if (link) window.open(link, '_blank');
+                                                                    }
+                                                                }}
+                                                                disabled={!pmWhatsApp}
+                                                                className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition-colors"
+                                                                title="Chat with PM on WhatsApp"
+                                                            >
+                                                                <MessageCircle className="h-3.5 w-3.5" />
+                                                                Chat PM
+                                                            </button>
+                                                            {hasAssets && (
+                                                                <button
+                                                                    onClick={() => setSelectedProjectAssets(project)}
+                                                                    className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 text-xs font-semibold transition-colors"
+                                                                    title="View client uploaded video assets"
+                                                                >
+                                                                    <Film className="h-3.5 w-3.5" />
+                                                                    Assets ({(project.rawFiles || []).length})
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-2">
+                                                            <Link
+                                                                href={`/dashboard/projects/${project.id}`}
+                                                                className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-colors w-full"
+                                                            >
+                                                                View Details
+                                                            </Link>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (pmWhatsApp) {
+                                                                        const link = buildWhatsAppLink(pmWhatsApp);
+                                                                        if (link) window.open(link, '_blank');
+                                                                    }
+                                                                }}
+                                                                disabled={!pmWhatsApp}
+                                                                className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition-colors"
+                                                                title="Chat with PM on WhatsApp"
+                                                            >
+                                                                <MessageCircle className="h-3.5 w-3.5" />
+                                                                Chat
+                                                            </button>
+                                                            {hasAssets && (
+                                                                <button
+                                                                    onClick={() => setSelectedProjectAssets(project)}
+                                                                    className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 text-xs font-semibold transition-colors"
+                                                                    title="View client uploaded video assets"
+                                                                >
+                                                                    <Film className="h-3.5 w-3.5" />
+                                                                    Assets
+                                                                </button>
+                                                            )}
+                                                            {isAccepted && (
+                                                                <button
+                                                                    onClick={() => {/* Will be implemented for draft uploads */}}
+                                                                    className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs font-semibold transition-colors"
+                                                                    title="Upload draft files for this project"
+                                                                >
+                                                                    <Upload className="h-3.5 w-3.5" />
+                                                                    Upload Draft
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>

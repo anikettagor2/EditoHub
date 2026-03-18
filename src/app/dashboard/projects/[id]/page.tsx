@@ -58,6 +58,21 @@ interface ExtendedProject extends Project {
     assignmentStatus?: ProjectAssignmentStatus;
 }
 
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatEta(seconds: number): string {
+    if (!isFinite(seconds) || seconds <= 0) return "--";
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return `${mins}m ${secs}s`;
+}
+
 export default function ProjectDetailsPage() {
     const { id } = useParams();
     const router = useRouter();
@@ -73,6 +88,12 @@ export default function ProjectDetailsPage() {
     // Asset Upload State
     const [isUploadingAsset, setIsUploadingAsset] = useState(false);
     const [uploadAssetProgress, setUploadAssetProgress] = useState(0);
+    const [uploadAssetSpeedBps, setUploadAssetSpeedBps] = useState(0);
+    const [uploadAssetEtaSeconds, setUploadAssetEtaSeconds] = useState<number>(Infinity);
+    const [uploadAssetChunksDone, setUploadAssetChunksDone] = useState(0);
+    const [uploadAssetChunksTotal, setUploadAssetChunksTotal] = useState(0);
+    const [uploadAssetConcurrency, setUploadAssetConcurrency] = useState(0);
+    const [uploadAssetMaxConcurrency, setUploadAssetMaxConcurrency] = useState(0);
     const [isDownloading, setIsDownloading] = useState(false);
     const [assignedPM, setAssignedPM] = useState<User | null>(null);
     const [assignedEditor, setAssignedEditor] = useState<User | null>(null);
@@ -90,6 +111,12 @@ export default function ProjectDetailsPage() {
                 file,
                 onProgress: (progress) => {
                     setUploadAssetProgress(progress.overallPct);
+                    setUploadAssetSpeedBps(progress.speedBps);
+                    setUploadAssetEtaSeconds(progress.etaSeconds);
+                    setUploadAssetChunksDone(progress.chunksComplete);
+                    setUploadAssetChunksTotal(progress.chunksTotal);
+                    setUploadAssetConcurrency(progress.currentConcurrency);
+                    setUploadAssetMaxConcurrency(progress.maxConcurrency);
                 },
             });
 
@@ -113,6 +140,12 @@ export default function ProjectDetailsPage() {
         } finally {
             setIsUploadingAsset(false);
             setUploadAssetProgress(0);
+            setUploadAssetSpeedBps(0);
+            setUploadAssetEtaSeconds(Infinity);
+            setUploadAssetChunksDone(0);
+            setUploadAssetChunksTotal(0);
+            setUploadAssetConcurrency(0);
+            setUploadAssetMaxConcurrency(0);
         }
     };
 
@@ -1243,14 +1276,26 @@ export default function ProjectDetailsPage() {
                             {isClient && (
                                 <div className="pt-2">
                                     {isUploadingAsset ? (
-                                        <div className="h-12 w-full bg-muted/50 rounded-xl border border-border flex items-center px-5 gap-4">
-                                            <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
-                                            <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                                                <motion.div 
+                                        <div className="w-full bg-muted/50 rounded-xl border border-border px-4 py-3 space-y-2.5">
+                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                                Uploading Raw Asset
+                                            </div>
+                                            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                                <motion.div
                                                     initial={{ width: 0 }}
                                                     animate={{ width: `${uploadAssetProgress}%` }}
                                                     className="h-full bg-primary shadow-[0_0_10px_rgba(99,102,241,0.6)]"
                                                 />
+                                            </div>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] text-muted-foreground">
+                                                <div>Progress: <span className="text-foreground font-bold">{uploadAssetProgress.toFixed(1)}%</span></div>
+                                                <div>Speed: <span className="text-foreground font-bold">{formatBytes(uploadAssetSpeedBps)}/s</span></div>
+                                                <div>ETA: <span className="text-foreground font-bold">{formatEta(uploadAssetEtaSeconds)}</span></div>
+                                                <div>Chunks: <span className="text-foreground font-bold">{uploadAssetChunksDone}/{uploadAssetChunksTotal}</span></div>
+                                            </div>
+                                            <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+                                                Parallel lanes: <span className="text-foreground font-bold">{uploadAssetConcurrency}/{uploadAssetMaxConcurrency}</span>
                                             </div>
                                         </div>
                                     ) : (

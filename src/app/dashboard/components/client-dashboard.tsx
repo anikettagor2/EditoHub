@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { Project, User } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import { 
@@ -70,13 +70,22 @@ function isClientAllowedFormat(allowedFormats: Record<string, boolean> | undefin
     return aliases.some((alias) => allowedFormats[alias] === true);
 }
 
+function buildWhatsAppLink(phone?: string) {
+    if (!phone) return null;
+    const digits = phone.replace(/\D/g, "");
+    if (!digits) return null;
+
+    // Treat 10-digit local numbers as Indian mobile numbers.
+    const normalized = digits.length === 10 ? `91${digits}` : digits;
+    return `https://wa.me/${normalized}`;
+}
+
 export function ClientDashboard() {
     const { user } = useAuth();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [assignedSE, setAssignedSE] = useState<any>(null);
     const [allUsers, setAllUsers] = useState<User[]>([]);
 
     useEffect(() => {
@@ -105,14 +114,9 @@ export function ClientDashboard() {
         return () => unsub();
     }, []);
 
-    useEffect(() => {
-        if (user?.managedBy) {
-            const seRef = doc(db, "users", user.managedBy);
-            getDoc(seRef).then(snap => {
-                if (snap.exists()) setAssignedSE({ uid: snap.id, ...snap.data() });
-            });
-        }
-    }, [user?.managedBy]);
+    // Show Project Manager in Account Manager card (not Sales Executive).
+    const assignedPMId = user?.managedByPM || projects.find(p => p.assignedPMId)?.assignedPMId;
+    const assignedPM = assignedPMId ? allUsers.find(u => u.uid === assignedPMId) : null;
 
     const filteredProjects = projects.filter(project => {
         if (statusFilter !== 'all' && project.status !== statusFilter) return false;
@@ -133,6 +137,8 @@ export function ClientDashboard() {
             videoType,
             price: getClientVisibleRate(user?.customRates, videoType)
         }));
+
+    const pmWhatsAppLink = buildWhatsAppLink(assignedPM?.whatsappNumber || assignedPM?.phoneNumber);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -358,40 +364,53 @@ export function ClientDashboard() {
                     {/* Account Manager Card */}
                     <div className="bg-card border border-border rounded-xl p-5">
                         <h3 className="font-semibold text-foreground mb-4">Your Account Manager</h3>
-                        {assignedSE ? (
+                        {assignedPM ? (
                             <div className="space-y-4">
                                 <div className="flex items-center gap-3">
                                     <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
                                         <span className="text-lg font-semibold text-primary">
-                                            {assignedSE.displayName?.[0]?.toUpperCase() || 'A'}
+                                            {assignedPM.displayName?.[0]?.toUpperCase() || 'A'}
                                         </span>
                                     </div>
                                     <div>
-                                        <p className="font-medium text-foreground">{assignedSE.displayName}</p>
-                                        <p className="text-sm text-muted-foreground">Account Manager</p>
+                                        <p className="font-medium text-foreground">{assignedPM.displayName}</p>
+                                        <p className="text-sm text-muted-foreground">Project Manager</p>
                                     </div>
                                 </div>
                                 <div className="pt-3 border-t border-border space-y-2">
-                                    {assignedSE.email && (
+                                    {assignedPM.email && (
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">Email</span>
-                                            <span className="text-foreground">{assignedSE.email}</span>
+                                            <span className="text-foreground">{assignedPM.email}</span>
                                         </div>
                                     )}
-                                    {assignedSE.phoneNumber && (
+                                    {assignedPM.phoneNumber && (
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">Phone</span>
-                                            <span className="text-foreground">{assignedSE.phoneNumber}</span>
+                                            <span className="text-foreground">{assignedPM.phoneNumber}</span>
                                         </div>
                                     )}
                                 </div>
-                                <a 
-                                    href={`mailto:${assignedSE.email}`}
-                                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-lg text-sm font-medium hover:bg-muted/80 transition-colors"
-                                >
-                                    <MessageCircle className="h-4 w-4" />
-                                    Send Message
-                                </a>
+                                {pmWhatsAppLink ? (
+                                    <a
+                                        href={pmWhatsAppLink}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-muted text-foreground rounded-lg text-sm font-medium hover:bg-muted/80 transition-colors"
+                                    >
+                                        <MessageCircle className="h-4 w-4" />
+                                        Send Message
+                                    </a>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        disabled
+                                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-muted/40 text-muted-foreground rounded-lg text-sm font-medium cursor-not-allowed"
+                                    >
+                                        <MessageCircle className="h-4 w-4" />
+                                        WhatsApp Not Available
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <div className="text-center py-6">
@@ -399,7 +418,7 @@ export function ClientDashboard() {
                                     <UserIcon className="h-6 w-6 text-muted-foreground" />
                                 </div>
                                 <p className="text-sm text-muted-foreground">
-                                    An account manager will be assigned to you shortly
+                                    A project manager will be assigned to you shortly
                                 </p>
                             </div>
                         )}

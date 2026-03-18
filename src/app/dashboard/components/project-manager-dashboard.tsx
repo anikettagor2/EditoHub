@@ -371,11 +371,6 @@ export function ProjectManagerDashboard() {
         p.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const pmTransactions = projects
-        .flatMap(project => (project.logs || []).map(log => ({ project, log })))
-        .filter(({ log }) => ['PAYMENT_SETTLED', 'PAYMENT_MARKED'].includes(log.event))
-        .sort((a, b) => b.log.timestamp - a.log.timestamp);
-
     return (
         <div className="space-y-8 max-w-[1600px] mx-auto pb-16">
             {/* Header */}
@@ -446,60 +441,6 @@ export function ProjectManagerDashboard() {
                     alert={pendingUnlockCount > 0}
                 />
             </div>
-
-            <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.08 }}
-                className="bg-card border border-border rounded-xl overflow-hidden"
-            >
-                <div className="p-4 md:p-5 border-b border-border flex items-center justify-between bg-muted/30">
-                    <div>
-                        <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Assigned project settlements only</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">{pmTransactions.length} total</span>
-                </div>
-
-                <div className="max-h-[280px] overflow-y-auto divide-y divide-border">
-                    {pmTransactions.length === 0 ? (
-                        <div className="p-8 text-center text-xs text-muted-foreground uppercase tracking-widest font-bold">
-                            No transactions recorded yet
-                        </div>
-                    ) : pmTransactions.map(({ project, log }) => {
-                        const isClientSettle = log.event === 'PAYMENT_SETTLED';
-                        const amount = isClientSettle ? (project.totalCost || 0) : (project.editorPrice || 0);
-                        return (
-                            <div key={`${project.id}-${log.timestamp}-${log.event}`} className="p-4 md:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-muted/30 transition-colors">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-sm font-bold text-foreground truncate">{project.name}</span>
-                                        <span className={cn(
-                                            "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 border rounded",
-                                            isClientSettle
-                                                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                                                : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                        )}>
-                                            {isClientSettle ? 'Client Settlement' : 'Editor Payout'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground flex-wrap">
-                                        <span>ID: {project.id.slice(0, 8)}</span>
-                                        <span>•</span>
-                                        <span>By {log.userName || 'System'}</span>
-                                        <span>•</span>
-                                        <span>{new Date(log.timestamp).toLocaleString()}</span>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm font-black text-foreground tabular-nums">₹{amount.toLocaleString()}</div>
-                                    <div className="text-[9px] text-muted-foreground uppercase tracking-widest">{(log as any).designation || 'System'}</div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </motion.div>
 
             {/* Projects Table */}
             <motion.div 
