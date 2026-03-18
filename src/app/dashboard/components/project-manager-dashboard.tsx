@@ -32,10 +32,14 @@ import {
     Download,
     Star,
     Sparkles,
-    MessageSquare
+    MessageSquare,
+    Upload,
+    File,
+    X as XIcon
 } from "lucide-react";
-import { db } from "@/lib/firebase/config";
+import { db, storage } from "@/lib/firebase/config";
 import { collection, query, orderBy, onSnapshot, updateDoc, doc, where, getDocs, limit } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Project, User } from "@/types/schema";
 import { 
     assignEditor,
@@ -172,6 +176,8 @@ export function ProjectManagerDashboard() {
     const [inspectProject, setInspectProject] = useState<Project | null>(null);
     const [isProjectDetailModalOpen, setIsProjectDetailModalOpen] = useState(false);
     const [reviewLoading, setReviewLoading] = useState(false);
+    const [isUploadingPMFile, setIsUploadingPMFile] = useState(false);
+    const [pmFileInput, setPmFileInput] = useState<HTMLInputElement | null>(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -338,6 +344,52 @@ export function ProjectManagerDashboard() {
             toast.success("Updated");
         } catch (err) {
             toast.error("Failed to update");
+        }
+    };
+
+    const handleUploadPMFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!inspectProject || !user) return;
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        setIsUploadingPMFile(true);
+        try {
+            const file = files[0];
+            const timestamp = Date.now();
+            const fileName = `${timestamp}-${file.name}`;
+            const storageRef = ref(storage, `projects/${inspectProject.id}/pm-files/${fileName}`);
+
+            // Upload to Firebase Storage
+            await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(storageRef);
+
+            // Add to project's pmFiles array (using referenceFiles field)
+            const currentReferenceFiles = inspectProject.referenceFiles || [];
+            const newPMFile = {
+                name: file.name,
+                url: downloadURL,
+                size: file.size,
+                type: file.type,
+                uploadedAt: timestamp,
+                uploadedBy: user.uid
+            };
+
+            await updateDoc(doc(db, "projects", inspectProject.id), {
+                referenceFiles: [...currentReferenceFiles, newPMFile],
+                updatedAt: Date.now()
+            });
+
+            toast.success("File uploaded successfully");
+            
+            // Reset file input
+            if (pmFileInput) {
+                pmFileInput.value = '';
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+            toast.error("Failed to upload file");
+        } finally {
+            setIsUploadingPMFile(false);
         }
     };
 
@@ -1371,6 +1423,70 @@ export function ProjectManagerDashboard() {
                                 ) : (
                                     <p className="text-xs text-muted-foreground">No raw files uploaded by client yet.</p>
                                 )}
+                            </div>
+
+                            {/* PM Reference/Upload Files */}
+                            <div className="bg-muted/30 border border-border rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <p className="text-xs text-muted-foreground">PM Reference Files</p>
+                                </div>
+                                
+                                {/* File List */}
+                                {inspectProject.referenceFiles && inspectProject.referenceFiles.length > 0 ? (
+                                    <div className="space-y-2 mb-3">
+                                        {inspectProject.referenceFiles.map((file: any, idx: number) => (
+                                            <a
+                                                key={`${file.url}-${idx}`}
+                                                href={file.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border hover:border-primary/40 transition-colors group"
+                                            >
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    <File className="h-4 w-4 text-primary flex-shrink-0" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-medium text-foreground truncate">{file.name}</p>
+                                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                                            {file.size ? `${(file.size / (1024*1024)).toFixed(2)} MB` : ''}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground mb-3">No reference files uploaded yet.</p>
+                                )}
+
+                                {/* Upload Button */}
+                                <div className="flex gap-2">
+                                    <input
+                                        ref={el => setPmFileInput(el)}
+                                        type="file"
+                                        onChange={handleUploadPMFile}
+                                        disabled={isUploadingPMFile}
+                                        className="hidden"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.zip,.rar"
+                                    />
+                                    <button
+                                        onClick={() => pmFileInput?.click()}
+                                        disabled={isUploadingPMFile}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isUploadingPMFile ? (
+                                            <>
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                Uploading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="h-3.5 w-3.5" />
+                                                Upload File
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Review Button */}
