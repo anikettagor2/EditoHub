@@ -160,14 +160,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         let email = normalizedIdentifier;
 
-        // Handle Phone Number or Username Login
+        // Handle Phone Number, WhatsApp Number or Username Login
         if (!normalizedIdentifier.includes("@")) {
           try {
               const { collection, query, where, getDocs } = await import("firebase/firestore");
             const rawIdentifier = identifier.trim();
             const digits = rawIdentifier.replace(/\D/g, '');
 
-            // Try phone lookup first (supports +91XXXXXXXXXX, 91XXXXXXXXXX, XXXXXXXXXX)
+            // Try phone/WhatsApp lookup first (supports +91XXXXXXXXXX, 91XXXXXXXXXX, XXXXXXXXXX)
             const phoneCandidates = new Set<string>();
             if (digits.length >= 10) {
               const lastTen = digits.slice(-10);
@@ -179,6 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             let resolvedUser: User | null = null;
 
+            // Check phoneNumber field
             for (const candidate of phoneCandidates) {
               const qPhone = query(collection(db, "users"), where("phoneNumber", "==", candidate));
               const phoneSnap = await getDocs(qPhone);
@@ -188,7 +189,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             }
 
-            // If not phone, treat as username (displayName)
+            // Check whatsappNumber field if phone not found
+            if (!resolvedUser) {
+              for (const candidate of phoneCandidates) {
+                const qWhatsApp = query(collection(db, "users"), where("whatsappNumber", "==", candidate));
+                const whatsappSnap = await getDocs(qWhatsApp);
+                if (!whatsappSnap.empty) {
+                  resolvedUser = whatsappSnap.docs[0].data() as User;
+                  break;
+                }
+              }
+            }
+
+            // If not phone or WhatsApp, treat as username (displayName)
             if (!resolvedUser) {
               const qUsername = query(collection(db, "users"), where("displayName", "==", rawIdentifier));
               const usernameSnap = await getDocs(qUsername);
@@ -200,7 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (resolvedUser?.email) {
               email = resolvedUser.email.toLowerCase();
             } else {
-              throw new Error("No account found with this phone number or username.");
+              throw new Error("No account found with this WhatsApp number, phone number or username.");
             }
           } catch (err: any) {
             console.error("Identifier lookup failed", err);
@@ -244,6 +257,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const phoneSnapshot = await getDocs(q);
               if (!phoneSnapshot.empty) {
                   throw new Error("Phone number already in use by another account.");
+              }
+          }
+
+          // Check if WhatsApp number is already in use
+          if (metadata?.whatsappNumber) {
+              const qWA = query(collection(db, "users"), where("whatsappNumber", "==", metadata.whatsappNumber.trim()));
+              const waSnapshot = await getDocs(qWA);
+              if (!waSnapshot.empty) {
+                  throw new Error("WhatsApp number already in use by another account.");
               }
           }
           
