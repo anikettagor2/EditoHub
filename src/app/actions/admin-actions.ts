@@ -653,21 +653,25 @@ export async function updateSystemSettings(settings: any) {
  */
 export async function getUnreadNotifications(userId: string) {
     try {
+        // Simple query without composite index
         const notificationsSnap = await adminDb
             .collection('notifications')
             .where('userId', '==', userId)
             .where('read', '==', false)
-            .orderBy('createdAt', 'desc')
-            .limit(20)
+            .limit(50)
             .get();
         
-        const notifications = notificationsSnap.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        const notifications = notificationsSnap.docs
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }))
+            .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
+            .slice(0, 20);
         
         return { success: true, data: notifications };
     } catch (error: any) {
+        console.error('Error fetching notifications:', error);
         return { success: false, error: error.message };
     }
 }

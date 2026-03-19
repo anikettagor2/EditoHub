@@ -38,6 +38,8 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
       const result = await getUnreadNotifications(user.uid);
       if (result.success) {
         setNotifications(result.data || []);
+      } else {
+        console.error('Failed to fetch notifications:', result.error);
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
