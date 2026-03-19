@@ -167,14 +167,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const rawIdentifier = identifier.trim();
             const digits = rawIdentifier.replace(/\D/g, '');
 
-            // Try phone/WhatsApp lookup first (supports +91XXXXXXXXXX, 91XXXXXXXXXX, XXXXXXXXXX)
+            // Try phone/WhatsApp lookup first (supports multiple formats)
             const phoneCandidates = new Set<string>();
-            if (digits.length >= 10) {
-              const lastTen = digits.slice(-10);
-              phoneCandidates.add(`+91${lastTen}`);
-              phoneCandidates.add(lastTen);
-              phoneCandidates.add(`91${lastTen}`);
+            
+            // Handle 10-digit numbers (most common)
+            if (digits.length === 10) {
+              // All possible formats for 10-digit number
+              phoneCandidates.add(`+91${digits}`);    // +919876543210
+              phoneCandidates.add(`91${digits}`);     // 919876543210
+              phoneCandidates.add(digits);            // 9876543210
+            } 
+            // Handle 11-digit numbers (with leading 0)
+            else if (digits.length === 11 && digits.startsWith('0')) {
+              const tenDigits = digits.slice(1);
+              phoneCandidates.add(`+91${tenDigits}`);
+              phoneCandidates.add(`91${tenDigits}`);
+              phoneCandidates.add(tenDigits);
+            } 
+            // Handle 12-digit numbers (91 + 10 digits)
+            else if (digits.length === 12 && digits.startsWith('91')) {
+              const tenDigits = digits.slice(2);
+              phoneCandidates.add(`+91${tenDigits}`);
+              phoneCandidates.add(digits);
+              phoneCandidates.add(tenDigits);
+            } 
+            // Handle 13-digit numbers (+91 + 10 digits as string)
+            else if (digits.length === 13 && digits.startsWith('91')) {
+              const tenDigits = digits.slice(2);
+              phoneCandidates.add(`+91${tenDigits}`);
+              phoneCandidates.add(`91${tenDigits}`);
+              phoneCandidates.add(tenDigits);
             }
+            
+            // Also try the raw identifier as-is
             phoneCandidates.add(rawIdentifier);
 
             let resolvedUser: User | null = null;
@@ -213,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (resolvedUser?.email) {
               email = resolvedUser.email.toLowerCase();
             } else {
-              throw new Error("No account found with this WhatsApp number, phone number or username.");
+              throw new Error("No account found. Please check your WhatsApp number, phone number, username, or email.");
             }
           } catch (err: any) {
             console.error("Identifier lookup failed", err);
