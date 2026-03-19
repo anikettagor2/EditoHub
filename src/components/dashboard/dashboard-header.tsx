@@ -7,6 +7,8 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { getUnreadNotifications, markNotificationAsRead, markAllNotificationsAsRead } from "@/app/actions/admin-actions";
+import { db } from "@/lib/firebase/config";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 import Image from "next/image";
 import { useBranding } from "@/lib/context/branding-context";
@@ -24,16 +26,40 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
   
   useEffect(() => {
     if (user?.uid) {
-      fetchNotifications();
-      // Refresh notifications every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
+      // Set up real-time listener for notifications
+      try {
+        const q = query(
+          collection(db, "notifications"),
+          where("userId", "==", user.uid),
+          where("read", "==", false)
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const newNotifications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+          
+          setNotifications(newNotifications);
+        }, (error) => {
+          console.error("Error listening to notifications:", error);
+          // Fallback to polling if real-time fails
+          fetchNotifications();
+        });
+        
+        return () => unsubscribe();
+      } catch (error) {
+        console.error("Error setting up notification listener:", error);
+        // Fallback to polling
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000);
+        return () => clearInterval(interval);
+      }
     }
   }, [user?.uid]);
   
   const fetchNotifications = async () => {
     if (!user?.uid) return;
-    setLoading(true);
     try {
       const result = await getUnreadNotifications(user.uid);
       if (result.success) {
@@ -43,8 +69,6 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
-    } finally {
-      setLoading(false);
     }
   };
   
@@ -228,9 +252,14 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                               )}>
                                 {notification.title}
                               </p>
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-3">
                                 {notification.message}
                               </p>
+                              {notification.type === 'project_rejected' && notification.reason && (
+                                <p className="text-xs text-red-600 mt-2 p-2 bg-red-500/10 rounded border border-red-500/20">
+                                  <span className="font-semibold">Reason:</span> {notification.reason}
+                                </p>
+                              )}
                               <p className="text-[10px] text-muted-foreground mt-1">
                                 {new Date(notification.createdAt).toLocaleString()}
                               </p>
