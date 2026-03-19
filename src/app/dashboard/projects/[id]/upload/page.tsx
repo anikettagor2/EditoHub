@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, addDoc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
 import {
     startChunkedUpload,
     ChunkedUploadProgress,
@@ -84,14 +84,14 @@ export default function UploadRevisionPage() {
         try {
             const q = query(
                 collection(db, "revisions"),
-                where("projectId", "==", id),
-                orderBy("version", "desc"),
-                limit(1)
+                where("projectId", "==", id)
             );
             const snap = await getDocs(q);
             let nextVersion = 1;
             if (!snap.empty) {
-                const latest = snap.docs[0].data() as Revision;
+                // Sort in memory by version (descending) and get the latest
+                const revisions = snap.docs.map(doc => doc.data() as Revision);
+                const latest = revisions.sort((a, b) => (b.version || 0) - (a.version || 0))[0];
                 nextVersion = latest.version + 1;
             }
 

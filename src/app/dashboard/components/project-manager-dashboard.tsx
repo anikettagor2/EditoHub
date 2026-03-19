@@ -38,7 +38,7 @@ import {
     X as XIcon
 } from "lucide-react";
 import { db, storage } from "@/lib/firebase/config";
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, where, getDocs, limit } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, updateDoc, doc, where, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Project, User } from "@/types/schema";
 import { 
@@ -328,18 +328,19 @@ export function ProjectManagerDashboard() {
         try {
             const q = query(
                 collection(db, "revisions"),
-                where("projectId", "==", projectId),
-                orderBy("version", "desc"),
-                limit(1)
+                where("projectId", "==", projectId)
             );
             const snap = await getDocs(q);
             if (snap.empty) {
                 toast.error("No revisions uploaded yet for this project.");
                 return;
             }
-            const revisionId = snap.docs[0].id;
-            router.push(`/dashboard/projects/${projectId}/review/${revisionId}`);
+            // Sort in memory by version (descending) and get the latest
+            const revisions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const latest = revisions.sort((a: any, b: any) => (b.version || 0) - (a.version || 0))[0];
+            router.push(`/dashboard/projects/${projectId}/review/${latest.id}`);
         } catch (err) {
+            console.error('Review error:', err);
             toast.error("Failed to open review.");
         } finally {
             setReviewLoading(false);

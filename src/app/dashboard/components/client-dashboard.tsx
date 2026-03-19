@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, onSnapshot, orderBy, getDocs, limit } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore";
 import { Project, User } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import { 
@@ -187,13 +187,14 @@ export function ClientDashboard() {
             const revisionsRef = collection(db, 'revisions');
             const q = query(
                 revisionsRef,
-                where('projectId', '==', project.id),
-                orderBy('version', 'desc'),
-                limit(1)
+                where('projectId', '==', project.id)
             );
             const snapshot = await getDocs(q);
             if (snapshot.docs.length > 0) {
-                setSelectedRevision({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+                // Sort in memory by version (descending) and get the latest
+                const revisions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const latest = revisions.sort((a: any, b: any) => (b.version || 0) - (a.version || 0))[0];
+                setSelectedRevision(latest);
                 setIsReviewModalOpen(true);
             } else {
                 alert('No draft videos available for this project.');
