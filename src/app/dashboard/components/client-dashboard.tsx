@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, getDocs, limit } from "firebase/firestore";
 import { Project, User } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import { 
@@ -41,6 +41,7 @@ import {
     DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { motion, AnimatePresence } from "framer-motion";
+import { DraftReviewModal } from "./draft-review-modal";
 
 const CLIENT_VIDEO_TYPE_ALIASES: Record<string, string[]> = {
     "Reel Format": ["Reel Format", "Reels", "Short Videos"],
@@ -93,6 +94,8 @@ export function ClientDashboard() {
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+    const [selectedRevision, setSelectedRevision] = useState<any>(null);
+    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -176,6 +179,28 @@ export function ClientDashboard() {
             document.body.appendChild(anchor);
             anchor.click();
             anchor.remove();
+        }
+    };
+
+    const handleReviewClick = async (project: Project) => {
+        try {
+            const revisionsRef = collection(db, 'revisions');
+            const q = query(
+                revisionsRef,
+                where('projectId', '==', project.id),
+                orderBy('version', 'desc'),
+                limit(1)
+            );
+            const snapshot = await getDocs(q);
+            if (snapshot.docs.length > 0) {
+                setSelectedRevision({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+                setIsReviewModalOpen(true);
+            } else {
+                alert('No draft videos available for this project.');
+            }
+        } catch (error) {
+            console.error('Error fetching revision:', error);
+            alert('Error loading draft video. Please try again.');
         }
     };
 
@@ -369,7 +394,17 @@ export function ClientDashboard() {
                                                             {project.paymentStatus === 'full_paid' ? 'Paid' : project.paymentStatus === 'half_paid' ? 'Partial' : 'Pending'}
                                                         </span>
                                                     </td>
-                                                    <td className="px-4 py-3 text-center">
+                                                    <td className="px-4 py-3 text-center space-x-1.5 flex items-center justify-center">
+                                                        {project.status === 'in_review' && (
+                                                            <button
+                                                                onClick={() => handleReviewClick(project)}
+                                                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+                                                                title="Review draft video"
+                                                            >
+                                                                <FileVideo className="h-3.5 w-3.5" />
+                                                                Review
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => {
                                                                 setSelectedProject(project);
@@ -555,6 +590,13 @@ export function ClientDashboard() {
                     </div>
                 )}
             </Modal>
+
+            <DraftReviewModal
+                isOpen={isReviewModalOpen}
+                onClose={() => setIsReviewModalOpen(false)}
+                project={selectedProject}
+                revision={selectedRevision}
+            />
         </div>
     );
 }
