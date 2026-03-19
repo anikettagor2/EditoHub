@@ -812,12 +812,6 @@ export function ProjectManagerDashboard() {
                                                         </div>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
-                                                {/* Rejection Reason Display */}
-                                                {project.assignmentStatus === 'rejected' && project.editorDeclineReason && (
-                                                    <p className="text-[10px] text-red-500 mt-1.5 p-2 bg-red-500/10 rounded border border-red-500/20 line-clamp-2">
-                                                        {project.editorDeclineReason}
-                                                    </p>
-                                                )}
                                             </div>
                                             </td>
                                             {/* Editor Price */}
@@ -1575,16 +1569,7 @@ export function ProjectManagerDashboard() {
                                 Open Review & Comments
                             </button>
 
-                            {/* Decline Reason */}
-                            {inspectProject.assignmentStatus === 'rejected' && inspectProject.editorDeclineReason && (
-                                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                                    <div className="flex items-center gap-2 text-red-500 mb-2">
-                                        <AlertCircle className="h-4 w-4" />
-                                        <p className="text-sm font-medium">Editor Declined</p>
-                                    </div>
-                                    <p className="text-sm text-red-500/80">{inspectProject.editorDeclineReason}</p>
-                                </div>
-                            )}
+
                         </div>
 
                         {/* Sidebar - Financials & History */}
