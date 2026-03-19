@@ -184,19 +184,30 @@ export function ClientDashboard() {
 
     const handleReviewClick = async (project: Project) => {
         try {
+            console.log('Fetching revisions for project:', project.id);
             const revisionsRef = collection(db, 'revisions');
             const q = query(
                 revisionsRef,
                 where('projectId', '==', project.id)
             );
             const snapshot = await getDocs(q);
+            console.log('Found revisions:', snapshot.docs.length);
+            
             if (snapshot.docs.length > 0) {
                 // Sort in memory by version (descending) and get the latest
-                const revisions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const revisions = snapshot.docs.map(doc => {
+                    console.log('Revision data:', doc.data());
+                    return { id: doc.id, ...doc.data() };
+                });
                 const latest = revisions.sort((a: any, b: any) => (b.version || 0) - (a.version || 0))[0];
+                console.log('Latest revision:', latest);
+                
+                // Set both project and revision before opening modal
+                setSelectedProject(project);
                 setSelectedRevision(latest);
                 setIsReviewModalOpen(true);
             } else {
+                console.log('No revisions found for project');
                 alert('No draft videos available for this project.');
             }
         } catch (error) {

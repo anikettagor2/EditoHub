@@ -32,6 +32,9 @@ export function DraftReviewModal({
     const [rating, setRating] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Debug log
+    console.log('DraftReviewModal props:', { isOpen, projectId: project?.id, revisionId: revision?.id, videoUrl: revision?.videoUrl });
+
     const handleDownloadClick = () => {
         setShowFeedbackPopup(true);
     };
@@ -87,7 +90,17 @@ export function DraftReviewModal({
             title="Review Draft Video"
             maxWidth="max-w-4xl"
         >
-            {revision && project && (
+            {!revision || !project ? (
+                <div className="mt-4 py-12 text-center">
+                    <div className="inline-flex items-center gap-3 text-muted-foreground mb-4">
+                        <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                        <span className="text-sm">Loading draft video...</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-4">
+                        {!revision ? 'No revision data' : ''} {!project ? 'No project data' : ''}
+                    </p>
+                </div>
+            ) : (
                 <div className="mt-4 space-y-5 max-h-[75vh] overflow-y-auto pr-2">
                     {/* Video Player */}
                     <div className="space-y-3">
