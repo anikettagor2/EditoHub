@@ -187,21 +187,31 @@ export function EditorDashboardV2() {
 
     const handleRejectProject = async (projectId: string) => {
         if (!user?.uid) return;
+        
+        // Prompt for rejection reason (required)
+        const reason = window.prompt("Please provide a reason for declining this project:\n\n(This is required and will be shown to the PM)");
+        if (!reason?.trim()) {
+            toast.error("A reason is required to decline the project.");
+            return;
+        }
+        
         try {
-            await updateDoc(doc(db, "projects", projectId), {
-                assignmentStatus: "rejected",
-                assignedEditorId: null,
-                updatedAt: Date.now()
-            });
-            toast.success("Project rejected. PM will be notified.");
-            setSelectedProjectDetails(null);
-            setProjectTimers(prev => {
-                const updated = { ...prev };
-                delete updated[projectId];
-                return updated;
-            });
+            const { respondToAssignment } = await import('@/app/actions/admin-actions');
+            const result = await respondToAssignment(projectId, 'rejected', reason.trim());
+            
+            if (result.success) {
+                toast.success("Project declined. PM will be notified with your reason.");
+                setSelectedProjectDetails(null);
+                setProjectTimers(prev => {
+                    const updated = { ...prev };
+                    delete updated[projectId];
+                    return updated;
+                });
+            } else {
+                toast.error(result.error || "Failed to decline project");
+            }
         } catch (error) {
-            toast.error("Failed to reject project");
+            toast.error("Failed to decline project");
             console.error(error);
         }
     };

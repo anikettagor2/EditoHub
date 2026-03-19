@@ -277,6 +277,11 @@ export async function respondToAssignment(projectId: string, response: 'accepted
     try {
         const now = Date.now();
         
+        // Validate rejection reason - required for rejection
+        if (response === 'rejected' && !reason?.trim()) {
+            return { success: false, error: 'Rejection reason is required. Please provide a reason for declining this project.' };
+        }
+        
         // Check if assignment has expired
         const projectRef = adminDb.collection('projects').doc(projectId);
         const projectSnap = await projectRef.get();
@@ -312,7 +317,7 @@ export async function respondToAssignment(projectId: string, response: 'accepted
         };
 
         if (response === 'rejected') {
-            updateData.editorDeclineReason = reason || 'No reason provided';
+            updateData.editorDeclineReason = reason?.trim() || 'No reason provided';
             updateData.assignedEditorId = admin.firestore.FieldValue.delete();
             updateData.editorPrice = admin.firestore.FieldValue.delete();
             updateData.assignmentAt = admin.firestore.FieldValue.delete();
@@ -325,6 +330,7 @@ export async function respondToAssignment(projectId: string, response: 'accepted
         const editorId = projectData?.assignedEditorId;
         const pmId = projectData?.assignedPMId;
         let editorName = 'Editor';
+        let projectName = projectData?.name || 'New Project';
         
         if (editorId) {
             const editorSnap = await adminDb.collection('users').doc(editorId).get();
@@ -341,11 +347,29 @@ export async function respondToAssignment(projectId: string, response: 'accepted
             if (pmId) {
                 notifyPMEditorAccepted(projectId, pmId, editorName);
             }
-        } else {
-            // Notify PM that editor rejected
+        } else if (response === 'rejected') {
+            // Create in-app notification for PM about rejection
+            if (pmId) {
+                const notificationRef = adminDb.collection('notifications').doc();
+                await notificationRef.set({
+                    id: notificationRef.id,
+                    userId: pmId,
+                    type: 'project_rejected',
+                    title: `${projectName} - Editor Rejected`,
+                    message: `${editorName} rejected the assignment. Reason: ${reason?.trim() || 'No reason provided'}`,
+                    projectId: projectId,
+                    editorName: editorName,
+                    reason: reason?.trim() || 'No reason provided',
+                    read: false,
+                    link: `/dashboard?project=${projectId}`,
+                    createdAt: now
+                });
+            }
+            
+            // Also send WhatsApp notification
             const { notifyPMEditorRejected } = await import('@/lib/whatsapp');
             if (pmId) {
-                notifyPMEditorRejected(projectId, pmId, editorName, reason || 'No reason provided');
+                notifyPMEditorRejected(projectId, pmId, editorName, reason?.trim() || 'No reason provided');
             }
         }
 
@@ -618,6 +642,68 @@ export async function getSystemSettings() {
 export async function updateSystemSettings(settings: any) {
     try {
         await adminDb.collection('settings').doc('system').set(settings, { merge: true });
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Fetches unread notifications for a user
+ */
+export async function getUnreadNotifications(userId: string) {
+    try {
+        const notificationsSnap = await adminDb
+            .collection('notifications')
+            .where('userId', '==', userId)
+            .where('read', '==', false)
+            .orderBy('createdAt', 'desc')
+            .limit(20)
+            .get();
+        
+        const notifications = notificationsSnap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        
+        return { success: true, data: notifications };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Marks a notification as read
+ */
+export async function markNotificationAsRead(notificationId: string) {
+    try {
+        await adminDb.collection('notifications').doc(notificationId).update({
+            read: true,
+            readAt: Date.now()
+        });
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Marks all notifications as read for a user
+ */
+export async function markAllNotificationsAsRead(userId: string) {
+    try {
+        const notificationsSnap = await adminDb
+            .collection('notifications')
+            .where('userId', '==', userId)
+            .where('read', '==', false)
+            .get();
+        
+        const batch = adminDb.batch();
+        notificationsSnap.docs.forEach(doc => {
+            batch.update(doc.ref, { read: true, readAt: Date.now() });
+        });
+        
+        await batch.commit();
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message };
