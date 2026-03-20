@@ -48,6 +48,8 @@ import {
     Star,
     MonitorPlay,
     ExternalLink,
+    Eye,
+    ChevronRight,
     LayoutGrid,
     TrendingUp,
     FolderOpen,
@@ -67,7 +69,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/modal";
-import { Button } from "@/components/ui/button"; 
+import { Button } from "@/components/ui/button";
+import { ReviewSystemModal } from "./review-system-modal"; 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -226,6 +229,8 @@ export function AdminDashboard() {
   // Project Details/Audit Modal
   const [isProjectDetailModalOpen, setIsProjectDetailModalOpen] = useState(false);
   const [inspectProject, setInspectProject] = useState<Project | null>(null);
+  const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
+  const [reviewProject, setReviewProject] = useState<Project | null>(null);
 
   // User Creation State
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -1000,6 +1005,9 @@ export function AdminDashboard() {
                                                 </DropdownMenuItem>
                                                  <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setInspectProject(project); setIsProjectDetailModalOpen(true); }}>
                                                     <Search className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Inspect History
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setReviewProject(project); setIsReviewSystemOpen(true); }}>
+                                                    <Eye className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Open Review System
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator className="my-1 bg-border" />
                                                 <DropdownMenuItem onClick={() => handleDeleteProject(project.id)} className="p-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer rounded-lg">
@@ -2671,6 +2679,17 @@ export function AdminDashboard() {
             )}
         </Modal>
 
+        <ReviewSystemModal
+            isOpen={isReviewSystemOpen}
+            onClose={() => setIsReviewSystemOpen(false)}
+            project={reviewProject ? { 
+                id: reviewProject.id, 
+                name: reviewProject.name,
+                paymentStatus: reviewProject.paymentStatus,
+                editorRating: reviewProject.editorRating
+            } : null}
+        />
+
         <Modal 
             isOpen={isProjectDetailModalOpen} 
             onClose={() => setIsProjectDetailModalOpen(false)} 
@@ -2702,6 +2721,15 @@ export function AdminDashboard() {
                         </div>
                         <div className="relative z-10 flex flex-col items-end gap-2 text-right">
                             <ProjectStatusBadges project={inspectProject} />
+                            <button
+                                onClick={() => {
+                                    setReviewProject(inspectProject);
+                                    setIsReviewSystemOpen(true);
+                                }}
+                                className="text-[10px] font-black uppercase tracking-widest bg-blue-500/10 border border-blue-500/30 text-blue-500 px-3 py-1 rounded-md hover:bg-blue-500/20"
+                            >
+                                Review
+                            </button>
                             <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest bg-card px-3 py-1 rounded-md border border-border">
                                 Last Updated: {new Date(inspectProject.updatedAt).toLocaleString()}
                             </div>

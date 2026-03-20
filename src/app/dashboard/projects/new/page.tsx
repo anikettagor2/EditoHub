@@ -146,8 +146,20 @@ export default function NewProjectPage() {
         ? availablePrices[Math.min(selectedPriceIndex, availablePrices.length - 1)].price 
         : getResolvedClientRate(user?.customRates, videoType);
     
+    // Add 18% GST (9% CGST + 9% SGST)
+    const gstRate = 0.18;
+    const pricingBeforeTax = basePrice;
+    const gstAmount = pricingBeforeTax * gstRate;
+    const basePriceWithGst = pricingBeforeTax + gstAmount;
+
     const urgentExtraCost = urgency === 'urgent' ? DEFAULT_URGENT_PRICE : 0;
-    const finalCost = basePrice + urgentExtraCost;
+    const urgentExtraWithGst = urgentExtraCost * (1 + gstRate);
+    
+    // Final total for the project (100%)
+    const finalTotalWithGst = basePriceWithGst + urgentExtraWithGst;
+    
+    // Upfront is 50% of the total cost
+    const upfrontPayment = finalTotalWithGst / 2;
 
     const canPayLater = user?.payLater === true;
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -155,7 +167,7 @@ export default function NewProjectPage() {
     // Pay Later limit check
     const creditLimit = user?.creditLimit || 0;
     const pendingDues = user?.pendingDues || 0;
-    const canUsePayLater = canPayLater && (pendingDues + finalCost <= creditLimit);
+    const canUsePayLater = canPayLater && (pendingDues + upfrontPayment <= creditLimit);
     const remainingCredit = Math.max(0, creditLimit - pendingDues);
 
     useEffect(() => {
@@ -402,10 +414,12 @@ export default function NewProjectPage() {
             videoType,
             description,
             urgency,
-            budget: finalCost,
-            totalCost: finalCost,
-            amountPaid: paymentOption === 'pay_now' ? finalCost : 0, 
-            paymentStatus: paymentOption === 'pay_now' ? 'full_paid' : 'pay_later',
+            budget: finalTotalWithGst,
+            totalCost: finalTotalWithGst,
+            upfrontAmount: upfrontPayment,
+            remainingAmount: finalTotalWithGst - upfrontPayment,
+            amountPaid: paymentOption === 'pay_now' ? upfrontPayment : 0, 
+            paymentStatus: paymentOption === 'pay_now' ? 'half_paid' : 'unpaid',
             paymentOption,
             razorpayPaymentId: razorpayPaymentId || null,
             deadline: null,
@@ -454,7 +468,7 @@ export default function NewProjectPage() {
             // Update user's pending dues
             const userRef = doc(db, "users", user.uid);
             await updateDoc(userRef, {
-                pendingDues: increment(finalCost)
+                pendingDues: increment(upfrontPayment)
             });
             
             toast.success("Project created successfully!");
@@ -486,7 +500,7 @@ export default function NewProjectPage() {
             // 3. Create Razorpay Order
             const orderRes = await fetch("/api/create-order", {
                 method: "POST",
-                body: JSON.stringify({ amount: finalCost, projectId: tempOrderId }),
+                body: JSON.stringify({ amount: upfrontPayment, projectId: tempOrderId }),
                 headers: { "Content-Type": "application/json" }
             });
             
@@ -1238,11 +1252,21 @@ export default function NewProjectPage() {
                                         </div>
                                     </div>
                                 )}
+                                <div className="flex justify-between items-center pb-4 border-b border-border">
+                                    <span className="text-sm text-muted-foreground font-bold uppercase tracking-widest">GST (18%)</span>
+                                    <div className="flex items-center font-bold text-foreground">
+                                        + <IndianRupee className="w-4 h-4 mx-1 text-muted-foreground" />
+                                        {gstAmount.toLocaleString()}
+                                    </div>
+                                </div>
                                 <div className="flex justify-between items-center pt-2">
-                                    <span className="text-lg text-foreground font-black">Total Cost</span>
+                                    <div className="flex flex-col">
+                                        <span className="text-lg text-foreground font-black">Total Project Value</span>
+                                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest italic">50% upfront required</span>
+                                    </div>
                                     <div className="flex items-center text-3xl font-black text-primary">
                                         <IndianRupee className="w-6 h-6 mr-1" />
-                                        {finalCost.toLocaleString()}
+                                        {finalTotalWithGst.toLocaleString()}
                                     </div>
                                 </div>
                             </div>
@@ -1266,24 +1290,24 @@ export default function NewProjectPage() {
                                 <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-3">
                                     <div className="flex items-center gap-2 mb-2">
                                         <CreditCard className="w-5 h-5 text-green-400" />
-                                        <span className="text-sm font-bold text-green-400">Secure Payment</span>
+                                        <span className="text-sm font-bold text-green-400">Secure 50% Upfront Payment</span>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Complete your payment securely via Razorpay. Your project will be submitted immediately after successful payment.
+                                        Pay ₹{upfrontPayment.toLocaleString()} now (50%) to start the project. The remaining 50% will be paid upon final draft approval.
                                     </p>
                                 </div>
                                 <Button 
                                     onClick={handlePayNow} 
                                     disabled={isSubmitting || isProcessingPayment}
                                     size="lg" 
-                                    className="h-14 rounded-xl font-bold tracking-wide w-full bg-green-600 hover:bg-green-700"
+                                    className="h-14 rounded-xl font-bold tracking-wide w-full bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/10"
                                 >
                                     {(isSubmitting || isProcessingPayment) ? (
                                         <Loader2 className="w-5 h-5 animate-spin mr-2" />
                                     ) : (
                                         <CreditCard className="w-5 h-5 mr-3" />
                                     )}
-                                    Pay ₹{finalCost.toLocaleString()} & Submit
+                                    Pay ₹{upfrontPayment.toLocaleString()} & Start Project
                                 </Button>
                             </div>
 
@@ -1313,7 +1337,7 @@ export default function NewProjectPage() {
                                         </div>
                                         {canUsePayLater ? (
                                             <p className="text-xs text-muted-foreground">
-                                                Submit your project now and settle payment with your Project Manager later.
+                                                Submit your project now and settle the 50% upfront payment (₹{upfrontPayment.toLocaleString()}) with your Project Manager later.
                                                 <span className="block mt-1 text-blue-400 font-medium">
                                                     Available Credit: ₹{remainingCredit.toLocaleString()} / ₹{creditLimit.toLocaleString()}
                                                 </span>
@@ -1332,14 +1356,14 @@ export default function NewProjectPage() {
                                         disabled={isSubmitting || !canUsePayLater}
                                         size="lg" 
                                         className={cn(
-                                            "h-14 rounded-xl font-bold tracking-wide w-full",
+                                            "h-14 rounded-xl font-bold tracking-wide w-full shadow-lg transition-all",
                                             canUsePayLater 
-                                                ? "bg-blue-600 hover:bg-blue-700" 
-                                                : "bg-gray-500 cursor-not-allowed"
+                                                ? "bg-blue-600 hover:bg-blue-700 shadow-blue-500/10" 
+                                                : "bg-gray-500 cursor-not-allowed opacity-50"
                                         )}
                                     >
                                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Clock className="w-5 h-5 mr-3" />}
-                                        Submit Project (Pay Later)
+                                        Submit with ₹{upfrontPayment.toLocaleString()} (Pay Later)
                                     </Button>
                                 </div>
                             )}

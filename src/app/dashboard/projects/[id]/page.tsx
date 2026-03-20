@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { doc, collection, query, where, orderBy, updateDoc, arrayUnion, onSnapshot } from "firebase/firestore";
+import { doc, collection, query, where, orderBy, updateDoc, arrayUnion, onSnapshot, increment } from "firebase/firestore";
 import { Project, Revision } from "@/types/schema";
 import { 
     Loader2, 
@@ -256,6 +256,7 @@ export default function ProjectDetailsPage() {
     const [editorReview, setEditorReview] = useState('');
     const [isSubmittingRating, setIsSubmittingRating] = useState(false);
     const [pendingDownloadId, setPendingDownloadId] = useState<string | null>(null);
+    const [isDownloadingState, setIsDownloadingState] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isTimelineModalOpen, setIsTimelineModalOpen] = useState(false);
     const [assignmentTimeRemaining, setAssignmentTimeRemaining] = useState<number | null>(null);
@@ -312,7 +313,24 @@ export default function ProjectDetailsPage() {
     };
 
     const initiateDownload = async (revisionId: string) => {
-        setIsDownloading(true);
+        // Logic check: Must be fully paid unless it's a payLater user with auth
+        const isFullyPaid = project?.paymentStatus === 'full_paid';
+        const isPayLater = user?.payLater || (project as any).isPayLaterRequest;
+        
+        if (!isFullyPaid && !isPayLater) {
+            setPendingDownloadId(revisionId);
+            setIsPaymentModalOpen(true);
+            return;
+        }
+
+        // Logic check: Must have rating and feedback
+        if (!project?.editorRating) {
+            setPendingDownloadId(revisionId);
+            setIsRatingModalOpen(true);
+            return;
+        }
+
+        setIsDownloadingState(true);
         try {
             const res = await registerDownload(id as string, revisionId);
             if (res.success && res.downloadUrl) {
@@ -322,8 +340,7 @@ export default function ProjectDetailsPage() {
                 );
                 toast.success(`Download initiated.`);
                 
-                const isPayLaterMode = user?.payLater || (project as any).isPayLaterRequest;
-                if (isPayLaterMode) {
+                if (isPayLater) {
                     await updateDoc(doc(db, "projects", id as string), {
                         clientHasDownloaded: true,
                         downloadUnlockedAt: Date.now(),
@@ -336,16 +353,13 @@ export default function ProjectDetailsPage() {
                     });
                     setProject(prev => prev ? ({ ...prev, status: 'completed' }) : null);
                 }
-                
-                // Send project completion notifications (fire-and-forget)
-                handleProjectCompleted(id as string).catch(console.error);
             } else {
                 toast.error(res.error || 'Download error.');
             }
         } catch (e: any) {
             toast.error(e.message || 'Download failed.');
         } finally {
-            setIsDownloading(false);
+            setIsDownloadingState(false);
         }
     };
 
@@ -772,22 +786,14 @@ export default function ProjectDetailsPage() {
                                 </div>
                                 
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-500 backdrop-blur-sm">
-                                    {showFeedbackTool ? (
-                                        <Link href={`/dashboard/projects/${id}/review/${latestRevision.id}`}>
-                                            <button className="h-20 w-20 bg-primary  rounded-full flex items-center justify-center hover:scale-110 transition-transform shadow-2xl active:scale-95">
-                                                <Play className="h-8 w-8 text-primary-foreground fill-primary ml-1" />
-                                            </button>
-                                        </Link>
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-4">
-                                            <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center border border-border opacity-50">
-                                                <Lock className="h-6 w-6 text-muted-foreground" />
-                                            </div>
-                                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-black/5 dark:bg-black/40 border border-border rounded-lg">
-                                                Awaiting Next Steps
-                                            </span>
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center border border-border opacity-50">
+                                            <Lock className="h-6 w-6 text-muted-foreground" />
                                         </div>
-                                    )}
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-black/5 dark:bg-black/40 border border-border rounded-lg">
+                                            Awaiting Next Steps
+                                        </span>
+                                    </div>
                                 </div>
 
                                 {/* Video Metadata Overlays */}
@@ -808,7 +814,7 @@ export default function ProjectDetailsPage() {
                                     <p className="text-sm text-muted-foreground font-medium">Version v{latestRevision.version} is ready for you to look at.</p>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    {showFeedbackTool && (
+                                    {showFeedbackTool && project.status !== 'completed' && (
                                         <Link href={`/dashboard/projects/${id}/review/${latestRevision.id}`}>
                                             <button className="h-11 px-5 rounded-lg bg-muted/50 border border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground text-[11px] font-bold uppercase tracking-widest transition-all active:scale-[0.98] flex items-center gap-2.5">
                                                 <MessageSquare className="h-4 w-4" />
@@ -818,60 +824,36 @@ export default function ProjectDetailsPage() {
                                     )}
                                     {isClient ? (
                                         (() => {
-                                            if (isPaymentLocked && !user?.payLater) {
-                                                return (
-                                                    <button onClick={handleFinalPayment} className="h-11 px-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-all active:scale-[0.98] flex items-center gap-2.5 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                                                        <IndianRupee className="h-4 w-4" />
-                                                        Complete Payment
-                                                    </button>
-                                                );
-                                            }
-
-                                            if (project.downloadsUnlocked || user?.payLater || (project as any).isPayLaterRequest) {
-                                                return (
-                                                    <button
-                                                        disabled={isDownloading}
-                                                        onClick={async () => {
-                                                            if (!latestRevision) return;
-                                                            if (isClient && !project.editorRating) {
-                                                                setPendingDownloadId(latestRevision.id);
-                                                                setIsRatingModalOpen(true);
-                                                            } else {
-                                                                await initiateDownload(latestRevision.id);
-                                                            }
-                                                        }}
-                                                        className="h-11 px-6 rounded-lg bg-primary  text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-[0.98] flex items-center gap-2.5 shadow-md shadow-primary/10"
-                                                    >
-                                                        {isDownloading ? <><Loader2 className="h-4 w-4 animate-spin" /> Fetching...</> : <><Download className="h-4 w-4" /> Download</>}
-                                                    </button>
-                                                );
-                                            }
-
-                                            if (project.downloadUnlockRequested) {
-                                                return (
-                                                    <div className="flex items-center gap-3 h-11 px-5 bg-muted/50 border border-border rounded-lg">
-                                                        <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
-                                                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Checking Download Access</span>
-                                                    </div>
-                                                );
-                                            }
-
+                                            const isPayLater = user?.payLater || (project as any).isPayLaterRequest;
+                                            
                                             return (
                                                 <button
+                                                    disabled={isDownloadingState}
                                                     onClick={async () => {
-                                                        if (!user) return;
-                                                        const res = await requestDownloadUnlock(id as string, user.uid);
-                                                        if (res.success) {
-                                                            toast.success("Download request logged.");
-                                                            setProject(prev => prev ? ({ ...prev, downloadUnlockRequested: true }) : null);
-                                                        } else {
-                                                            toast.error(res.error);
-                                                        }
+                                                        if (!latestRevision) return;
+                                                        await initiateDownload(latestRevision.id);
                                                     }}
-                                                    className="h-11 px-6 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold uppercase tracking-widest hover:bg-primary/20 transition-all active:scale-[0.98] flex items-center gap-2.5"
+                                                    className={cn(
+                                                        "h-11 px-6 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all active:scale-[0.98] flex items-center gap-2.5 shadow-md",
+                                                        isPaymentLocked && !isPayLater 
+                                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/10"
+                                                            : !project.editorRating
+                                                                ? "bg-amber-600 text-white hover:bg-amber-700 shadow-amber-500/10"
+                                                                : "bg-primary text-primary-foreground hover:bg-zinc-200 shadow-primary/10"
+                                                    )}
                                                 >
-                                                    <Unlock className="h-4 w-4" />
-                                                    Get Video File
+                                                    {isDownloadingState ? (
+                                                        <><Loader2 className="h-4 w-4 animate-spin" /> Fetching...</>
+                                                    ) : (
+                                                        <>
+                                                            <Download className="h-4 w-4" /> 
+                                                            {isPaymentLocked && !isPayLater 
+                                                                ? "Pay & Download" 
+                                                                : !project.editorRating 
+                                                                    ? "Rate & Download" 
+                                                                    : "Download Final Video"}
+                                                        </>
+                                                    )}
                                                 </button>
                                             );
                                         })()
@@ -1440,23 +1422,23 @@ export default function ProjectDetailsPage() {
                             <IndianRupee className="h-6 w-6" />
                         </div>
                         <div className="space-y-0.5 min-w-0">
-                            <h4 className="font-bold text-base tracking-tight truncate">Final Payment</h4>
-                            <p className="text-xs text-muted-foreground font-medium leading-relaxed">Complete the payment to unlock and download your final high-quality video.</p>
+                            <h4 className="font-bold text-base tracking-tight truncate">Final 50% Balance</h4>
+                            <p className="text-xs text-muted-foreground font-medium leading-relaxed">Complete your remaining project payment with 18% GST to unlock high-quality download.</p>
                         </div>
                     </div>
 
                     <div className="space-y-3 px-1">
                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Total Price</span>
+                            <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Total (100% Inc. GST)</span>
                             <span className="text-muted-foreground font-bold font-heading">₹{project?.totalCost?.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Paid So Far</span>
-                            <span className="text-muted-foreground font-bold font-heading">₹{project?.amountPaid?.toLocaleString() || '0'}</span>
+                            <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Initial 50% Paid</span>
+                            <span className="text-muted-foreground font-bold font-heading text-emerald-500">₹{(project?.amountPaid || 0).toLocaleString()}</span>
                         </div>
                         <div className="h-px bg-muted/50 my-4" />
                         <div className="flex justify-between items-end">
-                            <span className="text-foreground font-bold uppercase tracking-widest text-[11px] mb-1">Remaining Balance</span>
+                            <span className="text-foreground font-bold uppercase tracking-widest text-[11px] mb-1">Final Amount Due</span>
                             <span className="text-primary font-black font-heading text-4xl tracking-tighter text-glow">₹{((project?.totalCost || 0) - (project?.amountPaid || 0)).toLocaleString()}</span>
                         </div>
                     </div>
@@ -1466,15 +1448,40 @@ export default function ProjectDetailsPage() {
                             projectId={id as string}
                             user={user}
                             amount={(project?.totalCost || 0) - (project?.amountPaid || 0)}
-                            description={`Billing for: ${project?.name}`}
+                            description={`Final Payment: ${project?.name}`}
                             prefill={{
                                 name: user?.displayName || "",
                                 email: user?.email || ""
                             }}
-                            onSuccess={() => {
-                                setProject(prev => prev ? ({ ...prev, paymentStatus: 'full_paid', status: 'completed' }) : null);
+                            onSuccess={async () => {
+                                const finalAmount = (project?.totalCost || 0) - (project?.amountPaid || 0);
+                                if ((project as any).isPayLaterRequest) {
+                                    // Settle pending dues for pay later
+                                    const userRef = doc(db, "users", user!.uid);
+                                    await updateDoc(userRef, {
+                                        pendingDues: increment(-finalAmount)
+                                    });
+                                }
+                                
+                                await updateDoc(doc(db, "projects", id as string), {
+                                    paymentStatus: 'full_paid',
+                                    amountPaid: project?.totalCost
+                                });
+                                
+                                setProject(prev => prev ? ({ 
+                                    ...prev, 
+                                    paymentStatus: 'full_paid', 
+                                    amountPaid: project?.totalCost 
+                                }) : null);
+
                                 setIsPaymentModalOpen(false);
-                                toast.success("Payment successful! Your final video is now available for download.");
+                                
+                                toast.success("Payment successful! Now provide feedback to start your download.");
+                                
+                                // Automatically open the rating modal after a small delay to allow transition
+                                setTimeout(() => {
+                                    setIsRatingModalOpen(true);
+                                }, 500);
                             }}
                         />
                         <p className="text-center text-[10px] text-muted-foreground font-bold uppercase tracking-widest opacity-60">
@@ -1534,7 +1541,7 @@ export default function ProjectDetailsPage() {
                         ))}
                     </div>
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Leave a Review (Optional)</label>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Leave a Review (Required)</label>
                         <textarea
                             value={editorReview}
                             onChange={(e) => setEditorReview(e.target.value)}
@@ -1544,7 +1551,7 @@ export default function ProjectDetailsPage() {
                     </div>
                     <button
                         onClick={handleRatingSubmit}
-                        disabled={isSubmittingRating || editorRating === 0}
+                        disabled={isSubmittingRating || editorRating === 0 || !editorReview.trim()}
                         className="w-full h-12 rounded-xl bg-primary  text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-50"
                     >
                         {isSubmittingRating ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit Feedback"}

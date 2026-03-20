@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
 import { 
     Loader2, 
@@ -38,7 +37,7 @@ import {
     X as XIcon
 } from "lucide-react";
 import { db, storage } from "@/lib/firebase/config";
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, where, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, updateDoc, doc, where } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Project, User } from "@/types/schema";
 import { 
@@ -66,7 +65,7 @@ import { Modal } from "@/components/ui/modal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { FilePreview } from "@/components/file-preview";
-import { DraftReviewModal } from "./draft-review-modal";
+import { ReviewSystemModal } from "./review-system-modal";
 
 
 // Stats Card Component
@@ -195,11 +194,8 @@ export function ProjectManagerDashboard() {
     const [pmFileInput, setPmFileInput] = useState<HTMLInputElement | null>(null);
     const [openRejectionPopup, setOpenRejectionPopup] = useState<string | null>(null);
     
-    // Draft Review Modal
-    const [selectedRevisionForReview, setSelectedRevisionForReview] = useState<any>(null);
-    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-    
-    const router = useRouter();
+    const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
+    const [reviewProject, setReviewProject] = useState<Project | null>(null);
 
     useEffect(() => {
         setLoading(true);
@@ -332,22 +328,17 @@ export function ProjectManagerDashboard() {
     const handleOpenReview = async (projectId: string) => {
         setReviewLoading(true);
         try {
-            const q = query(
-                collection(db, "revisions"),
-                where("projectId", "==", projectId)
-            );
-            const snap = await getDocs(q);
-            if (snap.empty) {
-                toast.error("No revisions uploaded yet for this project.");
+            const target = projects.find((p) => p.id === projectId) || inspectProject || null;
+            if (!target) {
+                toast.error("Project not found.");
                 return;
             }
-            // Sort in memory by version (descending) and get the latest
-            const revisions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const latest = revisions.sort((a: any, b: any) => (b.version || 0) - (a.version || 0))[0];
-            
-            // Set revision for modal instead of routing
-            setSelectedRevisionForReview(latest);
-            setIsReviewModalOpen(true);
+            if (target.status === 'completed') {
+                toast.error("Review is disabled for completed projects.");
+                return;
+            }
+            setReviewProject(target);
+            setIsReviewSystemOpen(true);
         } catch (err) {
             console.error('Review error:', err);
             toast.error("Failed to open review.");
@@ -894,7 +885,7 @@ export function ProjectManagerDashboard() {
                                                 <div className="flex items-center gap-2">
                                                 <button
                                                     onClick={() => handleOpenReview(project.id)}
-                                                    disabled={reviewLoading}
+                                                    disabled={reviewLoading || project.status === 'completed'}
                                                     className="h-8 flex items-center gap-1.5 px-3 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer active:scale-95"
                                                 >
                                                     {reviewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquare className="h-3 w-3" />}
@@ -1559,7 +1550,7 @@ export function ProjectManagerDashboard() {
                             {/* Review Button */}
                             <button
                                 onClick={() => handleOpenReview(inspectProject.id)}
-                                disabled={reviewLoading}
+                                disabled={reviewLoading || inspectProject.status === 'completed'}
                                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer active:scale-95"
                             >
                                 {reviewLoading ? (
@@ -1652,13 +1643,17 @@ export function ProjectManagerDashboard() {
                 )}
             </Modal>
 
-            <DraftReviewModal
-                isOpen={isReviewModalOpen}
-                onClose={() => setIsReviewModalOpen(false)}
-                project={inspectProject}
-                revision={selectedRevisionForReview}
-                userRole="manager"
+            <ReviewSystemModal
+                isOpen={isReviewSystemOpen}
+                onClose={() => setIsReviewSystemOpen(false)}
+                project={reviewProject ? { 
+                    id: reviewProject.id, 
+                    name: reviewProject.name,
+                    paymentStatus: reviewProject.paymentStatus,
+                    editorRating: reviewProject.editorRating
+                } : null}
             />
+
         </div>
     );
 }

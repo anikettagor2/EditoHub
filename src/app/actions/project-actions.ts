@@ -8,6 +8,23 @@ import { FieldValue } from "firebase-admin/firestore";
 const DOWNLOAD_LIMIT = 3;
 const ASSET_PURGE_DELAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * ⚠️ CRITICAL BUSINESS RULE ⚠️
+ * 
+ * PROJECT COMPLETION IS TIED TO CLIENT DOWNLOADS ONLY
+ * 
+ * A project is marked as "completed" ONLY when:
+ * 1. The client successfully downloads the final video (registerDownload function)
+ * 2. The clientHasDownloaded flag is set to true
+ * 
+ * NO OTHER FUNCTION should manually set status to "completed"
+ * - Editors CANNOT mark projects as complete
+ * - Project Managers CANNOT mark projects as complete  
+ * - Only client downloads trigger the "completed" status
+ * 
+ * @see registerDownload() - The ONLY function that should set status to 'completed'
+ */
+
 function extractStoragePathFromUrl(url?: string): string | null {
     if (!url) return null;
 

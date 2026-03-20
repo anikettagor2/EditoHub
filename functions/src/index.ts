@@ -97,6 +97,58 @@ function campaignByRole(role?: string): string {
     return "PROJECT_MANAGER";
 }
 
+// ---------------------------------------------------------------------------
+// Send WhatsApp notification to PM when editor doesn't accept assignment
+// ---------------------------------------------------------------------------
+async function sendAssignmentTimeoutWhatsApp(params: {
+    pmName: string;
+    pmPhone: string;
+    projectName: string;
+    editorName?: string;
+}): Promise<void> {
+    const apiKey = process.env.AISENSY_API_KEY;
+    if (!apiKey) {
+        console.warn("[WhatsApp] AISENSY_API_KEY missing; skipping assignment-timeout notification");
+        return;
+    }
+
+    const settingsSnap = await admin.firestore().collection("settings").doc("whatsapp").get();
+    const settings = settingsSnap.exists ? settingsSnap.data() : null;
+    if (settings && settings.enabled === false) return;
+
+    const message = `Editor did not respond to project assignment within 15 minutes: "${params.projectName}". Please reassign to another editor or take appropriate action.`;
+    const campaignName = settings?.campaigns?.pm || "PROJECT_MANAGER";
+
+    const payload = {
+        apiKey,
+        campaignName,
+        destination: params.pmPhone,
+        userName: params.pmPhone,
+        templateParams: [
+            params.pmName || "Project Manager",
+            message,
+            "EditoHub Assignment Timeout",
+        ],
+        source: "EditoHub-Functions",
+    };
+
+    const response = await fetch(AISENSY_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        console.error("[WhatsApp] assignment-timeout send failed:", response.status, text);
+    } else {
+        console.log(`[WhatsApp] PM notified of assignment timeout for project: ${params.projectName}`);
+    }
+}
+
 async function sendAccountCreatedWhatsApp(params: {
     name: string;
     role: string;
@@ -147,6 +199,64 @@ async function sendAccountCreatedWhatsApp(params: {
         console.error("[WhatsApp] account-created send failed:", response.status, text);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Scheduled: Handle assignment timeout (15 minutes) - Auto-reject if not accepted
+// ---------------------------------------------------------------------------
+export const handleAssignmentTimeout = functions.pubsub
+    .schedule("every 5 minutes")
+    .onRun(async () => {
+        const now = Date.now();
+        const fifteenMinutesAgo = now - (15 * 60 * 1000);
+
+        // Find projects with pending assignment that haven't been accepted within 15 minutes
+        const pendingSnap = await admin.firestore()
+            .collection("projects")
+            .where("assignmentStatus", "==", "pending")
+            .where("assignedAt", "<=", fifteenMinutesAgo)
+            .get();
+
+        for (const projectDoc of pendingSnap.docs) {
+            const project = projectDoc.data() as any;
+            const editorId = project.assignedEditorId;
+            const pmId = project.assignedPMId;
+
+            if (!editorId || !pmId) continue;
+
+            // Get editor and PM details
+            const editorSnap = await admin.firestore().collection("users").doc(editorId).get();
+            const pmSnap = await admin.firestore().collection("users").doc(pmId).get();
+
+            const editor = editorSnap.data();
+            const pm = pmSnap.data();
+
+            // Mark assignment as automatically rejected
+            await projectDoc.ref.update({
+                assignmentStatus: "rejected",
+                rejectionReason: "Auto-rejected: Editor did not accept assignment within 15 minutes",
+                autoRejectedAt: now,
+                updatedAt: now,
+            });
+
+            // Send WhatsApp notification to PM
+            if (pm?.whatsappNumber || pm?.phoneNumber) {
+                const pmPhone = pm.whatsappNumber || pm.phoneNumber;
+                const normalizedPhone = normalizePhone(pmPhone);
+                if (normalizedPhone) {
+                    await sendAssignmentTimeoutWhatsApp({
+                        pmName: pm.displayName || "Project Manager",
+                        pmPhone: normalizedPhone,
+                        projectName: project.name || "Unknown Project",
+                        editorName: editor?.displayName,
+                    });
+                }
+            }
+
+            console.log(`[AssignmentTimeout] Project auto-rejected: ${projectDoc.id}, Editor: ${editorId}`);
+        }
+
+        return null;
+    });
 
 // ---------------------------------------------------------------------------
 // Scheduled cleanup: purge project assets 24h after first client download

@@ -17,12 +17,33 @@ import {
     Film,
     Check,
     X as XIcon,
-    Upload
+    Upload,
+    Download,
+    FileStack,
+    Zap,
+    CheckCircle,
+    RefreshCw,
+    MessageSquare,
+    History,
+    FileVideo,
+    FileText,
+    File,
+    Archive,
+    FileIcon,
+    Briefcase,
+    Banknote,
+    Circle,
+    User,
+    Mail,
+    Users,
+    LinkIcon,
+    ArrowRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { UploadDraftModal } from "./upload-draft-modal";
+import { ReviewSystemModal } from "./review-system-modal";
 
 export function EditorDashboardV2() {
     const { user } = useAuth();
@@ -38,6 +59,8 @@ export function EditorDashboardV2() {
     const [selectedUploadProject, setSelectedUploadProject] = useState<Project | null>(null);
     const [projectRevisions, setProjectRevisions] = useState<Record<string, any>>({});
     const [projectTimers, setProjectTimers] = useState<Record<string, number>>({});
+    const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
+    const [reviewProject, setReviewProject] = useState<Project | null>(null);
 
     useEffect(() => {
         if (!user) return;
@@ -125,6 +148,11 @@ export function EditorDashboardV2() {
                     if (updated[projectId] > 0) {
                         updated[projectId] -= 1;
                         hasActive = true;
+                        
+                        // When timer reaches 0, handle timeout
+                        if (updated[projectId] === 0) {
+                            handleAssignmentTimeout(projectId);
+                        }
                     }
                 }
                 
@@ -134,6 +162,29 @@ export function EditorDashboardV2() {
         
         return () => clearInterval(interval);
     }, []);
+
+    const handleAssignmentTimeout = async (projectId: string) => {
+        const project = projects.find(p => p.id === projectId);
+        if (!project) return;
+
+        // Check if still pending (cloud function will auto-reject, but we show UI feedback)
+        toast.error(
+            "⏱️ Assignment Time Expired: You did not accept this project within 15 minutes. The PM has been notified automatically.",
+            { duration: 5000 }
+        );
+
+        // Remove from pending state UI
+        setProjectTimers(prev => {
+            const updated = { ...prev };
+            delete updated[projectId];
+            return updated;
+        });
+
+        // Close modal if this project was open
+        if (selectedProjectDetails?.id === projectId) {
+            setSelectedProjectDetails(null);
+        }
+    };
 
     const startProjectTimer = (projectId: string) => {
         setProjectTimers(prev => ({
@@ -488,171 +539,382 @@ export function EditorDashboardV2() {
                                         </div>
                                     </div>
 
-                                    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-3">
-                                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Project Files</p>
+                                    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-5">
+                                        <div className="flex items-center gap-2 justify-between">
+                                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">📁 Project Files & Assets</p>
+                                            {(selectedProjectDetails.rawFiles?.length || selectedProjectDetails.referenceFiles?.length || selectedProjectDetails.footageLink) && (
+                                                <span className="text-[9px] font-bold px-2 py-1 bg-primary/20 text-primary rounded-full">
+                                                    {(selectedProjectDetails.rawFiles?.length || 0) + (selectedProjectDetails.referenceFiles?.length || 0) + (selectedProjectDetails.footageLink ? 1 : 0)} items
+                                                </span>
+                                            )}
+                                        </div>
 
+                                        {/* Footage Link */}
                                         {selectedProjectDetails.footageLink && (
-                                            <div className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border">
-                                                <span className="text-xs font-medium truncate">Raw Footage Drive Link</span>
-                                                <button
-                                                    onClick={() => window.open(selectedProjectDetails.footageLink, '_blank')}
-                                                    className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
-                                                    title="Open link"
-                                                >
-                                                    <Eye className="h-3.5 w-3.5" />
-                                                </button>
+                                            <a 
+                                                href={selectedProjectDetails.footageLink.startsWith('http') ? selectedProjectDetails.footageLink : `https://${selectedProjectDetails.footageLink}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="flex items-center justify-between gap-3 p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-400/5 border border-blue-500/20 hover:border-blue-500/40 hover:bg-blue-500/15 transition-all group"
+                                            >
+                                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                    <div className="h-9 w-9 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500 flex-shrink-0">
+                                                        <LinkIcon className="h-4.5 w-4.5" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-[10px] text-blue-500/70 font-bold uppercase tracking-widest">Raw Footage Link</p>
+                                                        <p className="text-xs font-medium text-foreground group-hover:text-blue-500 transition-colors truncate mt-0.5">Google Drive / External Storage</p>
+                                                    </div>
+                                                </div>
+                                                <div className="h-8 w-8 rounded-lg bg-blue-500/20 text-blue-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/30 transition-all">
+                                                    <ArrowRight className="h-4 w-4" />
+                                                </div>
+                                            </a>
+                                        )}
+
+                                        {/* Client Raw Files */}
+                                        {selectedProjectDetails.rawFiles && selectedProjectDetails.rawFiles.length > 0 && (
+                                            <div className="space-y-3">
+                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold ml-1 flex items-center gap-2">
+                                                    <span className="text-xs">📦</span> Client Assets
+                                                </p>
+                                                <div className="grid gap-2">
+                                                    {selectedProjectDetails.rawFiles.map((file: any, idx: number) => (
+                                                        <div key={`raw-${idx}`} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-card border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                <div className="h-9 w-9 rounded-lg bg-muted/50 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0">
+                                                                    {file.name?.includes('.mp4') || file.name?.includes('.mov') || file.name?.includes('.avi') ? (
+                                                                        <FileVideo className="h-4.5 w-4.5" />
+                                                                    ) : file.name?.includes('.pdf') || file.name?.includes('.doc') ? (
+                                                                        <FileText className="h-4.5 w-4.5" />
+                                                                    ) : file.name?.includes('.zip') || file.name?.includes('.rar') ? (
+                                                                        <Archive className="h-4.5 w-4.5" />
+                                                                    ) : (
+                                                                        <File className="h-4.5 w-4.5" />
+                                                                    )}
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="text-xs font-bold text-foreground truncate">{file.name}</p>
+                                                                    <p className="text-[9px] text-muted-foreground">
+                                                                        {file.size ? `${(file.size / (1024*1024)).toFixed(2)} MB` : 'Unknown size'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                                {file.url?.includes('.mp4') || file.url?.includes('.mov') || file.url?.includes('.avi') ? (
+                                                                    <button
+                                                                        onClick={() => setPreviewVideoUrl(file.url)}
+                                                                        className="h-8 w-8 rounded-lg bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all group-hover:bg-primary/20"
+                                                                        title="Preview video"
+                                                                    >
+                                                                        <Eye className="h-4 w-4" />
+                                                                    </button>
+                                                                ) : null}
+                                                                <button
+                                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                                    className="h-8 w-8 rounded-lg bg-muted hover:bg-emerald-500/20 hover:text-emerald-500 text-muted-foreground flex items-center justify-center transition-all"
+                                                                    title="Download file"
+                                                                >
+                                                                    <Download className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
 
-                                        {selectedProjectDetails.rawFiles && selectedProjectDetails.rawFiles.length > 0 && (
-                                            <div className="space-y-2">
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Client Assets</p>
-                                                {selectedProjectDetails.rawFiles.map((file: any, idx: number) => (
-                                                    <div key={`raw-${idx}`} className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border">
-                                                        <span className="text-xs font-medium truncate">{file.name}</span>
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                onClick={() => setPreviewVideoUrl(file.url)}
-                                                                className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
-                                                                title="Preview"
-                                                            >
-                                                                <Eye className="h-3.5 w-3.5" />
-                                                            </button>
+                                        {/* Reference Files from Manager */}
+                                        {selectedProjectDetails.referenceFiles && selectedProjectDetails.referenceFiles.length > 0 && (
+                                            <div className="space-y-3 pt-2 border-t border-border/30">
+                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold ml-1 flex items-center gap-2">
+                                                    <span className="text-xs">📌</span> Manager References
+                                                </p>
+                                                <div className="grid gap-2">
+                                                    {selectedProjectDetails.referenceFiles.map((file: any, idx: number) => (
+                                                        <div key={`ref-${idx}`} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-card border border-border hover:border-amber-500/30 hover:bg-amber-500/5 transition-all group">
+                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 flex-shrink-0">
+                                                                    {file.name?.includes('.mp4') || file.name?.includes('.mov') ? (
+                                                                        <FileVideo className="h-4.5 w-4.5" />
+                                                                    ) : file.name?.includes('.pdf') ? (
+                                                                        <FileText className="h-4.5 w-4.5" />
+                                                                    ) : file.name?.includes('.zip') ? (
+                                                                        <Archive className="h-4.5 w-4.5" />
+                                                                    ) : (
+                                                                        <File className="h-4.5 w-4.5" />
+                                                                    )}
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="text-xs font-bold text-foreground truncate">{file.name}</p>
+                                                                    <p className="text-[9px] text-muted-foreground">
+                                                                        Uploaded by PM
+                                                                    </p>
+                                                                </div>
+                                                            </div>
                                                             <button
                                                                 onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                                className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
-                                                                title="Download"
+                                                                className="h-8 w-8 rounded-lg bg-muted hover:bg-emerald-500/20 hover:text-emerald-500 text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                                title="Download reference file"
                                                             >
-                                                                <Upload className="h-3.5 w-3.5" />
+                                                                <Download className="h-4 w-4" />
                                                             </button>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
 
-                                        {selectedProjectDetails.referenceFiles && selectedProjectDetails.referenceFiles.length > 0 && (
-                                            <div className="space-y-2">
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Manager References</p>
-                                                {selectedProjectDetails.referenceFiles.map((file: any, idx: number) => (
-                                                    <div key={`ref-${idx}`} className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border">
-                                                        <div className="min-w-0 flex-1">
-                                                            <p className="text-xs font-medium truncate">{file.name}</p>
-                                                            <p className="text-[10px] text-muted-foreground">Uploaded by Project Manager</p>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                            className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
-                                                            title="Download"
-                                                        >
-                                                            <Upload className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                        {/* No Files Message */}
+                                        {!selectedProjectDetails.footageLink && (!selectedProjectDetails.rawFiles || selectedProjectDetails.rawFiles.length === 0) && (!selectedProjectDetails.referenceFiles || selectedProjectDetails.referenceFiles.length === 0) && (
+                                            <div className="py-8 text-center">
+                                                <div className="h-12 w-12 rounded-lg bg-muted/50 mx-auto mb-3 flex items-center justify-center text-muted-foreground">
+                                                    <AlertCircle className="h-5 w-5" />
+                                                </div>
+                                                <p className="text-xs text-muted-foreground font-medium">No files uploaded yet</p>
+                                                <p className="text-[10px] text-muted-foreground mt-1">Client assets will appear here</p>
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="bg-muted/30 border border-border rounded-lg p-4">
-                                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-3">Project Timeline & Updates</p>
+                                    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
+                                        <div className="flex items-center gap-2 justify-between">
+                                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">📅 Timeline & Activity Log</p>
+                                            {selectedProjectDetails.logs && selectedProjectDetails.logs.length > 0 && (
+                                                <span className="text-[9px] font-bold px-2 py-1 bg-primary/20 text-primary rounded-full">
+                                                    {selectedProjectDetails.logs.length} events
+                                                </span>
+                                            )}
+                                        </div>
+
                                         {selectedProjectDetails.logs && selectedProjectDetails.logs.length > 0 ? (
-                                            <div className="space-y-3 max-h-[240px] overflow-y-auto">
-                                                {[...selectedProjectDetails.logs].reverse().slice(0, 12).map((log: any, idx: number) => (
-                                                    <div key={idx} className="flex items-start gap-3 pb-3 border-b border-border last:border-0 last:pb-0">
-                                                        <div className="h-2 w-2 mt-1.5 rounded-full bg-primary" />
-                                                        <div className="min-w-0 flex-1">
-                                                            <p className="text-xs font-semibold text-foreground">{String(log.event || '').replace(/_/g, ' ')}</p>
-                                                            {log.details && <p className="text-xs text-muted-foreground mt-0.5">{log.details}</p>}
-                                                            <p className="text-[10px] text-muted-foreground mt-1">{log.userName || 'System'} • {new Date(log.timestamp).toLocaleString()}</p>
+                                            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
+                                                {[...selectedProjectDetails.logs].reverse().slice(0, 12).map((log: any, idx: number) => {
+                                                    const eventType = String(log.event || '').toLowerCase();
+                                                    const isUpload = eventType.includes('upload') || eventType.includes('added');
+                                                    const isStatusChange = eventType.includes('status') || eventType.includes('change');
+                                                    const isComment = eventType.includes('comment') || eventType.includes('noted');
+                                                    const isCompletion = eventType.includes('completed') || eventType.includes('finished');
+                                                    const isDownload = eventType.includes('download') || eventType.includes('exported');
+
+                                                    let bgColor = 'bg-muted/20';
+                                                    let borderColor = 'border-muted/30';
+                                                    let iconBg = 'bg-muted/40 text-muted-foreground';
+                                                    let dotColor = 'bg-muted-foreground/40';
+                                                    let icon = <FileIcon className="h-3.5 w-3.5" />;
+
+                                                    if (isUpload) {
+                                                        bgColor = 'bg-blue-500/10';
+                                                        borderColor = 'border-blue-500/20';
+                                                        iconBg = 'bg-blue-500/20 text-blue-500';
+                                                        dotColor = 'bg-blue-500';
+                                                        icon = <Upload className="h-3.5 w-3.5" />;
+                                                    } else if (isStatusChange) {
+                                                        bgColor = 'bg-amber-500/10';
+                                                        borderColor = 'border-amber-500/20';
+                                                        iconBg = 'bg-amber-500/20 text-amber-500';
+                                                        dotColor = 'bg-amber-500';
+                                                        icon = <RefreshCw className="h-3.5 w-3.5" />;
+                                                    } else if (isComment) {
+                                                        bgColor = 'bg-cyan-500/10';
+                                                        borderColor = 'border-cyan-500/20';
+                                                        iconBg = 'bg-cyan-500/20 text-cyan-500';
+                                                        dotColor = 'bg-cyan-500';
+                                                        icon = <MessageSquare className="h-3.5 w-3.5" />;
+                                                    } else if (isCompletion) {
+                                                        bgColor = 'bg-emerald-500/10';
+                                                        borderColor = 'border-emerald-500/20';
+                                                        iconBg = 'bg-emerald-500/20 text-emerald-500';
+                                                        dotColor = 'bg-emerald-500';
+                                                        icon = <CheckCircle2 className="h-3.5 w-3.5" />;
+                                                    } else if (isDownload) {
+                                                        bgColor = 'bg-purple-500/10';
+                                                        borderColor = 'border-purple-500/20';
+                                                        iconBg = 'bg-purple-500/20 text-purple-500';
+                                                        dotColor = 'bg-purple-500';
+                                                        icon = <Download className="h-3.5 w-3.5" />;
+                                                    }
+
+                                                    return (
+                                                        <div key={idx} className={`flex items-start gap-3 p-3 rounded-lg border transition-all hover:border-opacity-50 group ${bgColor} ${borderColor}`}>
+                                                            <div className={`h-6 w-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${iconBg}`}>
+                                                                {icon}
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div className="flex-1">
+                                                                        <p className="text-xs font-bold text-foreground capitalize">{String(log.event || '').replace(/_/g, ' ')}</p>
+                                                                        {log.details && (
+                                                                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{log.details}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 mt-2 text-[10px]">
+                                                                    <span className="text-muted-foreground font-medium">{log.userName || 'System'}</span>
+                                                                    <span className="text-muted-foreground/50">•</span>
+                                                                    <span className="text-muted-foreground/60">{new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         ) : (
-                                            <p className="text-xs text-muted-foreground">No updates recorded yet.</p>
+                                            <div className="py-8 text-center">
+                                                <div className="h-12 w-12 rounded-lg bg-muted/30 mx-auto mb-3 flex items-center justify-center text-muted-foreground">
+                                                    <History className="h-5 w-5" />
+                                                </div>
+                                                <p className="text-xs text-muted-foreground font-medium">No activity yet</p>
+                                                <p className="text-[10px] text-muted-foreground mt-1">Project updates will appear here</p>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     {selectedProjectDetails.assignmentStatus === "pending" && (
-                                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-3">
-                                            <div className="space-y-2">
-                                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Decision Required</p>
-                                                {projectTimers[selectedProjectDetails.id] ? (
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm font-semibold text-amber-500">Time Remaining:</span>
-                                                        <span className="text-2xl font-black text-amber-500 tabular-nums">{formatTimeRemaining(projectTimers[selectedProjectDetails.id])}</span>
-                                                    </div>
-                                                ) : null}
+                                        <div className="bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-transparent border border-amber-500/30 rounded-lg p-4 space-y-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-500 flex-shrink-0 mt-0.5">
+                                                    <AlertCircle className="h-5 w-5" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold text-amber-500 uppercase tracking-widest">Decision Required</p>
+                                                    <p className="text-sm text-foreground font-semibold mt-1">Please respond to this project assignment</p>
+                                                </div>
                                             </div>
-                                            <div className="space-y-2">
+
+                                            {projectTimers[selectedProjectDetails.id] ? (
+                                                <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mb-2">⏱️ Time Remaining</p>
+                                                    <div className="text-3xl font-black text-amber-500 tabular-nums font-mono">
+                                                        {formatTimeRemaining(projectTimers[selectedProjectDetails.id])}
+                                                    </div>
+                                                </div>
+                                            ) : null}
+
+                                            <div className="grid grid-cols-2 gap-2.5">
                                                 <button
                                                     onClick={() => handleAcceptProject(selectedProjectDetails.id)}
-                                                    className="w-full h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/30 text-[10px] font-bold uppercase tracking-widest transition-all"
+                                                    className="h-10 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/30 hover:border-emerald-500/60 text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95"
                                                 >
                                                     <Check className="h-4 w-4" />
-                                                    Accept Project
+                                                    Accept
                                                 </button>
                                                 <button
                                                     onClick={() => handleRejectProject(selectedProjectDetails.id)}
-                                                    className="w-full h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-500 hover:bg-red-500/30 text-[10px] font-bold uppercase tracking-widest transition-all"
+                                                    className="h-10 inline-flex items-center justify-center gap-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-500 hover:bg-red-500/30 hover:border-red-500/60 text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95"
                                                 >
                                                     <XIcon className="h-4 w-4" />
-                                                    Reject Project
+                                                    Reject
                                                 </button>
                                             </div>
                                         </div>
                                     )}
-                                    <div className="bg-muted/30 border border-border rounded-lg p-4">
-                                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-3">Assigned Manager</p>
-                                        <p className="text-sm font-semibold text-foreground">
-                                            {selectedProjectDetails.assignedPMId && allUsers[selectedProjectDetails.assignedPMId]
-                                                ? allUsers[selectedProjectDetails.assignedPMId].displayName || 'Project Manager'
-                                                : 'Not Assigned'}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            {selectedProjectDetails.assignedPMId && allUsers[selectedProjectDetails.assignedPMId]
-                                                ? allUsers[selectedProjectDetails.assignedPMId].email || ''
-                                                : ''}
-                                        </p>
+                                    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                                                <Users className="h-4 w-4" />
+                                            </div>
+                                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Project Manager</p>
+                                        </div>
 
-                                        <button
-                                            onClick={() => {
-                                                const pmNumber = getPMWhatsAppNumber(selectedProjectDetails as any);
-                                                if (!pmNumber) return;
-                                                const link = buildWhatsAppLink(pmNumber);
-                                                if (link) window.open(link, '_blank');
-                                            }}
-                                            disabled={!getPMWhatsAppNumber(selectedProjectDetails as any)}
-                                            className="mt-3 h-8 w-full inline-flex items-center justify-center gap-1 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-bold uppercase tracking-widest transition-all"
-                                        >
-                                            <MessageCircle className="h-3.5 w-3.5" />
-                                            Chat with Project Manager
-                                        </button>
+                                        {selectedProjectDetails.assignedPMId && allUsers[selectedProjectDetails.assignedPMId] ? (
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <p className="text-sm font-bold text-foreground">{allUsers[selectedProjectDetails.assignedPMId].displayName || 'Project Manager'}</p>
+                                                    {allUsers[selectedProjectDetails.assignedPMId].email && (
+                                                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                                                            <Mail className="h-3 w-3" />
+                                                            {allUsers[selectedProjectDetails.assignedPMId].email}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        const pmNumber = getPMWhatsAppNumber(selectedProjectDetails as any);
+                                                        if (!pmNumber) return;
+                                                        const link = buildWhatsAppLink(pmNumber);
+                                                        if (link) window.open(link, '_blank');
+                                                    }}
+                                                    disabled={!getPMWhatsAppNumber(selectedProjectDetails as any)}
+                                                    className="w-full h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500/20 hover:border-green-500/40 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95"
+                                                >
+                                                    <MessageCircle className="h-4 w-4" />
+                                                    Message on WhatsApp
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="py-6 text-center">
+                                                <div className="h-10 w-10 rounded-lg bg-muted/30 mx-auto mb-2 flex items-center justify-center text-muted-foreground">
+                                                    <User className="h-4 w-4 opacity-50" />
+                                                </div>
+                                                <p className="text-xs text-muted-foreground font-medium">No Project Manager Assigned</p>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-2">
-                                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-2">Project Snapshot</p>
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="text-muted-foreground">Client</span>
-                                            <span className="font-semibold text-foreground">{selectedProjectDetails.clientName || 'N/A'}</span>
+                                    <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                                                <Briefcase className="h-4 w-4" />
+                                            </div>
+                                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Project Overview</p>
                                         </div>
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="text-muted-foreground">Editor Share</span>
-                                            <span className="font-semibold text-foreground">₹{(selectedProjectDetails.editorPrice || 0).toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="text-muted-foreground">Status</span>
-                                            <span className="font-semibold text-foreground">{getStatusLabel(selectedProjectDetails.status)}</span>
+
+                                        <div className="grid gap-2.5">
+                                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-card border border-border/50">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-6 w-6 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                                        <User className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Client</span>
+                                                </div>
+                                                <span className="text-xs font-bold text-foreground">{selectedProjectDetails.clientName || 'N/A'}</span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-card border border-border/50">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-6 w-6 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                                        <Banknote className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Your Payment</span>
+                                                </div>
+                                                <span className="text-xs font-bold text-emerald-500">₹{(selectedProjectDetails.editorPrice || 0).toLocaleString()}</span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-card border border-border/50">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-6 w-6 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
+                                                        <Circle className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</span>
+                                                </div>
+                                                <span className={cn(
+                                                    "text-xs font-bold px-2 py-1 rounded-full",
+                                                    selectedProjectDetails.status === 'completed' && 'bg-emerald-500/20 text-emerald-500',
+                                                    selectedProjectDetails.status === 'in_progress' && 'bg-blue-500/20 text-blue-500',
+                                                    selectedProjectDetails.status === 'revision' && 'bg-amber-500/20 text-amber-500',
+                                                    selectedProjectDetails.status === 'pending' && 'bg-gray-500/20 text-gray-500'
+                                                )}>
+                                                    {getStatusLabel(selectedProjectDetails.status)}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 space-y-2">
-                                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-2">Manager Remarks</p>
-                                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap break-words">
-                                            {(selectedProjectDetails as any).pmRemarks || 'No remarks from the manager yet.'}
-                                        </p>
+                                    <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-lg p-4 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                                                <MessageSquare className="h-4 w-4" />
+                                            </div>
+                                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Manager Notes</p>
+                                        </div>
+                                        <div className="bg-card/50 border border-primary/10 rounded-lg p-3">
+                                            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap break-words font-medium">
+                                                {(selectedProjectDetails as any).pmRemarks || 'No remarks from the manager yet.'}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -692,21 +954,56 @@ export function EditorDashboardV2() {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                    <div className="bg-card border border-border rounded-xl p-5">
-                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-2">Total Projects</div>
-                        <div className="text-3xl font-black text-foreground tabular-nums">{projects.length}</div>
+                    <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Total Projects</div>
+                            <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                                <FileStack className="h-4 w-4" />
+                            </div>
+                        </div>
+                        <div className="text-3xl font-black text-primary tabular-nums">{projects.length}</div>
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-primary w-full"></div>
+                        </div>
                     </div>
-                    <div className="bg-card border border-border rounded-xl p-5">
-                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-2">Active</div>
+
+                    <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20 rounded-xl p-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Active</div>
+                            <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500">
+                                <Zap className="h-4 w-4" />
+                            </div>
+                        </div>
                         <div className="text-3xl font-black text-blue-500 tabular-nums">{activeProjects.length}</div>
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 w-full" style={{width: `${activeProjects.length > 0 ? Math.min((activeProjects.length / projects.length) * 100, 100) : 0}%`}}></div>
+                        </div>
                     </div>
-                    <div className="bg-card border border-border rounded-xl p-5">
-                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-2">Completed</div>
+
+                    <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-xl p-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Completed</div>
+                            <div className="h-8 w-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500">
+                                <CheckCircle className="h-4 w-4" />
+                            </div>
+                        </div>
                         <div className="text-3xl font-black text-emerald-500 tabular-nums">{completedProjects.length}</div>
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500" style={{width: `${completedProjects.length > 0 ? Math.min((completedProjects.length / projects.length) * 100, 100) : 0}%`}}></div>
+                        </div>
                     </div>
-                    <div className="bg-card border border-border rounded-xl p-5">
-                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-2">Payment Pending</div>
-                        <div className="text-3xl font-black text-amber-500 tabular-nums">₹{pendingEarnings.toLocaleString()}</div>
+
+                    <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-xl p-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Pending</div>
+                            <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-500">
+                                <IndianRupee className="h-4 w-4" />
+                            </div>
+                        </div>
+                        <div className="text-3xl font-black text-amber-600 tabular-nums">₹{pendingEarnings.toLocaleString()}</div>
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-amber-500 w-full"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -811,14 +1108,17 @@ export function EditorDashboardV2() {
                                                             Project Details
                                                         </button>
                                                     ) : projectRevisions[project.id] ? (
-                                                        <a
-                                                            href={`/review/${project.id}/${projectRevisions[project.id].id}`}
+                                                        <button
+                                                            onClick={() => {
+                                                                setReviewProject(project);
+                                                                setIsReviewSystemOpen(true);
+                                                            }}
                                                             className="h-9 px-4 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-500 hover:bg-blue-500/30 text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
                                                             title="Review uploaded draft"
                                                         >
                                                             <Eye className="h-4 w-4" />
                                                             Review
-                                                        </a>
+                                                        </button>
                                                     ) : (
                                                         <div className="flex items-center gap-2 flex-wrap">
                                                             <button
@@ -897,6 +1197,18 @@ export function EditorDashboardV2() {
                     </div>
                 )}
             </div>
+
+            <ReviewSystemModal
+                isOpen={isReviewSystemOpen}
+                onClose={() => setIsReviewSystemOpen(false)}
+                project={reviewProject ? { 
+                    id: reviewProject.id, 
+                    name: reviewProject.name,
+                    paymentStatus: reviewProject.paymentStatus,
+                    editorRating: reviewProject.editorRating
+                } : null}
+                allowUploadDraft={true}
+            />
 
             {/* Upload Draft Modal */}
             <UploadDraftModal

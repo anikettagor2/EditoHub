@@ -33,9 +33,10 @@ interface PaymentButtonProps {
     };
     onSuccess?: () => void;
     className?: string;
+    allowPayLaterBypass?: boolean;
 }
 
-export function PaymentButton({ projectId, user, amount, description, prefill, onSuccess, className }: PaymentButtonProps) {
+export function PaymentButton({ projectId, user, amount, description, prefill, onSuccess, className, allowPayLaterBypass = true }: PaymentButtonProps) {
     const [isLoading, setIsLoading] = useState(false);
 
     const handlePayment = async (e: React.MouseEvent) => {
@@ -119,7 +120,7 @@ export function PaymentButton({ projectId, user, amount, description, prefill, o
         }
     };
 
-    if (user?.payLater) {
+    if (allowPayLaterBypass && user?.payLater) {
         return (
             <div className={`p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg text-center ${className || ''}`}>
                  <p className="text-sm font-medium text-blue-400 mb-1">Pay Later Enabled</p>

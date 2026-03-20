@@ -62,8 +62,10 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
      * Initialize adaptive streaming manager
      */
     useEffect(() => {
-      // Determine if source is HLS
-      const hlsUrl = src.includes('.m3u8') || src.includes('hlsUrl');
+      if (!src) return;
+
+      // Determine if source is HLS (more reliable check)
+      const hlsUrl = (src && (src.includes('.m3u8') || src.includes('/hls/') || src.includes('hlsUrl'))) || false;
       setIsHLS(hlsUrl);
 
       // Create streaming manager
@@ -109,9 +111,16 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
      * Initialize HLS support if available
      */
     useEffect(() => {
-      if (!isHLS || !videoRef.current) return;
+      if (!videoRef.current) return;
 
-      // Dynamically import HLS.js
+      // For non-HLS sources, the source element handles loading
+      if (!isHLS) {
+        // Ensure video element is ready for playback
+        videoRef.current.load?.();
+        return;
+      }
+
+      // For HLS sources, use HLS.js
       const initHLS = async () => {
         try {
           const HLS = (await import('hls.js')).default;
@@ -120,6 +129,7 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
             // Fallback to native HLS support
             if (videoRef.current) {
               videoRef.current.src = src;
+              videoRef.current.load?.();
             }
             return;
           }
@@ -136,7 +146,9 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
 
           hlsRef.current = hls;
 
-          hls.loadSource(src);
+          if (src) {
+            hls.loadSource(src);
+          }
           if (videoRef.current) {
             hls.attachMedia(videoRef.current);
           }
@@ -153,6 +165,7 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
 
           // Handle errors
           hls.on(HLS.Events.ERROR, (event, data) => {
+            console.error('HLS Error:', data);
             if (managerRef.current) {
               managerRef.current.recordError(`HLS Error: ${data.type} - ${data.reason}`);
             }
@@ -166,6 +179,7 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
           console.warn('HLS.js not available, using native HLS support:', error);
           if (videoRef.current) {
             videoRef.current.src = src;
+            videoRef.current.load?.();
           }
         }
       };
@@ -190,12 +204,34 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
      */
     const handleDurationChange = useCallback(
       (e: React.SyntheticEvent<HTMLVideoElement>) => {
+        console.log('Video duration loaded:', e.currentTarget.duration);
         if (onDurationChange) {
           onDurationChange(e.currentTarget.duration);
         }
       },
       [onDurationChange]
     );
+
+    /**
+     * Handle metadata loaded
+     */
+    const handleLoadedMetadata = useCallback(() => {
+      console.log('Video metadata loaded successfully');
+      if (videoRef.current) {
+        console.log('Video info:', {
+          duration: videoRef.current.duration,
+          readyState: videoRef.current.readyState,
+          networkState: videoRef.current.networkState
+        });
+      }
+    }, []);
+
+    /**
+     * Handle load start
+     */
+    const handleLoadStart = useCallback(() => {
+      console.log('Video load started');
+    }, []);
 
     /**
      * Handle buffering events
@@ -211,6 +247,34 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
         managerRef.current.recordBufferingEnd();
       }
     }, []);
+
+    /**
+     * Debug logging for video source
+     */
+    useEffect(() => {
+      console.log('AdaptiveVideoPlayer source updated:', {
+        isHLS,
+        srcExists: !!src,
+        srcLength: src?.length || 0,
+        srcPreview: src ? `${src.substring(0, 80)}...` : 'undefined',
+        videoElementRef: !!videoRef.current,
+        crossOrigin: videoRef.current?.crossOrigin
+      });
+
+      if (videoRef.current) {
+        // Force reload the video element with new sources
+        videoRef.current.load?.();
+        
+        const sources = videoRef.current.querySelectorAll('source');
+        console.log('Video element source elements:', {
+          count: sources.length,
+          sources: Array.from(sources).map(s => ({ 
+            src: (s as any).src?.substring(0, 60) + '...',
+            type: (s as any).type 
+          }))
+        });
+      }
+    }, [src, isHLS]);
 
     /**
      * Ref methods exposed to parent
@@ -271,8 +335,30 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
           onDurationChange={handleDurationChange}
           onWaiting={handleWaiting}
           onPlaying={handlePlaying}
+          onLoadStart={handleLoadStart}
+          onLoadedMetadata={handleLoadedMetadata}
+          onError={(e) => {
+            const errorCode = e.currentTarget.error?.code;
+            const errorMessages: Record<number, string> = {
+              1: 'MEDIA_ERR_ABORTED',
+              2: 'MEDIA_ERR_NETWORK',
+              3: 'MEDIA_ERR_DECODE',
+              4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+            };
+            console.error('Video loading error:', {
+              code: errorCode,
+              codeName: errorCode ? errorMessages[errorCode] || 'UNKNOWN' : 'NO_CODE',
+              message: e.currentTarget.error?.message,
+              src: src?.substring(0, 100) + (src && src.length > 100 ? '...' : ''),
+              sourceElements: videoRef.current?.querySelectorAll('source').length,
+              videoReadyState: videoRef.current?.readyState,
+              videoError: videoRef.current?.error
+            });
+          }}
         >
-          {!isHLS && <source src={src} type="video/mp4" />}
+          {!isHLS && src && <source src={src} type="video/mp4" />}
+          {isHLS && src && <source src={src} type="application/x-mpegURL" />}
+          {src === undefined && <div style={{color: 'white', padding: '20px'}}>No video URL provided</div>}
           Your browser does not support the video tag.
         </video>
       </div>

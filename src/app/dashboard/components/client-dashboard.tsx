@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { Project, User } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import { 
@@ -41,7 +41,9 @@ import {
     DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { motion, AnimatePresence } from "framer-motion";
-import { DraftReviewModal } from "./draft-review-modal";
+import { toast } from "sonner";
+import { ReviewSystemModal } from "./review-system-modal";
+
 
 const CLIENT_VIDEO_TYPE_ALIASES: Record<string, string[]> = {
     "Reel Format": ["Reel Format", "Reels", "Short Videos"],
@@ -94,8 +96,8 @@ export function ClientDashboard() {
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
-    const [selectedRevision, setSelectedRevision] = useState<any>(null);
-    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+    const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
+
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -182,38 +184,9 @@ export function ClientDashboard() {
         }
     };
 
-    const handleReviewClick = async (project: Project) => {
-        try {
-            console.log('Fetching revisions for project:', project.id);
-            const revisionsRef = collection(db, 'revisions');
-            const q = query(
-                revisionsRef,
-                where('projectId', '==', project.id)
-            );
-            const snapshot = await getDocs(q);
-            console.log('Found revisions:', snapshot.docs.length);
-            
-            if (snapshot.docs.length > 0) {
-                // Sort in memory by version (descending) and get the latest
-                const revisions = snapshot.docs.map(doc => {
-                    console.log('Revision data:', doc.data());
-                    return { id: doc.id, ...doc.data() };
-                });
-                const latest = revisions.sort((a: any, b: any) => (b.version || 0) - (a.version || 0))[0];
-                console.log('Latest revision:', latest);
-                
-                // Set both project and revision before opening modal
-                setSelectedProject(project);
-                setSelectedRevision(latest);
-                setIsReviewModalOpen(true);
-            } else {
-                console.log('No revisions found for project');
-                alert('No draft videos available for this project.');
-            }
-        } catch (error) {
-            console.error('Error fetching revision:', error);
-            alert('Error loading draft video. Please try again.');
-        }
+    const handleReviewClick = (project: Project) => {
+        setSelectedProject(project);
+        setIsReviewSystemOpen(true);
     };
 
     return (
@@ -603,13 +576,20 @@ export function ClientDashboard() {
                 )}
             </Modal>
 
-            <DraftReviewModal
-                isOpen={isReviewModalOpen}
-                onClose={() => setIsReviewModalOpen(false)}
-                project={selectedProject}
-                revision={selectedRevision}
-                userRole="client"
+            <ReviewSystemModal
+                isOpen={isReviewSystemOpen}
+                onClose={() => setIsReviewSystemOpen(false)}
+                project={selectedProject ? { 
+                    id: selectedProject.id, 
+                    name: selectedProject.name,
+                    totalCost: selectedProject.totalCost,
+                    amountPaid: selectedProject.amountPaid,
+                    paymentStatus: selectedProject.paymentStatus,
+                    editorRating: selectedProject.editorRating,
+                    editorReview: selectedProject.editorReview
+                } : null}
             />
+
         </div>
     );
 }
