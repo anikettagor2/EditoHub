@@ -252,7 +252,7 @@ export default function ProjectDetailsPage() {
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [selectedEditorId, setSelectedEditorId] = useState<string | null>(null);
     const [editorRevenueShare, setEditorRevenueShare] = useState<string>("");
-    const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ url: string; type: string; name: string } | null>(null);
     const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
     const [editorRating, setEditorRating] = useState(0);
     const [editorReview, setEditorReview] = useState('');
@@ -604,7 +604,7 @@ export default function ProjectDetailsPage() {
                                                             <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</span>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                    <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
                                                 </div>
                                             ))}
                                         </div>
@@ -623,17 +623,10 @@ export default function ProjectDetailsPage() {
                                                             <span className="text-xs font-bold text-primary/70 truncate">{file.name}</span>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-primary/10 hover:bg-primary/20 hover:text-primary text-primary/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                    <button onClick={() => setPreviewFile({ url: file.url, type: 'other', name: file.name })} className="h-8 px-3 rounded bg-primary/10 hover:bg-primary/20 hover:text-primary text-primary/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
-                                )}
-
-                                {previewFileUrl && (
-                                    <div className="mt-4 rounded-xl overflow-hidden bg-background border border-border relative">
-                                        <button onClick={() => setPreviewFileUrl(null)} className="absolute top-2 right-2 h-8 w-8 bg-black/60 text-white rounded-lg flex items-center justify-center z-10 hover:bg-red-500 transition-colors"><X className="h-4 w-4" /></button>
-                                        <video src={previewFileUrl} controls controlsList="nodownload" className="w-full max-h-[400px]" autoPlay />
                                     </div>
                                 )}
                             </div>
@@ -1255,7 +1248,10 @@ export default function ProjectDetailsPage() {
                                                         <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</p>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <button onClick={() => setPreviewFileUrl(file.url)} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex items-center gap-2">
+                                                        <button 
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} 
+                                                            className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
+                                                        >
                                                             <Eye className="h-3.5 w-3.5" /> Preview
                                                         </button>
                                                         <button
@@ -1318,7 +1314,7 @@ export default function ProjectDetailsPage() {
                                                                         src={file.url} 
                                                                         alt={file.name} 
                                                                         className="max-h-[200px] w-full object-cover group-hover:opacity-80 transition-opacity"
-                                                                        onClick={() => setPreviewFileUrl(file.url)}
+                                                                        onClick={() => setPreviewFile({ url: file.url, type: 'image', name: file.name })}
                                                                     />
                                                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
                                                                         <div className="text-white text-xs font-bold uppercase tracking-widest bg-black/60 px-3 py-1.5 rounded-full">
@@ -1334,7 +1330,7 @@ export default function ProjectDetailsPage() {
                                                                     <video 
                                                                         src={file.url}
                                                                         className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
-                                                                        onClick={() => setPreviewFileUrl(file.url)}
+                                                                        onClick={() => setPreviewFile({ url: file.url, type: 'video', name: file.name })}
                                                                     />
                                                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
                                                                         <Play className="h-10 w-10 text-white opacity-90" />
@@ -1351,7 +1347,7 @@ export default function ProjectDetailsPage() {
                                                                 <div className="flex items-center gap-2 flex-shrink-0">
                                                                     {!isImage && !isVideo && (
                                                                         <button 
-                                                                            onClick={() => setPreviewFileUrl(file.url)} 
+                                                                            onClick={() => setPreviewFile({ url: file.url, type: 'other', name: file.name })} 
                                                                             className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all"
                                                                         >
                                                                             Preview
@@ -1375,13 +1371,35 @@ export default function ProjectDetailsPage() {
                                 </div>
                             )}
 
-                            {previewFileUrl && (
-                                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onClick={() => setPreviewFileUrl(null)}>
-                                    <div className="relative max-w-5xl w-full aspect-video bg-black rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(var(--primary),0.2)]" onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => setPreviewFileUrl(null)} className="absolute top-6 right-6 h-12 w-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-md z-10 transition-all">
+                            {previewFile && (
+                                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onClick={() => setPreviewFile(null)}>
+                                    <div className="relative max-w-5xl w-full max-h-[90vh] bg-black rounded-3xl overflow-hidden shadow-[0_0_100px_rgba(var(--primary),0.2)] flex items-center justify-center" onClick={e => e.stopPropagation()}>
+                                        <button onClick={() => setPreviewFile(null)} className="absolute top-6 right-6 h-12 w-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-md z-10 transition-all">
                                             <X className="h-6 w-6" />
                                         </button>
-                                        <video src={previewFileUrl} controls className="w-full h-full" autoPlay />
+                                        
+                                        {/* Image Preview */}
+                                        {previewFile.type === 'image' || previewFile.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(previewFile.name) ? (
+                                            <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
+                                        ) : previewFile.type === 'video' || previewFile.type.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(previewFile.name) ? (
+                                            <video src={previewFile.url} controls className="w-full h-full" autoPlay />
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-6 p-12 text-center">
+                                                <div className="h-20 w-20 bg-muted/20 rounded-2xl flex items-center justify-center border border-border">
+                                                    <FileText className="h-10 w-10 text-muted-foreground" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <h3 className="text-xl font-bold text-white tracking-tight">{previewFile.name}</h3>
+                                                    <p className="text-muted-foreground text-sm uppercase tracking-widest font-bold">Preview not available for this file type</p>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleDirectDownload(previewFile.url, previewFile.name)}
+                                                    className="h-12 px-8 rounded-xl bg-primary text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all flex items-center gap-3"
+                                                >
+                                                    <Download className="h-4 w-4" /> Download to View
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
