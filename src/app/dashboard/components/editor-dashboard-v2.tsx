@@ -893,9 +893,9 @@ export function EditorDashboardV2() {
                                                 <span className={cn(
                                                     "text-xs font-bold px-2 py-1 rounded-full",
                                                     selectedProjectDetails.status === 'completed' && 'bg-emerald-500/20 text-emerald-500',
-                                                    selectedProjectDetails.status === 'in_progress' && 'bg-blue-500/20 text-blue-500',
-                                                    selectedProjectDetails.status === 'revision' && 'bg-amber-500/20 text-amber-500',
-                                                    selectedProjectDetails.status === 'pending' && 'bg-gray-500/20 text-gray-500'
+                                                    selectedProjectDetails.status === 'active' && 'bg-blue-500/20 text-blue-500',
+                                                    selectedProjectDetails.status === 'in_review' && 'bg-amber-500/20 text-amber-500',
+                                                    selectedProjectDetails.status === 'pending_assignment' && 'bg-gray-500/20 text-gray-500'
                                                 )}>
                                                     {getStatusLabel(selectedProjectDetails.status)}
                                                 </span>

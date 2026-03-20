@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
-import { Project, User } from "@/types/schema";
+import { Project, User, Invoice } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import { 
     Plus, 
@@ -28,7 +28,8 @@ import {
     ShieldCheck,
     Download,
     Link as LinkIcon,
-    X
+    X,
+    FileText
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -97,6 +98,7 @@ export function ClientDashboard() {
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
 
 
     useEffect(() => {
@@ -124,6 +126,24 @@ export function ClientDashboard() {
         });
         return () => unsub();
     }, []);
+
+    // Fetch invoices for this client
+    useEffect(() => {
+        if (!user?.uid) return;
+
+        const q = query(
+            collection(db, "invoices"),
+            where("clientId", "==", user.uid),
+            orderBy("createdAt", "desc")
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Invoice));
+            setInvoices(items);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
 
     // Show Project Manager in Account Manager card (not Sales Executive).
     const assignedPMId = user?.managedByPM || projects.find(p => p.assignedPMId)?.assignedPMId;
@@ -571,6 +591,38 @@ export function ClientDashboard() {
                                     <span className="font-semibold text-foreground">₹{(selectedProject.totalCost || 0).toLocaleString()}</span>
                                 </div>
                             </div>
+
+                            {selectedProject.status === 'completed' && (
+                                <div className="bg-emerald-500/[0.05] border border-emerald-500/20 rounded-lg p-4 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-emerald-500" />
+                                        <p className="text-xs text-emerald-600 font-bold uppercase tracking-widest">Invoice</p>
+                                    </div>
+                                    {invoices.filter(inv => inv.projectId === selectedProject.id).length > 0 ? (
+                                        <div className="space-y-2">
+                                            {invoices.filter(inv => inv.projectId === selectedProject.id).map((invoice) => (
+                                                <Link key={invoice.id} href={`/dashboard/invoices/${invoice.id}`}>
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.02 }}
+                                                        className="w-full flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20 hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all group"
+                                                    >
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <FileText className="h-3.5 w-3.5 text-emerald-600 group-hover:text-emerald-500 transition-colors flex-shrink-0" />
+                                                            <div className="text-left min-w-0">
+                                                                <p className="text-xs font-semibold text-foreground group-hover:text-emerald-600 transition-colors truncate">{invoice.invoiceNumber}</p>
+                                                                <p className="text-[10px] text-muted-foreground">₹{invoice.total.toLocaleString()}</p>
+                                                            </div>
+                                                        </div>
+                                                        <Download className="h-3.5 w-3.5 text-muted-foreground group-hover:text-emerald-600 transition-colors flex-shrink-0" />
+                                                    </motion.button>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground text-center py-2">Invoice generation in progress...</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
