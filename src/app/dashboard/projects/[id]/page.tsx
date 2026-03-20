@@ -1135,23 +1135,17 @@ export default function ProjectDetailsPage() {
                             <DetailRow label="Client Account" value={project.brand || project.clientName || 'N/A'} />
                             {assignedPM && <DetailRow label="Project Manager" value={assignedPM.displayName || "Assigned PM"} />}
                             {assignedSE && <DetailRow label="Sales Executive" value={assignedSE.displayName || "Assigned SE"} />}
+                            {assignedSE && <DetailRow label="Sales Executive" value={assignedSE.displayName || "Assigned SE"} />}
                             {assignedEditor && <DetailRow label="Primary Editor" value={assignedEditor.displayName || "Assigned Editor"} />}
-                            {(project as any).videoType && <DetailRow label="Video Type" value={(project as any).videoType} />}
+                            {(project as any).videoFormat && <DetailRow label="Video Format" value={(project as any).videoFormat} />}
                             {(project as any).aspectRatio && <DetailRow label="Aspect Ratio" value={(project as any).aspectRatio} />}
                             <DetailRow label="Estimated Duration" value={`${project.duration || 0}m`} />
-                            {project.deadline && <DetailRow label="Target Delivery" value={project.deadline} />}
-                            {(project as any).urgency && <DetailRow label="Urgency" value={(project as any).urgency === 'urgent' ? 'Urgent (24hrs)' : 'Standard'} />}
-                            
-                             {/* Script / Direction Text */}
-                             <div className="pt-6 border-t border-border space-y-3">
-                                <label className="text-[9px] text-muted-foreground uppercase font-black tracking-widest block">Script / Direction</label>
-                                {project.description || (project as any).scriptText ? (
-                                    <div className="text-sm text-foreground leading-relaxed font-medium bg-muted/30 p-4 rounded-xl border border-border italic whitespace-pre-wrap">
-                                        {project.description || (project as any).scriptText}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground italic">No script or instructions provided by client.</p>
-                                )}
+                            <DetailRow label="Target Delivery" value={project.deadline ? project.deadline : "TBD"} />
+                            <div className="pt-6 border-t border-border space-y-3">
+                                <label className="text-[9px] text-muted-foreground uppercase font-black tracking-widest block">Project Intent</label>
+                                <p className="text-sm text-muted-foreground leading-relaxed font-medium italic">
+                                    "{project.description || "No description provided."}"
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -1212,54 +1206,32 @@ export default function ProjectDetailsPage() {
                         </div>
                         
                         <div className="grid gap-4">
-                            {/* Raw Data Link (Google Drive) */}
-                            {(project.footageLink || (project as any).referenceLink) && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {project.footageLink && (
-                                        <a 
-                                            href={project.footageLink.startsWith('http') ? project.footageLink : `https://${project.footageLink}`} 
-                                            target="_blank" 
-                                            className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border hover:bg-muted/50 hover:border-primary/30 transition-all group"
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-muted text-muted-foreground group-hover:text-primary transition-colors">
-                                                    <LinkIcon className="h-4 w-4" />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none mb-1.5">Footage Link</p>
-                                                    <p className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors truncate">Open Drive Link</p>
-                                                </div>
-                                            </div>
-                                        </a>
-                                    )}
-
-                                    {(project as any).referenceLink && (
-                                        <a 
-                                            href={(project as any).referenceLink.startsWith('http') ? (project as any).referenceLink : `https://${(project as any).referenceLink}`} 
-                                            target="_blank" 
-                                            className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20 hover:border-primary/40 transition-all group"
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors">
-                                                    <ExternalLink className="h-4 w-4" />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[10px] text-primary font-bold uppercase tracking-widest leading-none mb-1.5">Style Reference</p>
-                                                    <p className="text-sm font-bold text-primary truncate">Open Reference URL</p>
-                                                </div>
-                                            </div>
-                                        </a>
-                                    )}
-                                </div>
+                            {/* Raw Data Link */}
+                            {project.footageLink && (
+                                <a 
+                                    href={project.footageLink.startsWith('http') ? project.footageLink : `https://${project.footageLink}`} 
+                                    target="_blank" 
+                                    className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border hover:bg-muted/50 hover:border-primary/30 transition-all group"
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-muted text-muted-foreground group-hover:text-primary transition-colors">
+                                            <ExternalLink className="h-4 w-4" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none mb-1.5">Raw Footage</p>
+                                            <p className="text-sm font-bold text-muted-foreground group-hover:text-foreground transition-colors truncate">Open Drive Link</p>
+                                        </div>
+                                    </div>
+                                </a>
                             )}
 
-                            {/* Raw Video / Images Uploaded by Client */}
+                            {/* Local Asset Grid */}
                             {project.rawFiles && project.rawFiles.length > 0 && (
                                 <div className="space-y-3 pt-2">
                                     <div className="flex items-center gap-2">
-                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Main Raw Footage / Images</p>
+                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Client Raw Files</p>
                                         <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 text-[8px] font-bold uppercase tracking-widest border border-blue-500/20">
-                                            Client Upload
+                                            Primary Footage
                                         </span>
                                     </div>
                                     <div className="grid gap-2">
@@ -1270,7 +1242,7 @@ export default function ProjectDetailsPage() {
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/5 transition-all">
-                                                        {file.type?.includes('image') ? <ImageIcon className="h-4 w-4" /> : <FileVideo className="h-4 w-4" />}
+                                                        {file.type?.includes('video') ? <FileVideo className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
                                                     </div>
                                                     <div className="flex-1 min-w-0 text-left">
                                                         <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground mb-0.5">{file.name}</p>
@@ -1298,151 +1270,188 @@ export default function ProjectDetailsPage() {
                                 </div>
                             )}
 
-                            {/* B-Roll Files (Optional) */}
-                            {(project as any).bRoleFiles && (project as any).bRoleFiles.length > 0 && (
-                                <div className="space-y-3 pt-2">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-[9px] text-orange-500 font-bold uppercase tracking-widest">B-Roll Files / Assets</p>
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 text-[8px] font-bold uppercase tracking-widest border border-orange-500/20">
-                                            Optional Asset
-                                        </span>
-                                    </div>
+                            {/* Scripts & Directions */}
+                            <div className="space-y-3 pt-4 border-t border-border">
+                                <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Scripts & Directions</p>
+                                
+                                {project.scripts && project.scripts.length > 0 ? (
                                     <div className="grid gap-2">
-                                        {(project as any).bRoleFiles.map((file: any, idx: number) => (
-                                            <div 
-                                                key={idx}
-                                                className="flex flex-col p-3.5 bg-orange-500/[0.03] rounded-xl border border-orange-500/10 transition-all group"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground group-hover:text-orange-500 transition-all">
-                                                        {file.type?.includes('image') ? <ImageIcon className="h-4 w-4" /> : <FileVideo className="h-4 w-4" />}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0 text-left">
-                                                        <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground mb-0.5">{file.name}</p>
-                                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <button 
-                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} 
-                                                            className="h-8 px-3 rounded bg-muted hover:bg-orange-500/20 hover:text-orange-500 text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
-                                                        >
-                                                            <Eye className="h-3.5 w-3.5" /> Preview
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDirectDownload(file.url, file.name)}
-                                                            className="h-8 w-8 rounded bg-muted hover:bg-zinc-800 flex items-center justify-center text-muted-foreground transition-all"
-                                                        >
-                                                            <Download className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Script Files Uploaded by Client */}
-                            {(project as any).scriptFiles && (project as any).scriptFiles.length > 0 && (
-                                <div className="space-y-3 pt-2">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-[9px] text-indigo-500 font-bold uppercase tracking-widest">Script / Direction Documents</p>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        {(project as any).scriptFiles.map((file: any, idx: number) => (
-                                            <div 
-                                                key={idx}
-                                                className="flex flex-col p-3.5 bg-indigo-500/[0.03] rounded-xl border border-indigo-500/10 transition-all group"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground group-hover:text-indigo-400 transition-all">
+                                        {project.scripts.map((script, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-3.5 bg-muted/50 rounded-xl border border-border group">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground">
                                                         <FileText className="h-4 w-4" />
                                                     </div>
-                                                    <div className="flex-1 min-w-0 text-left">
-                                                        <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground mb-0.5">{file.name}</p>
-                                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</p>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-muted-foreground truncate">{script.name}</p>
+                                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Script File</p>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <button 
-                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'application/pdf', name: file.name })} 
-                                                            className="h-8 px-3 rounded bg-muted hover:bg-indigo-500/20 hover:text-indigo-400 text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
-                                                        >
-                                                            <Eye className="h-3.5 w-3.5" /> Preview
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDirectDownload(file.url, file.name)}
-                                                            className="h-8 w-8 rounded bg-muted hover:bg-zinc-800 flex items-center justify-center text-muted-foreground transition-all"
-                                                        >
-                                                            <Download className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        onClick={() => setPreviewFile({ url: script.url, type: script.type || 'text/plain', name: script.name })}
+                                                        className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all"
+                                                    >
+                                                        Preview
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDirectDownload(script.url, script.name)}
+                                                        className="h-8 w-8 rounded bg-muted hover:bg-zinc-800 flex items-center justify-center text-muted-foreground transition-all"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            )}
+                                ) : (project as any).scriptText ? (
+                                    <div className="p-4 bg-muted/30 rounded-xl border border-border">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Written Script</p>
+                                        <p className="text-sm text-foreground/80 leading-relaxed italic whitespace-pre-wrap">
+                                            "{(project as any).scriptText}"
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground italic ml-1">No script provided by client.</p>
+                                )}
+                            </div>
 
-                            {/* Style Reference (Project Manager) */}
-                            {(project as any).referenceFiles && (project as any).referenceFiles.length > 0 && (
-                                <div className="space-y-3 pt-4 border-t border-border">
+                            {/* B-Roll Footage */}
+                            <div className="space-y-3 pt-4 border-t border-border">
+                                <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">B-Roll / Supplementary Assets</p>
+                                {(project as any).bRoleFiles && (project as any).bRoleFiles.length > 0 ? (
+                                    <div className="grid gap-2">
+                                        {(project as any).bRoleFiles.map((file: any, idx: number) => (
+                                            <div key={idx} className="flex items-center justify-between p-3.5 bg-muted/50 rounded-xl border border-border group">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="h-9 w-9 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground">
+                                                        {file.type?.includes('image') ? <ImageIcon className="h-4 w-4" /> : <FileVideo className="h-4 w-4" />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-muted-foreground truncate">{file.name}</p>
+                                                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">B-Roll Asset</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })}
+                                                        className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all"
+                                                    >
+                                                        Preview
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDirectDownload(file.url, file.name)}
+                                                        className="h-8 w-8 rounded bg-muted hover:bg-zinc-800 flex items-center justify-center text-muted-foreground transition-all"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground italic ml-1">No B-roll assets provided.</p>
+                                )}
+                            </div>
+
+                            {/* Reference Section */}
+                            {((project as any).referenceLink || ((project as any).referenceFiles && (project as any).referenceFiles.length > 0)) && (
+                                <div className="space-y-4 pt-4 border-t border-border">
                                     <div className="flex items-center gap-2">
                                         <p className="text-[9px] text-primary/70 font-black uppercase tracking-widest ml-1 flex items-center gap-2">
-                                            <Zap className="h-3 w-3" /> External Style References
+                                            <Zap className="h-3 w-3" /> Style Reference Components
                                         </p>
                                         <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 text-[8px] font-bold uppercase tracking-widest border border-purple-500/20">
-                                            Reference Assets
+                                            PM Upload
                                         </span>
                                     </div>
-                                    <div className="grid gap-2">
-                                        {(project as any).referenceFiles.map((file: any, idx: number) => {
-                                            const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name);
-                                            const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(file.name);
-                                            
-                                            return (
-                                                <div key={idx} className="flex flex-col gap-2 p-3.5 bg-primary/5 rounded-xl border border-primary/10 group transition-all">
-                                                    {isImage && (
-                                                        <div className="relative rounded-xl overflow-hidden border border-border bg-black/20 group/img cursor-pointer mb-2">
-                                                            <img 
-                                                                src={file.url} 
-                                                                alt={file.name} 
-                                                                className="max-h-[200px] w-full object-cover group-hover/img:opacity-80 transition-opacity"
-                                                                onClick={() => setPreviewFile({ url: file.url, type: 'image', name: file.name })}
-                                                            />
-                                                            <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
-                                                                <div className="text-white text-[9px] font-black uppercase tracking-[0.2em] bg-black/60 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/10">
-                                                                    View
+                                    <div className="grid gap-3">
+                                        {(project as any).referenceLink && (
+                                            <a 
+                                                href={(project as any).referenceLink.startsWith('http') ? (project as any).referenceLink : `https://${(project as any).referenceLink}`} 
+                                                target="_blank" 
+                                                className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/20 hover:border-primary/40 transition-all group"
+                                            >
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="h-9 w-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                                        <LinkIcon className="h-4 w-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[9px] text-primary font-bold uppercase tracking-widest leading-none mb-1.5">Style URL</p>
+                                                        <p className="text-sm font-bold text-primary truncate">Open Reference Page</p>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        )}
+                                        
+                                        {(project as any).referenceFiles && (project as any).referenceFiles.length > 0 && (
+                                            <div className="grid gap-2">
+                                                {(project as any).referenceFiles.map((file: any, idx: number) => {
+                                                    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name);
+                                                    const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(file.name);
+                                                    
+                                                    return (
+                                                        <div key={idx} className="flex flex-col gap-2">
+                                                            {/* Image Preview */}
+                                                            {isImage && (
+                                                                <div className="relative rounded-xl overflow-hidden border border-border bg-black/20 group cursor-pointer">
+                                                                    <img 
+                                                                        src={file.url} 
+                                                                        alt={file.name} 
+                                                                        className="max-h-[200px] w-full object-cover group-hover:opacity-80 transition-opacity"
+                                                                        onClick={() => setPreviewFile({ url: file.url, type: 'image', name: file.name })}
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                                                        <div className="text-white text-xs font-bold uppercase tracking-widest bg-black/60 px-3 py-1.5 rounded-full">
+                                                                            View
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Video Thumbnail */}
+                                                            {isVideo && (
+                                                                <div className="relative rounded-xl overflow-hidden border border-border bg-black/40 group cursor-pointer aspect-video">
+                                                                    <video 
+                                                                        src={file.url}
+                                                                        className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
+                                                                        onClick={() => setPreviewFile({ url: file.url, type: 'video', name: file.name })}
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                                                        <Play className="h-10 w-10 text-white opacity-90" />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* File Info & Actions */}
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground">{file.name}</p>
+                                                                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">Uploaded by: Project Manager</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                                    {!isImage && !isVideo && (
+                                                                        <button 
+                                                                            onClick={() => setPreviewFile({ url: file.url, type: 'other', name: file.name })} 
+                                                                            className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all"
+                                                                        >
+                                                                            Preview
+                                                                        </button>
+                                                                    )}
+                                                                    <button 
+                                                                        onClick={() => handleDirectDownload(file.url, file.name)}
+                                                                        className="h-8 w-8 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
+                                                                        title="Download file"
+                                                                    >
+                                                                        <Download className="h-3.5 w-3.5" />
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <div className="flex items-center gap-3 min-w-0">
-                                                            <div className="h-8 w-8 rounded-lg bg-zinc-900 border border-border flex items-center justify-center text-muted-foreground">
-                                                                {isImage ? <ImageIcon className="h-3.5 w-3.5" /> : isVideo ? <FileVideo className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-xs font-bold text-muted-foreground truncate group-hover:text-foreground mb-0.5">{file.name}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <button 
-                                                                onClick={() => setPreviewFile({ url: file.url, type: isImage ? 'image' : isVideo ? 'video' : 'other', name: file.name })} 
-                                                                className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all"
-                                                            >
-                                                                Preview
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleDirectDownload(file.url, file.name)}
-                                                                className="h-8 w-8 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
-                                                            >
-                                                                <Download className="h-3.5 w-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -1459,8 +1468,8 @@ export default function ProjectDetailsPage() {
                                             <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
                                         ) : previewFile.type === 'video' || previewFile.type.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(previewFile.name) ? (
                                             <video src={previewFile.url} controls className="w-full h-full" autoPlay />
-                                        ) : previewFile.type === 'application/pdf' || previewFile.type.includes('pdf') || previewFile.name.endsWith('.pdf') ? (
-                                            <iframe src={previewFile.url} className="w-full h-full border-none bg-white" title="PDF Preview" />
+                                        ) : previewFile.type === 'pdf' || previewFile.type === 'application/pdf' || previewFile.name.toLowerCase().endsWith('.pdf') ? (
+                                            <iframe src={previewFile.url} className="w-full h-screen border-none" />
                                         ) : (
                                             <div className="flex flex-col items-center gap-6 p-12 text-center">
                                                 <div className="h-20 w-20 bg-muted/20 rounded-2xl flex items-center justify-center border border-border">
