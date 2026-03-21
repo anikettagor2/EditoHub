@@ -279,13 +279,13 @@ export async function assignEditor(projectId: string, editorId: string, editorPr
         }
 
         const now = Date.now();
-        const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+        const fifteenMinutes = 15 * 60 * 1000; // 15 minutes in milliseconds (changed from 5 minutes)
 
         const updateData: any = {
             assignedEditorId: editorId,
             assignmentStatus: 'pending',
             assignmentAt: now,
-            assignmentExpiresAt: now + fiveMinutes,
+            assignmentExpiresAt: now + fifteenMinutes,
             status: 'pending_assignment',
             members: members,
             editorPrice: editorPrice,
@@ -363,7 +363,7 @@ export async function respondToAssignment(projectId: string, response: 'accepted
             });
             
             revalidatePath('/dashboard');
-            return { success: false, error: 'Assignment has expired. The 5-minute acceptance window has passed.' };
+            return { success: false, error: 'Assignment has expired. The 15-minute acceptance window has passed.' };
         }
         
         const updateData: any = {

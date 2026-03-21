@@ -66,6 +66,7 @@ if (!AISENSY_API_KEY) {
 This is a **production network connectivity issue** - the server cannot resolve the domain name.
 
 **Error Details**:
+
 ```
 [WhatsApp] Network Error: TypeError: fetch failed
   errno: -3008
@@ -95,14 +96,18 @@ This is a **production network connectivity issue** - the server cannot resolve 
    - Information provided: hostname, solution steps, error details
 
 4. ✅ **Test Endpoint Availability**:
+
    ```typescript
    // Add this test endpoint to verify connectivity
    // GET /api/health/whatsapp-connectivity
-   const response = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-     method: 'POST',
-     headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({ test: true })
-   });
+   const response = await fetch(
+     "https://backend.aisensy.com/campaign/t1/api/v2",
+     {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ test: true }),
+     },
+   );
    ```
 
 5. ✅ **As Last Resort - Use Proxy/VPN**:

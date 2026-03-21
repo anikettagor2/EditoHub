@@ -135,7 +135,7 @@ export interface Project {
     finalVideoPurgedAt?: number; // when final video objects were purged
 }
 
-export type ProjectAssignmentStatus = 'pending' | 'accepted' | 'rejected';
+export type ProjectAssignmentStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
 
 export type RevisionStatus = 'active' | 'approved' | 'changes_requested' | 'archived';
 

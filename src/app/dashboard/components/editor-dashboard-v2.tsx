@@ -80,9 +80,24 @@ export function EditorDashboardV2() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetchedProjects: Project[] = [];
             const revisionsMap: Record<string, any> = {};
+            const now = Date.now();
             
             snapshot.forEach((doc) => {
                 const project = { id: doc.id, ...doc.data() } as Project;
+                
+                // Filter out expired assignments - don't show if assignment has expired and not yet accepted
+                if (project.assignmentStatus === 'pending' && (project as any).assignmentExpiresAt) {
+                    if (now > (project as any).assignmentExpiresAt) {
+                        // Assignment expired, skip this project
+                        return;
+                    }
+                }
+                
+                // Also skip if assignment status is 'expired'
+                if (project.assignmentStatus === 'expired') {
+                    return;
+                }
+                
                 fetchedProjects.push(project);
                 
                 // Fetch latest revision for this project
@@ -140,20 +155,26 @@ export function EditorDashboardV2() {
         };
     }, [user]);
 
-    // Timer countdown for pending assignments
+    // Timer countdown for pending assignments - calculates from assignmentExpiresAt
     useEffect(() => {
         const interval = setInterval(() => {
             setProjectTimers(prev => {
                 const updated = { ...prev };
                 let hasActive = false;
                 
+                // Recalculate time remaining for each pending project based on assignmentExpiresAt
                 for (const projectId in updated) {
-                    if (updated[projectId] > 0) {
-                        updated[projectId] -= 1;
-                        hasActive = true;
+                    const project = projects.find(p => p.id === projectId);
+                    if (project && project.assignmentStatus === 'pending') {
+                        const expiresAt = (project as any).assignmentExpiresAt || 0;
+                        const now = Date.now();
+                        const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
                         
-                        // When timer reaches 0, handle timeout
-                        if (updated[projectId] === 0) {
+                        if (remaining > 0) {
+                            updated[projectId] = remaining;
+                            hasActive = true;
+                        } else if (remaining === 0 && updated[projectId] > 0) {
+                            // Timer just expired
                             handleAssignmentTimeout(projectId);
                         }
                     }
@@ -164,7 +185,7 @@ export function EditorDashboardV2() {
         }, 1000);
         
         return () => clearInterval(interval);
-    }, []);
+    }, [projects]);
 
     const handleAssignmentTimeout = async (projectId: string) => {
         const project = projects.find(p => p.id === projectId);
@@ -189,19 +210,19 @@ export function EditorDashboardV2() {
         }
     };
 
-    const startProjectTimer = (projectId: string) => {
-        setProjectTimers(prev => ({
-            ...prev,
-            [projectId]: 900 // 15 minutes in seconds
-        }));
-    };
-
-    // Start timer when details modal opens for pending projects
+    // Calculate time remaining when details modal opens for pending projects
     useEffect(() => {
-        if (selectedProjectDetails?.assignmentStatus === "pending" && !projectTimers[selectedProjectDetails.id]) {
-            startProjectTimer(selectedProjectDetails.id);
+        if (selectedProjectDetails?.assignmentStatus === "pending") {
+            const expiresAt = (selectedProjectDetails as any).assignmentExpiresAt || 0;
+            const now = Date.now();
+            const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+            
+            setProjectTimers(prev => ({
+                ...prev,
+                [selectedProjectDetails.id]: remaining
+            }));
         }
-    }, [selectedProjectDetails?.id, selectedProjectDetails?.assignmentStatus]);
+    }, [selectedProjectDetails?.id, selectedProjectDetails?.assignmentStatus, selectedProjectDetails?.assignmentExpiresAt]);
 
     const formatTimeRemaining = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
