@@ -2497,9 +2497,9 @@ export function AdminDashboard() {
                                             </div>
                                             <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Post-Payment Rights</span>
+                                                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Pay-Later Access</span>
                                                     <span className="text-[10px] font-black text-primary uppercase mt-1">
-                                                        {selectedUserDetail.payLater ? "Authorized" : "Revoked"}
+                                                        {selectedUserDetail.payLater ? "Enabled" : "Disabled"}
                                                     </span>
                                                 </div>
                                                 <button 
@@ -2515,6 +2515,41 @@ export function AdminDashboard() {
                                                 >
                                                     <div className={cn("h-3.5 w-3.5 rounded-full bg-white transition-all shadow-sm", selectedUserDetail.payLater ? "translate-x-6" : "translate-x-0")} />
                                                 </button>
+                                            </div>
+                                            <div className="p-4 bg-card border border-border rounded-xl space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Sales Pricing Matrix</span>
+                                                    <span className="text-[9px] font-black text-primary uppercase tracking-widest">All Formats</span>
+                                                </div>
+                                                {(selectedUserDetail.multiTierRates && Object.keys(selectedUserDetail.multiTierRates).length > 0) ? (
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                                        {Object.entries(selectedUserDetail.multiTierRates).map(([formatKey, tiers]: any) => (
+                                                            <div key={formatKey} className="rounded-lg border border-border p-2.5 bg-muted/30">
+                                                                <p className="text-[10px] font-black text-foreground uppercase tracking-wider mb-2">{formatKey.replace(/_/g, ' ')}</p>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {(tiers || []).map((tier: any, idx: number) => (
+                                                                        <span key={`${formatKey}-${idx}`} className="text-[9px] font-bold px-2 py-1 rounded-md border border-primary/20 bg-primary/10 text-primary">
+                                                                            {(tier?.label || `Tier ${idx + 1}`)}: ₹{(tier?.price || 0).toLocaleString()}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (selectedUserDetail.customRates && Object.keys(selectedUserDetail.customRates).length > 0) ? (
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                                        {Object.entries(selectedUserDetail.customRates).map(([formatKey, price]: any) => (
+                                                            <div key={formatKey} className="rounded-lg border border-border p-2.5 bg-muted/30 flex items-center justify-between">
+                                                                <p className="text-[10px] font-black text-foreground uppercase tracking-wider">{formatKey.replace(/_/g, ' ')}</p>
+                                                                <p className="text-[10px] font-black text-emerald-500">₹{Number(price || 0).toLocaleString()}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="rounded-lg border border-dashed border-border p-3 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                        No Sales Pricing Configured
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -2635,20 +2670,76 @@ export function AdminDashboard() {
                                 </div>
                             )}
 
-                            {/* Bio / Internal Intelligence (Large Rectangle) */}
-                            <div className="bg-muted/30 border border-border rounded-2xl p-6 space-y-3 relative overflow-hidden group">
-                                <div className="absolute -bottom-6 -right-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
-                                    <Database className="h-24 w-24" />
+                            {selectedUserDetail.role === 'client' ? (
+                                <div className="bg-muted/30 border border-border rounded-2xl p-6 space-y-3 relative overflow-hidden group">
+                                    <div className="absolute -bottom-6 -right-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                                        <Activity className="h-24 w-24" />
+                                    </div>
+                                    <h5 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                                        <Activity className="h-4 w-4" /> Project History
+                                    </h5>
+                                    <div className="bg-card border border-border rounded-xl p-3 relative z-10 overflow-x-auto">
+                                        <table className="w-full min-w-[820px]">
+                                            <thead>
+                                                <tr className="border-b border-border/70">
+                                                    <th className="text-left py-2 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">Project</th>
+                                                    <th className="text-left py-2 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">Payment</th>
+                                                    <th className="text-left py-2 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">PM</th>
+                                                    <th className="text-left py-2 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">Editor</th>
+                                                    <th className="text-left py-2 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">Sales Executive</th>
+                                                    <th className="text-left py-2 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">Start Date</th>
+                                                    <th className="text-left py-2 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">End Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {projects
+                                                    .filter((p) => p.clientId === selectedUserDetail.uid)
+                                                    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+                                                    .map((p) => {
+                                                        const paymentLabel = p.paymentStatus || (p.isPayLaterRequest ? 'pay_later' : 'pending');
+                                                        const pmName = users.find((u) => u.uid === p.assignedPMId)?.displayName || 'Not Assigned';
+                                                        const editorName = users.find((u) => u.uid === p.assignedEditorId)?.displayName || 'Not Assigned';
+                                                        const seFallbackId = p.assignedSEId || selectedUserDetail.managedBy || selectedUserDetail.createdBy;
+                                                        const seName = users.find((u) => u.uid === seFallbackId)?.displayName || 'Not Assigned';
+                                                        const startDate = p.assignmentAt || p.createdAt;
+                                                        const endDate = p.completedAt || ((p.status === 'completed' || p.status === 'approved') ? p.updatedAt : undefined);
+
+                                                        return (
+                                                            <tr key={p.id} className="border-b border-border/40 last:border-0">
+                                                                <td className="py-2 px-2 text-xs font-semibold text-foreground">{p.name}</td>
+                                                                <td className="py-2 px-2 text-xs font-bold text-primary uppercase">{paymentLabel.replace(/_/g, ' ')}</td>
+                                                                <td className="py-2 px-2 text-xs text-foreground">{pmName}</td>
+                                                                <td className="py-2 px-2 text-xs text-foreground">{editorName}</td>
+                                                                <td className="py-2 px-2 text-xs text-foreground">{seName}</td>
+                                                                <td className="py-2 px-2 text-xs text-muted-foreground">{startDate ? new Date(startDate).toLocaleDateString() : '—'}</td>
+                                                                <td className="py-2 px-2 text-xs text-muted-foreground">{endDate ? new Date(endDate).toLocaleDateString() : 'In Progress'}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                            </tbody>
+                                        </table>
+                                        {projects.filter((p) => p.clientId === selectedUserDetail.uid).length === 0 && (
+                                            <div className="py-8 text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                No Project History Found
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <h5 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                                    <Database className="h-4 w-4" /> Internal Intelligence
-                                </h5>
-                                <div className="bg-card border border-border rounded-xl p-4 min-h-[100px] relative z-10 transition-colors group-hover:border-primary/20">
-                                    <p className="text-xs leading-relaxed text-foreground/80 font-medium whitespace-pre-wrap">
-                                        {selectedUserDetail.bio || "NO_BIOMETRIC_DATA_AVAILABLE // SYSTEM_DEFAULT_STATE"}
-                                    </p>
+                            ) : (
+                                <div className="bg-muted/30 border border-border rounded-2xl p-6 space-y-3 relative overflow-hidden group">
+                                    <div className="absolute -bottom-6 -right-6 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                                        <Database className="h-24 w-24" />
+                                    </div>
+                                    <h5 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                                        <Database className="h-4 w-4" /> Internal Intelligence
+                                    </h5>
+                                    <div className="bg-card border border-border rounded-xl p-4 min-h-[100px] relative z-10 transition-colors group-hover:border-primary/20">
+                                        <p className="text-xs leading-relaxed text-foreground/80 font-medium whitespace-pre-wrap">
+                                            {selectedUserDetail.bio || "NO_BIOMETRIC_DATA_AVAILABLE // SYSTEM_DEFAULT_STATE"}
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* RIGHT COLUMN: Logistics & Geography (4 Units) */}
@@ -2684,6 +2775,7 @@ export function AdminDashboard() {
                                 </div>
                             </div>
 
+                            {selectedUserDetail.role !== 'client' && (
                             <div className="bg-muted/30 border border-border rounded-2xl p-6 space-y-6">
                                 <h5 className="text-[11px] font-black uppercase tracking-widest text-emerald-500 border-b border-border pb-3 flex items-center gap-2">
                                     <Briefcase className="h-4 w-4" /> Logistics Summary
@@ -2708,6 +2800,7 @@ export function AdminDashboard() {
                                     )}
                                 </div>
                             </div>
+                            )}
                         </div>
                     </div>
                 </div>
