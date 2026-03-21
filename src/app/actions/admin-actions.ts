@@ -264,7 +264,13 @@ export async function assignClientManager(clientId: string, pmId: string, update
  * Assigns an editor to a project with a 5-minute validity window
  * Editor must accept within 5 minutes or assignment expires
  */
-export async function assignEditor(projectId: string, editorId: string, editorPrice: number, deadline?: string) {
+export async function assignEditor(
+    projectId: string,
+    editorId: string,
+    editorPrice: number,
+    deadline?: string,
+    assignedByRole: 'project_manager' | 'admin' = 'admin'
+) {
     try {
         const projectRef = adminDb.collection('projects').doc(projectId);
         const projectSnap = await projectRef.get();
@@ -272,6 +278,10 @@ export async function assignEditor(projectId: string, editorId: string, editorPr
         if (!projectSnap.exists) throw new Error("Project not found");
 
         const projectData = projectSnap.data();
+
+        if (projectData?.assignedEditorId && assignedByRole !== 'project_manager') {
+            return { success: false, error: 'Editor reassignment is restricted to Project Managers after initial assignment.' };
+        }
         let members = projectData?.members || [];
 
         if (!members.includes(editorId)) {

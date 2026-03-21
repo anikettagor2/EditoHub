@@ -26,6 +26,7 @@ type RevisionDoc = {
     projectId: string;
     version?: number;
     videoUrl?: string;
+    hlsUrl?: string;
     description?: string;
     createdAt?: number;
 };
@@ -108,6 +109,8 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     // Video state
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [networkTier, setNetworkTier] = useState<"low" | "medium" | "high">("high");
+    const hlsInstanceRef = useRef<any>(null);
 
     // Payment & Download state
     const [isDownloading, setIsDownloading] = useState(false);
@@ -133,6 +136,91 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         () => revisions.find((r) => r.id === selectedRevisionId) || null,
         [revisions, selectedRevisionId]
     );
+
+    useEffect(() => {
+        const connection = (navigator as any)?.connection;
+        if (!connection) return;
+
+        const updateTier = () => {
+            const effectiveType = connection.effectiveType as string | undefined;
+            const downlink = Number(connection.downlink || 0);
+            const saveData = Boolean(connection.saveData);
+
+            if (saveData || effectiveType === "slow-2g" || effectiveType === "2g" || downlink < 1.2) {
+                setNetworkTier("low");
+                return;
+            }
+            if (effectiveType === "3g" || downlink < 3) {
+                setNetworkTier("medium");
+                return;
+            }
+            setNetworkTier("high");
+        };
+
+        updateTier();
+        connection.addEventListener?.("change", updateTier);
+        return () => connection.removeEventListener?.("change", updateTier);
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen || !videoRef.current || !selectedRevision?.videoUrl) return;
+
+        const videoElement = videoRef.current;
+        const hlsSource = selectedRevision.hlsUrl || (selectedRevision.videoUrl.includes(".m3u8") ? selectedRevision.videoUrl : null);
+        let disposed = false;
+
+        const cleanupHls = () => {
+            if (hlsInstanceRef.current) {
+                hlsInstanceRef.current.destroy();
+                hlsInstanceRef.current = null;
+            }
+        };
+
+        const initPlayback = async () => {
+            cleanupHls();
+
+            if (!hlsSource) {
+                videoElement.src = selectedRevision.videoUrl || "";
+                return;
+            }
+
+            const { default: Hls } = await import("hls.js");
+            if (disposed) return;
+
+            if (Hls.isSupported()) {
+                const startLevel = networkTier === "low" ? 0 : networkTier === "medium" ? 1 : -1;
+                const hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    capLevelToPlayerSize: true,
+                    maxBufferLength: networkTier === "low" ? 10 : 20,
+                    maxMaxBufferLength: networkTier === "low" ? 20 : 40,
+                    startLevel,
+                });
+
+                hls.loadSource(hlsSource);
+                hls.attachMedia(videoElement);
+                hlsInstanceRef.current = hls;
+                return;
+            }
+
+            if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+                videoElement.src = hlsSource;
+                return;
+            }
+
+            videoElement.src = selectedRevision.videoUrl || "";
+        };
+
+        initPlayback().catch(() => {
+            videoElement.src = selectedRevision.videoUrl || "";
+        });
+
+        return () => {
+            disposed = true;
+            cleanupHls();
+        };
+    }, [isOpen, selectedRevision?.id, selectedRevision?.videoUrl, selectedRevision?.hlsUrl, networkTier]);
 
     // Image upload handler
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -526,8 +614,9 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                             <video
                                 key={selectedRevision.id}
                                 ref={videoRef}
-                                src={selectedRevision.videoUrl}
                                 controls
+                                preload="metadata"
+                                playsInline
                                 className="w-full h-full object-contain"
                                 onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                                 onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}

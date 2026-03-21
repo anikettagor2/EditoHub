@@ -324,6 +324,15 @@ export function EditorDashboardV2() {
     const pendingEarnings = projects
         .filter(p => ['completed', 'approved'].includes(p.status) && !p.editorPaid)
         .reduce((acc, p) => acc + (p.editorPrice || 0), 0);
+    const selectedProjectPmFiles = selectedProjectDetails
+        ? ((((selectedProjectDetails as any).pmFiles || []) as any[]).length > 0
+            ? (((selectedProjectDetails as any).pmFiles || []) as any[])
+            : (selectedProjectDetails.referenceFiles || []).filter((file: any) => Boolean(file?.uploadedBy)))
+        : [];
+    const selectedProjectStyleReferenceFiles = selectedProjectDetails
+        ? (selectedProjectDetails.referenceFiles || []).filter((file: any) => !file?.uploadedBy)
+        : [];
+    const canEditorDownloadAssets = selectedProjectDetails?.assignmentStatus === 'accepted';
 
     const getStatusColor = (status: string) => {
         switch(status) {
@@ -359,6 +368,10 @@ export function EditorDashboardV2() {
     };
 
     const triggerDirectDownload = async (url: string, fileName?: string) => {
+        if (!canEditorDownloadAssets) {
+            toast.error("You can download assets only after accepting the project assignment.");
+            return;
+        }
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error("Failed to fetch file");
@@ -381,6 +394,10 @@ export function EditorDashboardV2() {
             anchor.click();
             anchor.remove();
         }
+    };
+
+    const openFilePreview = (url: string) => {
+        window.open(url, "_blank", "noopener,noreferrer");
     };
 
     if (loading) {
@@ -609,12 +626,21 @@ export function EditorDashboardV2() {
                                                                     {file.size && <p className="text-[9px] text-muted-foreground">{(file.size / (1024*1024)).toFixed(1)} MB</p>}
                                                                 </div>
                                                             </div>
-                                                            <button
-                                                                onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                                className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                            >
-                                                                <Download className="h-3.5 w-3.5" />
-                                                            </button>
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => openFilePreview(file.url)}
+                                                                    className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                                >
+                                                                    Preview
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                                    className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    disabled={!canEditorDownloadAssets}
+                                                                >
+                                                                    <Download className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                     {(selectedProjectDetails.rawFiles?.length || 0) > 3 && (
@@ -643,12 +669,21 @@ export function EditorDashboardV2() {
                                                                 <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                                                 <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                             </div>
-                                                            <button
-                                                                onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                                className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                            >
-                                                                <Download className="h-3.5 w-3.5" />
-                                                            </button>
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => openFilePreview(file.url)}
+                                                                    className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                                >
+                                                                    Preview
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                                    className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    disabled={!canEditorDownloadAssets}
+                                                                >
+                                                                    <Download className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -700,12 +735,21 @@ export function EditorDashboardV2() {
                                                                 )}
                                                                 <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                             </div>
-                                                            <button
-                                                                onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                                className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                            >
-                                                                <Download className="h-3.5 w-3.5" />
-                                                            </button>
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => openFilePreview(file.url)}
+                                                                    className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                                >
+                                                                    Preview
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                                    className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    disabled={!canEditorDownloadAssets}
+                                                                >
+                                                                    <Download className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                     {((selectedProjectDetails as any).bRoleFiles?.length || 0) > 2 && (
@@ -738,9 +782,9 @@ export function EditorDashboardV2() {
                                             )}
 
                                             {/* Reference Files */}
-                                            {(selectedProjectDetails as any).referenceFiles && (selectedProjectDetails as any).referenceFiles.length > 0 && (
+                                            {selectedProjectStyleReferenceFiles.length > 0 && (
                                                 <div className="grid gap-2">
-                                                    {(selectedProjectDetails as any).referenceFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                    {selectedProjectStyleReferenceFiles.slice(0, 2).map((file: any, idx: number) => (
                                                         <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                             <div className="flex items-center gap-2 min-w-0 flex-1">
                                                                 {file.type?.includes('image') ? (
@@ -750,24 +794,78 @@ export function EditorDashboardV2() {
                                                                 )}
                                                                 <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                             </div>
-                                                            <button
-                                                                onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                                className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                            >
-                                                                <Download className="h-3.5 w-3.5" />
-                                                            </button>
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => openFilePreview(file.url)}
+                                                                    className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                                >
+                                                                    Preview
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                                    className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    disabled={!canEditorDownloadAssets}
+                                                                >
+                                                                    <Download className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ))}
-                                                    {((selectedProjectDetails as any).referenceFiles?.length || 0) > 2 && (
-                                                        <p className="text-xs text-muted-foreground text-center py-1">+{((selectedProjectDetails as any).referenceFiles?.length || 0) - 2} more files</p>
+                                                    {(selectedProjectStyleReferenceFiles.length || 0) > 2 && (
+                                                        <p className="text-xs text-muted-foreground text-center py-1">+{(selectedProjectStyleReferenceFiles.length || 0) - 2} more files</p>
                                                     )}
                                                 </div>
                                             )}
 
                                             {/* Empty State */}
-                                            {!(selectedProjectDetails as any).referenceLink && (!((selectedProjectDetails as any).referenceFiles) || (selectedProjectDetails as any).referenceFiles.length === 0) && (
+                                            {!(selectedProjectDetails as any).referenceLink && selectedProjectStyleReferenceFiles.length === 0 && (
                                                 <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
                                                     <p className="text-xs text-muted-foreground">Not uploaded yet</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 6. PM Uploaded Files */}
+                                        <div className="space-y-3 pt-3 border-t border-border/30">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">📤 PM Uploaded Files</span>
+                                            </div>
+                                            {selectedProjectPmFiles.length > 0 ? (
+                                                <div className="grid gap-2">
+                                                    {selectedProjectPmFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                        <div key={`${file.url}-${idx}`} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
+                                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                {file.type?.includes('image') ? (
+                                                                    <ImageIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                                ) : (
+                                                                    <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                                )}
+                                                                <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => openFilePreview(file.url)}
+                                                                    className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                                >
+                                                                    Preview
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                                    className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    disabled={!canEditorDownloadAssets}
+                                                                >
+                                                                    <Download className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {selectedProjectPmFiles.length > 2 && (
+                                                        <p className="text-xs text-muted-foreground text-center py-1">+{selectedProjectPmFiles.length - 2} more files</p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
+                                                    <p className="text-xs text-muted-foreground">No PM uploads yet</p>
                                                 </div>
                                             )}
                                         </div>

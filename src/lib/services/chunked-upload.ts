@@ -156,123 +156,26 @@ export async function startChunkedUpload(
   signal?: AbortSignal
 ): Promise<string> {
   const sessionId = makeSessionId(projectId, file);
-  const chunks = splitFile(file, CHUNK_SIZE);
-  const totalChunks = chunks.length;
-
-  // ── Load or create Firestore session ──────────────────────────────────────
   const sessionRef = doc(db, "upload_sessions", sessionId);
   let canPersistSession = true;
-  let session: PersistedSession = {
-    sessionId,
-    projectId,
-    fileName: file.name,
-    fileSize: file.size,
-    totalChunks,
-    completedChunks: [],
-    chunkPaths: {},
-    status: "uploading",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
 
   try {
-    const existingSnap = await getDoc(sessionRef);
-    if (
-      existingSnap.exists() &&
-      (existingSnap.data() as PersistedSession).status === "uploading"
-    ) {
-      session = existingSnap.data() as PersistedSession;
-    } else {
-      await setDoc(sessionRef, session);
-    }
+    await setDoc(sessionRef, {
+      sessionId,
+      projectId,
+      fileName: file.name,
+      fileSize: file.size,
+      totalChunks: 1,
+      completedChunks: [],
+      chunkPaths: {},
+      status: "uploading",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as PersistedSession);
   } catch (err) {
-    // If Firestore upload_sessions is blocked by rules, continue without
-    // persistence so draft upload still works.
     canPersistSession = false;
     console.warn("upload_sessions persistence unavailable; continuing upload without resume state", err);
   }
-
-  const done = new Set<number>(session.completedChunks);
-
-  // ── Progress tracking ─────────────────────────────────────────────────────
-  // bytes[i] = bytes uploaded so far for chunk i
-  const chunkBytes = new Map<number, number>();
-  done.forEach((i) => chunkBytes.set(i, chunks[i].size));
-
-  let speedSampleTime = Date.now();
-  let lastSampleBytes = [...chunkBytes.values()].reduce((a, b) => a + b, 0);
-  let speedBps = 0;
-
-  function emitProgress(currentStatus: ChunkedUploadProgress["status"] = "uploading") {
-    const bytesUploaded = [...chunkBytes.values()].reduce((a, b) => a + b, 0);
-    const overallPct = Math.min(100, (bytesUploaded / file.size) * 100);
-    const now = Date.now();
-    const dt = (now - speedSampleTime) / 1000;
-    if (dt >= 0.3) {
-      speedBps = Math.max(0, (bytesUploaded - lastSampleBytes) / dt);
-      lastSampleBytes = bytesUploaded;
-      speedSampleTime = now;
-    }
-    const remaining = file.size - bytesUploaded;
-    onProgress({
-      overallPct,
-      bytesUploaded,
-      totalBytes: file.size,
-      speedBps,
-      etaSeconds: speedBps > 0 ? remaining / speedBps : Infinity,
-      chunksTotal: totalChunks,
-      chunksComplete: done.size,
-      status: currentStatus,
-    });
-  }
-
-  // Emit initial progress (handles resume case where some chunks are done)
-  emitProgress("uploading");
-
-  // ── Upload pending chunks in parallel ─────────────────────────────────────
-  const pending = Array.from({ length: totalChunks }, (_, i) => i).filter(
-    (i) => !done.has(i)
-  );
-
-  const uploadFns = pending.map((chunkIdx) => async () => {
-    const path = `projects/${projectId}/chunks/${sessionId}/chunk_${String(chunkIdx).padStart(5, "0")}`;
-    const chunkPath = await uploadChunk(
-      chunks[chunkIdx],
-      path,
-      (bytes) => {
-        chunkBytes.set(chunkIdx, bytes);
-        emitProgress("uploading");
-      },
-      signal
-    );
-
-    done.add(chunkIdx);
-    session.completedChunks = [...done];
-    session.chunkPaths[chunkIdx] = chunkPath;
-
-    if (canPersistSession) {
-      try {
-        await updateDoc(sessionRef, {
-          completedChunks: session.completedChunks,
-          [`chunkPaths.${chunkIdx}`]: chunkPath,
-          updatedAt: Date.now(),
-        });
-      } catch (err) {
-        canPersistSession = false;
-        console.warn("Failed to persist chunk state; continuing upload", err);
-      }
-    }
-  });
-
-  await withConcurrency(uploadFns, MAX_CONCURRENT);
-
-  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-
-  // ── All chunks done – now upload the assembled video ──────────────────────
-  // The Cloud Function will compose the chunks (GCS Compose), but we also
-  // upload the full file directly so the revision is immediately available
-  // without waiting for the function to run.
-  emitProgress("assembling");
 
   const finalPath = `projects/${projectId}/revisions/${sessionId}/${file.name}`;
   const finalRef = ref(storage, finalPath);
@@ -282,6 +185,10 @@ export async function startChunkedUpload(
       reject(new DOMException("Aborted", "AbortError"));
       return;
     }
+
+    let sampleBytes = 0;
+    let sampleTime = Date.now();
+    let speedBps = 0;
 
     const task = uploadBytesResumable(finalRef, file, {
       contentType: file.type || "video/mp4",
@@ -293,51 +200,72 @@ export async function startChunkedUpload(
       },
     });
 
-    // Track progress on the final upload too
+    const handleAbort = () => task.cancel();
+    signal?.addEventListener("abort", handleAbort);
+
     task.on(
       "state_changed",
       (snap) => {
-        // Keep showing 99% until fully done to avoid confusion
-        const pct = Math.min(
-          99,
-          80 + (snap.bytesTransferred / snap.totalBytes) * 19
-        );
+        const now = Date.now();
+        const dt = (now - sampleTime) / 1000;
+        if (dt >= 0.3) {
+          speedBps = Math.max(0, (snap.bytesTransferred - sampleBytes) / dt);
+          sampleBytes = snap.bytesTransferred;
+          sampleTime = now;
+        }
+
+        const remaining = Math.max(0, file.size - snap.bytesTransferred);
+
         onProgress({
-          overallPct: pct,
+          overallPct: Math.min(100, (snap.bytesTransferred / file.size) * 100),
           bytesUploaded: snap.bytesTransferred,
           totalBytes: file.size,
           speedBps,
-          etaSeconds: 0,
-          chunksTotal: totalChunks,
-          chunksComplete: totalChunks,
-          status: "assembling",
+          etaSeconds: speedBps > 0 ? remaining / speedBps : Infinity,
+          chunksTotal: 1,
+          chunksComplete: snap.bytesTransferred >= file.size ? 1 : 0,
+          status: snap.bytesTransferred >= file.size ? "assembling" : "uploading",
         });
       },
-      reject,
+      async (err) => {
+        signal?.removeEventListener("abort", handleAbort);
+        if (canPersistSession) {
+          try {
+            await updateDoc(sessionRef, { status: "error", updatedAt: Date.now() });
+          } catch {
+            // best-effort persistence only
+          }
+        }
+        reject(err);
+      },
       async () => {
+        signal?.removeEventListener("abort", handleAbort);
         try {
           const url = await getDownloadURL(task.snapshot.ref);
           if (canPersistSession) {
             try {
               await updateDoc(sessionRef, {
                 status: "done",
+                completedChunks: [0],
                 finalUrl: url,
                 updatedAt: Date.now(),
               });
-            } catch (err) {
-              console.warn("Failed to persist final upload session state", err);
+            } catch {
+              // best-effort persistence only
             }
           }
+
           onProgress({
             overallPct: 100,
             bytesUploaded: file.size,
             totalBytes: file.size,
             speedBps: 0,
             etaSeconds: 0,
-            chunksTotal: totalChunks,
-            chunksComplete: totalChunks,
+            chunksTotal: 1,
+            chunksComplete: 1,
             status: "done",
           });
+
           resolve(url);
         } catch (e) {
           reject(e);

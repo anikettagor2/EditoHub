@@ -183,6 +183,14 @@ export function ClientDashboard() {
     const selectedProjectPMWhatsapp = buildWhatsAppLink(
         selectedProjectPM?.whatsappNumber || selectedProjectPM?.phoneNumber
     );
+    const selectedProjectPmFiles = selectedProject
+        ? ((((selectedProject as any).pmFiles || []) as any[]).length > 0
+            ? (((selectedProject as any).pmFiles || []) as any[])
+            : (selectedProject.referenceFiles || []).filter((file: any) => Boolean(file?.uploadedBy)))
+        : [];
+    const selectedProjectStyleReferenceFiles = selectedProject
+        ? (selectedProject.referenceFiles || []).filter((file: any) => !file?.uploadedBy)
+        : [];
 
     const triggerDirectDownload = async (url: string, fileName?: string) => {
         try {
@@ -484,13 +492,22 @@ export function ClientDashboard() {
                                         {selectedProject.rawFiles.map((file: any, idx: number) => (
                                             <div key={`raw-${idx}`} className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border">
                                                 <span className="text-xs font-medium truncate">{file.name}</span>
-                                                <button
-                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                    className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
-                                                    title="Download"
-                                                >
-                                                    <Download className="h-3.5 w-3.5" />
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })}
+                                                        className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-all"
+                                                        title="Preview"
+                                                    >
+                                                        Preview
+                                                    </button>
+                                                    <button
+                                                        onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                        className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
+                                                        title="Download"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -498,22 +515,31 @@ export function ClientDashboard() {
                                     <p className="text-xs text-muted-foreground">No client raw files available.</p>
                                 )}
 
-                                {selectedProject.referenceFiles && selectedProject.referenceFiles.length > 0 && (
+                                {selectedProjectPmFiles.length > 0 && (
                                     <div className="space-y-2 pt-2 border-t border-border">
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Manager References</p>
-                                        {selectedProject.referenceFiles.map((file: any, idx: number) => (
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Project Manager Uploads</p>
+                                        {selectedProjectPmFiles.map((file: any, idx: number) => (
                                             <div key={`ref-${idx}`} className="flex items-center justify-between gap-3 p-2 rounded-md bg-card border border-border">
                                                 <div className="min-w-0 flex-1">
                                                     <p className="text-xs font-medium truncate">{file.name}</p>
                                                     <p className="text-[10px] text-muted-foreground">Uploaded by Project Manager</p>
                                                 </div>
-                                                <button
-                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                    className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
-                                                    title="Download"
-                                                >
-                                                    <Download className="h-3.5 w-3.5" />
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => setPreviewFile({ url: file.url, type: file.type || 'application/octet-stream', name: file.name })}
+                                                        className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-all"
+                                                        title="Preview"
+                                                    >
+                                                        Preview
+                                                    </button>
+                                                    <button
+                                                        onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                        className="h-8 w-8 rounded-md bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground flex items-center justify-center transition-all"
+                                                        title="Download"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -730,9 +756,9 @@ export function ClientDashboard() {
                                     )}
 
                                     {/* Reference Files */}
-                                    {(selectedProject as any).referenceFiles && (selectedProject as any).referenceFiles.length > 0 && (
+                                    {selectedProjectStyleReferenceFiles.length > 0 && (
                                         <div className="grid gap-2">
-                                            {(selectedProject as any).referenceFiles.slice(0, 2).map((file: any, idx: number) => (
+                                            {selectedProjectStyleReferenceFiles.slice(0, 2).map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         {file.type?.includes('image') ? (
@@ -758,16 +784,60 @@ export function ClientDashboard() {
                                                     </div>
                                                 </div>
                                             ))}
-                                            {((selectedProject as any).referenceFiles?.length || 0) > 2 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{((selectedProject as any).referenceFiles?.length || 0) - 2} more files</p>
+                                            {(selectedProjectStyleReferenceFiles.length || 0) > 2 && (
+                                                <p className="text-xs text-muted-foreground text-center py-1">+{(selectedProjectStyleReferenceFiles.length || 0) - 2} more files</p>
                                             )}
                                         </div>
                                     )}
 
                                     {/* Empty State */}
-                                    {!(selectedProject as any).referenceLink && (!((selectedProject as any).referenceFiles) || (selectedProject as any).referenceFiles.length === 0) && (
+                                    {!(selectedProject as any).referenceLink && selectedProjectStyleReferenceFiles.length === 0 && (
                                         <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
                                             <p className="text-xs text-muted-foreground">Not uploaded yet</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 6. PM Uploaded Files */}
+                                <div className="space-y-3 pt-3 border-t border-border/30">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">📤 PM Uploaded Files</span>
+                                    </div>
+                                    {selectedProjectPmFiles.length > 0 ? (
+                                        <div className="grid gap-2">
+                                            {selectedProjectPmFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                <div key={`${file.url}-${idx}`} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        {file.type?.includes('image') ? (
+                                                            <ImageIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                        ) : (
+                                                            <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                        )}
+                                                        <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'application/octet-stream', name: file.name })}
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                        <button
+                                                            onClick={() => triggerDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {selectedProjectPmFiles.length > 2 && (
+                                                <p className="text-xs text-muted-foreground text-center py-1">+{selectedProjectPmFiles.length - 2} more files</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
+                                            <p className="text-xs text-muted-foreground">No PM uploads yet</p>
                                         </div>
                                     )}
                                 </div>

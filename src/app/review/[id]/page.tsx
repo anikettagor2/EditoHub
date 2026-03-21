@@ -16,6 +16,7 @@ import {
 import { 
     Loader2, 
     Play, 
+    Pause,
     MessageSquare, 
     ShieldAlert, 
     User as UserIcon,
@@ -30,6 +31,7 @@ type RevisionDoc = {
     projectId: string;
     version?: number;
     videoUrl?: string;
+    hlsUrl?: string;
     description?: string;
     createdAt?: number;
 };
@@ -69,6 +71,11 @@ export default function GuestReviewPage() {
     const [savingComment, setSavingComment] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [isBuffering, setIsBuffering] = useState(false);
+    const [networkTier, setNetworkTier] = useState<"low" | "medium" | "high">("high");
+    const [streamMode, setStreamMode] = useState<"hls" | "direct">("direct");
+    const hlsInstanceRef = useRef<any>(null);
 
     useEffect(() => {
         if (!revisionId) return;
@@ -122,6 +129,97 @@ export default function GuestReviewPage() {
         setIsIdentified(true);
     };
 
+    useEffect(() => {
+        const connection = (navigator as any)?.connection;
+        if (!connection) return;
+
+        const updateTier = () => {
+            const effectiveType = connection.effectiveType as string | undefined;
+            const downlink = Number(connection.downlink || 0);
+            const saveData = Boolean(connection.saveData);
+
+            if (saveData || effectiveType === "slow-2g" || effectiveType === "2g" || downlink < 1.2) {
+                setNetworkTier("low");
+                return;
+            }
+            if (effectiveType === "3g" || downlink < 3) {
+                setNetworkTier("medium");
+                return;
+            }
+            setNetworkTier("high");
+        };
+
+        updateTier();
+        connection.addEventListener?.("change", updateTier);
+        return () => connection.removeEventListener?.("change", updateTier);
+    }, []);
+
+    useEffect(() => {
+        if (!isIdentified || !videoRef.current || !revision?.videoUrl) return;
+
+        const videoElement = videoRef.current;
+        const hlsSource = revision.hlsUrl || (revision.videoUrl.includes(".m3u8") ? revision.videoUrl : null);
+        let disposed = false;
+
+        const cleanupHls = () => {
+            if (hlsInstanceRef.current) {
+                hlsInstanceRef.current.destroy();
+                hlsInstanceRef.current = null;
+            }
+        };
+
+        const initPlayback = async () => {
+            cleanupHls();
+
+            if (!hlsSource) {
+                videoElement.src = revision.videoUrl || "";
+                setStreamMode("direct");
+                return;
+            }
+
+            const { default: Hls } = await import("hls.js");
+            if (disposed) return;
+
+            if (Hls.isSupported()) {
+                const startLevel = networkTier === "low" ? 0 : networkTier === "medium" ? 1 : -1;
+                const hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 30,
+                    capLevelToPlayerSize: true,
+                    maxBufferLength: networkTier === "low" ? 10 : 20,
+                    maxMaxBufferLength: networkTier === "low" ? 20 : 40,
+                    startLevel,
+                });
+
+                hls.loadSource(hlsSource);
+                hls.attachMedia(videoElement);
+                hlsInstanceRef.current = hls;
+                setStreamMode("hls");
+                return;
+            }
+
+            if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+                videoElement.src = hlsSource;
+                setStreamMode("hls");
+                return;
+            }
+
+            videoElement.src = revision.videoUrl || "";
+            setStreamMode("direct");
+        };
+
+        initPlayback().catch(() => {
+            videoElement.src = revision.videoUrl || "";
+            setStreamMode("direct");
+        });
+
+        return () => {
+            disposed = true;
+            cleanupHls();
+        };
+    }, [isIdentified, revision?.id, revision?.videoUrl, revision?.hlsUrl, networkTier]);
+
     const handleAddComment = async () => {
         if (!revision || !guestName) return;
         if (!newComment.trim()) {
@@ -157,6 +255,22 @@ export default function GuestReviewPage() {
         if (!videoRef.current) return;
         videoRef.current.currentTime = time;
         setCurrentTime(time);
+    };
+
+    const togglePlayback = async () => {
+        if (!videoRef.current) return;
+        try {
+            if (videoRef.current.paused) {
+                await videoRef.current.play();
+                setIsPlaying(true);
+            } else {
+                videoRef.current.pause();
+                setIsPlaying(false);
+            }
+        } catch (error) {
+            console.error("Playback toggle failed:", error);
+            toast.error("Playback control failed. Please try again.");
+        }
     };
 
     if (loading) {
@@ -251,10 +365,19 @@ export default function GuestReviewPage() {
                         <div className="relative rounded-2xl overflow-hidden bg-black aspect-video group shadow-2xl border border-white/5">
                             <video
                                 ref={videoRef}
-                                src={revision.videoUrl}
                                 className="h-full w-full outline-none"
+                                controls
+                                preload="auto"
+                                playsInline
                                 onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                                 onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                                onPlaying={() => {
+                                    setIsPlaying(true);
+                                    setIsBuffering(false);
+                                }}
+                                onPause={() => setIsPlaying(false)}
+                                onWaiting={() => setIsBuffering(true)}
+                                onCanPlay={() => setIsBuffering(false)}
                                 controlsList="nodownload"
                                 onContextMenu={(e) => e.preventDefault()}
                             />
@@ -269,15 +392,38 @@ export default function GuestReviewPage() {
 
                         {/* Controls/Timeline */}
                         <div className="mt-6 space-y-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <button
+                                    onClick={togglePlayback}
+                                    className="h-9 px-4 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
+                                >
+                                    {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                                    {isPlaying ? "Pause" : "Play"}
+                                </button>
+                                {isBuffering && (
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+                                        Buffering...
+                                    </span>
+                                )}
+                            </div>
+
                             <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-muted-foreground px-1">
                                 <div className="flex gap-4">
                                     <span className="text-primary">{formatTime(currentTime)}</span>
                                     <span>{formatTime(duration)}</span>
                                 </div>
-                                <span className="opacity-60">Click on timeline to seek</span>
+                                <span className="opacity-60">{streamMode === "hls" ? `Adaptive ${networkTier}` : "Click on timeline to seek"}</span>
                             </div>
 
-                            <div className="relative h-1.5 bg-white/5 rounded-full cursor-pointer overflow-hidden border border-white/5">
+                            <div
+                                className="relative h-1.5 bg-white/5 rounded-full cursor-pointer overflow-hidden border border-white/5"
+                                onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const x = e.clientX - rect.left;
+                                    const progress = Math.max(0, Math.min(1, x / rect.width));
+                                    seekTo(progress * (duration || 0));
+                                }}
+                            >
                                 <div
                                     className="absolute inset-y-0 left-0 bg-primary transition-all duration-100"
                                     style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}

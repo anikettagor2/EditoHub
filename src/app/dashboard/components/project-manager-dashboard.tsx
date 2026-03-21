@@ -242,7 +242,7 @@ export function ProjectManagerDashboard() {
         }
 
         try {
-            const res = await assignEditor(selectedProject.id, editorId, Number(editorPriceInput), assignDeadline);
+            const res = await assignEditor(selectedProject.id, editorId, Number(editorPriceInput), assignDeadline, 'project_manager');
             if (res.success) {
                 toast.success("Editor assigned successfully");
                 setIsAssignModalOpen(false);
@@ -386,8 +386,8 @@ export function ProjectManagerDashboard() {
             await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(storageRef);
 
-            // Add to project's pmFiles array (using referenceFiles field)
-            const currentReferenceFiles = inspectProject.referenceFiles || [];
+            // Store PM uploads in a dedicated field so they do not pollute client style references.
+            const currentPmFiles = ((inspectProject as any).pmFiles || []) as any[];
             const newPMFile = {
                 name: file.name,
                 url: downloadURL,
@@ -398,7 +398,7 @@ export function ProjectManagerDashboard() {
             };
 
             await updateDoc(doc(db, "projects", inspectProject.id), {
-                referenceFiles: [...currentReferenceFiles, newPMFile],
+                pmFiles: [...currentPmFiles, newPMFile],
                 updatedAt: Date.now()
             });
 
@@ -446,6 +446,14 @@ export function ProjectManagerDashboard() {
     const activeCount = projects.filter(p => !['completed', 'approved', 'archived', 'delivered'].includes(p.status)).length;
     const pendingUnlockCount = projects.filter(p => p.downloadUnlockRequested && p.paymentStatus !== 'full_paid').length;
     const editorPendingCount = projects.filter(p => p.assignedEditorId && p.clientHasDownloaded && !p.editorPaid).length;
+    const inspectPmFiles = inspectProject
+        ? ((((inspectProject as any).pmFiles || []) as any[]).length > 0
+            ? (((inspectProject as any).pmFiles || []) as any[])
+            : (inspectProject.referenceFiles || []).filter((file: any) => Boolean(file?.uploadedBy)))
+        : [];
+    const inspectStyleReferenceFiles = inspectProject
+        ? (inspectProject.referenceFiles || []).filter((file: any) => !file?.uploadedBy)
+        : [];
 
     // PM availability status
     const currentUserData = users.find(u => u.uid === user?.uid);
@@ -785,7 +793,7 @@ export function ProjectManagerDashboard() {
                                                                                     if (!project.editorPrice) {
                                                                                         toast.error("Set editor payment first");
                                                                                     } else {
-                                                                                        const res = await assignEditor(project.id, editor.uid, project.editorPrice, project.deadline || '');
+                                                                                        const res = await assignEditor(project.id, editor.uid, project.editorPrice, project.deadline || '', 'project_manager');
                                                                                         if (res.success) toast.success('Editor assigned');
                                                                                         else toast.error(res.error || 'Failed');
                                                                                     }
@@ -1503,16 +1511,16 @@ export function ProjectManagerDashboard() {
                                 )}
                             </div>
 
-                            {/* PM Reference/Upload Files */}
+                            {/* PM Uploaded Files */}
                             <div className="bg-muted/30 border border-border rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-4">
-                                    <p className="text-xs text-muted-foreground font-semibold">PM Reference Files</p>
+                                    <p className="text-xs text-muted-foreground font-semibold">PM Uploaded Files</p>
                                 </div>
                                 
                                 {/* File List */}
-                                {inspectProject.referenceFiles && inspectProject.referenceFiles.length > 0 ? (
+                                {inspectPmFiles.length > 0 ? (
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-                                        {inspectProject.referenceFiles.map((file: any, idx: number) => (
+                                        {inspectPmFiles.map((file: any, idx: number) => (
                                             <FilePreview
                                                 key={`${file.url}-${idx}`}
                                                 file={file}
@@ -1522,7 +1530,7 @@ export function ProjectManagerDashboard() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-xs text-muted-foreground mb-4">No reference files uploaded yet.</p>
+                                    <p className="text-xs text-muted-foreground mb-4">No PM files uploaded yet.</p>
                                 )}
 
                                 {/* Upload Button */}
@@ -1601,12 +1609,20 @@ export function ProjectManagerDashboard() {
                                                             {file.size && <p className="text-[9px] text-muted-foreground">{(file.size / (1024*1024)).toFixed(1)} MB</p>}
                                                         </div>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleDirectDownload(file.url, file.name)}
-                                                        className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                    >
-                                                        <Download className="h-3.5 w-3.5" />
-                                                    </button>
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })}
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                             {(inspectProject.rawFiles?.length || 0) > 3 && (
@@ -1635,12 +1651,20 @@ export function ProjectManagerDashboard() {
                                                         <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                                         <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleDirectDownload(file.url, file.name)}
-                                                        className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                    >
-                                                        <Download className="h-3.5 w-3.5" />
-                                                    </button>
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'text/plain', name: file.name })}
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -1692,12 +1716,20 @@ export function ProjectManagerDashboard() {
                                                         )}
                                                         <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleDirectDownload(file.url, file.name)}
-                                                        className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                    >
-                                                        <Download className="h-3.5 w-3.5" />
-                                                    </button>
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'image', name: file.name })}
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                             {((inspectProject as any).bRoleFiles?.length || 0) > 2 && (
@@ -1730,9 +1762,9 @@ export function ProjectManagerDashboard() {
                                     )}
 
                                     {/* Reference Files */}
-                                    {(inspectProject as any).referenceFiles && (inspectProject as any).referenceFiles.length > 0 && (
+                                    {inspectStyleReferenceFiles.length > 0 && (
                                         <div className="grid gap-2">
-                                            {(inspectProject as any).referenceFiles.slice(0, 2).map((file: any, idx: number) => (
+                                            {inspectStyleReferenceFiles.slice(0, 2).map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         {file.type?.includes('image') ? (
@@ -1742,24 +1774,76 @@ export function ProjectManagerDashboard() {
                                                         )}
                                                         <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleDirectDownload(file.url, file.name)}
-                                                        className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
-                                                    >
-                                                        <Download className="h-3.5 w-3.5" />
-                                                    </button>
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'image', name: file.name })}
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
-                                            {((inspectProject as any).referenceFiles?.length || 0) > 2 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{((inspectProject as any).referenceFiles?.length || 0) - 2} more files</p>
+                                            {(inspectStyleReferenceFiles.length || 0) > 2 && (
+                                                <p className="text-xs text-muted-foreground text-center py-1">+{(inspectStyleReferenceFiles.length || 0) - 2} more files</p>
                                             )}
                                         </div>
                                     )}
 
                                     {/* Empty State */}
-                                    {!(inspectProject as any).referenceLink && (!((inspectProject as any).referenceFiles) || (inspectProject as any).referenceFiles.length === 0) && (
+                                    {!(inspectProject as any).referenceLink && inspectStyleReferenceFiles.length === 0 && (
                                         <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
                                             <p className="text-xs text-muted-foreground">Not uploaded yet</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 6. PM Uploaded Files */}
+                                <div className="space-y-3 pt-3 border-t border-border/30">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">📤 PM Uploaded Files</span>
+                                    </div>
+                                    {inspectPmFiles.length > 0 ? (
+                                        <div className="grid gap-2">
+                                            {inspectPmFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                <div key={`${file.url}-${idx}`} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        {file.type?.includes('image') ? (
+                                                            <ImageIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                        ) : (
+                                                            <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                        )}
+                                                        <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <button
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'application/octet-stream', name: file.name })}
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {inspectPmFiles.length > 2 && (
+                                                <p className="text-xs text-muted-foreground text-center py-1">+{inspectPmFiles.length - 2} more files</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
+                                            <p className="text-xs text-muted-foreground">No PM uploads yet</p>
                                         </div>
                                     )}
                                 </div>

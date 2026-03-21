@@ -447,6 +447,10 @@ export function AdminDashboard() {
 
    const handleAssignEditor = async (editorId: string) => {
     if (!selectedProject) return;
+    if (selectedProject.assignedEditorId) {
+        toast.error("Reassignment is managed by Project Managers only once an editor is assigned.");
+        return;
+    }
     if (!assignEditorPrice) {
         toast.error("Please enter a revenue share amount for the editor.");
         return;
@@ -460,7 +464,7 @@ export function AdminDashboard() {
     }
 
     try {
-        const res = await assignEditor(selectedProject.id, editorId, price, assignDeadline);
+        const res = await assignEditor(selectedProject.id, editorId, price, assignDeadline, 'admin');
         if (res.success) {
             toast.success("Editor assigned successfully. Pending their acceptance.");
             setIsAssignModalOpen(false);
@@ -1014,10 +1018,11 @@ export function AdminDashboard() {
                                              <DropdownMenuContent align="end" className="w-52 bg-popover border-border p-1.5 rounded-xl shadow-2xl">
                                                 {!(project.status === 'completed' || project.status === 'archived') && (
                                                     <>
-                                                        <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setEditForm({totalCost: project.totalCost||0, status: project.status}); setIsEditModalOpen(true); }}>
-                                                            <Edit className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Edit Project
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}>
+                                                        <DropdownMenuItem 
+                                                            className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg disabled:opacity-50 disabled:cursor-not-allowed" 
+                                                            onClick={() => { setSelectedProject(project); setIsAssignModalOpen(true); }}
+                                                            disabled={Boolean(project.assignedEditorId)}
+                                                        >
                                                             <UserPlus className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Assign Editor
                                                         </DropdownMenuItem>
                                                         {(project as any).paymentOption === 'pay_later' && project.paymentStatus !== 'full_paid' && (

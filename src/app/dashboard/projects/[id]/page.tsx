@@ -465,9 +465,14 @@ export default function ProjectDetailsPage() {
     const isAdmin = user?.role === 'admin';
     const isPM = user?.role === 'project_manager';
     const canManage = isAdmin || isPM;
+    const canAssignEditor = isPM;
     const isEditor = user?.role === 'editor';
     const isAssignedEditor = isEditor && project.assignedEditorId === user?.uid;
     const isPaymentLocked = isClient && project.paymentStatus !== 'full_paid';
+    const projectPmFiles = ((((project as any).pmFiles || []) as any[]).length > 0
+        ? (((project as any).pmFiles || []) as any[])
+        : (project.referenceFiles || []).filter((file: any) => Boolean(file?.uploadedBy)));
+    const projectStyleReferenceFiles = (project.referenceFiles || []).filter((file: any) => !file?.uploadedBy);
 
     const showFeedbackTool = canManage ? (project.assignmentStatus === 'accepted') : true;
 
@@ -645,7 +650,12 @@ export default function ProjectDetailsPage() {
                                                             <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</span>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        <button onClick={() => handleDirectDownload(file.url, file.name)} className="h-8 w-8 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-all flex items-center justify-center">
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -668,7 +678,12 @@ export default function ProjectDetailsPage() {
                                                             <span className="text-xs font-bold text-amber-500/70 truncate">{file.name}</span>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-500 text-amber-500/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-500 text-amber-500/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        <button onClick={() => handleDirectDownload(file.url, file.name)} className="h-8 w-8 rounded bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-500 text-amber-500/70 transition-all flex items-center justify-center">
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -679,11 +694,11 @@ export default function ProjectDetailsPage() {
                                     </div>
                                 )}
 
-                                {(project as any).referenceFiles && (project as any).referenceFiles.length > 0 && (
+                                {projectStyleReferenceFiles.length > 0 && (
                                     <div className="space-y-2">
                                         <p className="text-[9px] text-primary/70 font-black uppercase tracking-widest ml-1">Reference Assets</p>
                                         <div className="grid gap-2">
-                                            {(project as any).referenceFiles.map((file: any, idx: number) => (
+                                            {projectStyleReferenceFiles.map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between p-2.5 bg-primary/5 rounded-lg border border-primary/10 group">
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         <Eye className="h-4 w-4 text-primary/70 group-hover:text-primary transition-colors" />
@@ -691,7 +706,36 @@ export default function ProjectDetailsPage() {
                                                             <span className="text-xs font-bold text-primary/70 truncate">{file.name}</span>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => setPreviewFile({ url: file.url, type: 'other', name: file.name })} className="h-8 px-3 rounded bg-primary/10 hover:bg-primary/20 hover:text-primary text-primary/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setPreviewFile({ url: file.url, type: 'other', name: file.name })} className="h-8 px-3 rounded bg-primary/10 hover:bg-primary/20 hover:text-primary text-primary/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        <button onClick={() => handleDirectDownload(file.url, file.name)} className="h-8 w-8 rounded bg-primary/10 hover:bg-primary/20 hover:text-primary text-primary/70 transition-all flex items-center justify-center">
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {projectPmFiles.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest ml-1">PM Uploaded Files</p>
+                                        <div className="grid gap-2">
+                                            {projectPmFiles.map((file: any, idx: number) => (
+                                                <div key={`${file.url}-${idx}`} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg border border-border group">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        {file.type?.includes('image') ? <ImageIcon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" /> : <FileVideo className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />}
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-xs font-bold text-foreground truncate">{file.name}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'application/octet-stream', name: file.name })} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        <button onClick={() => handleDirectDownload(file.url, file.name)} className="h-8 w-8 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-all flex items-center justify-center">
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -1029,12 +1073,14 @@ export default function ProjectDetailsPage() {
                                     <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                         Editor Assignment
                                     </h3>
-                                    <button 
-                                        onClick={() => setIsAssignModalOpen(true)}
-                                        className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-                                    >
-                                        Modify
-                                    </button>
+                                    {canAssignEditor && (
+                                        <button 
+                                            onClick={() => setIsAssignModalOpen(true)}
+                                            className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                            Modify
+                                        </button>
+                                    )}
                                 </div>
                                 
                                 <div className="relative z-10">
@@ -1137,7 +1183,7 @@ export default function ProjectDetailsPage() {
 
                                                     setAssigning(true);
                                                     try {
-                                                        await assignEditor(id as string, selectedEditorId, shareAmount);
+                                                        await assignEditor(id as string, selectedEditorId, shareAmount, undefined, 'project_manager');
                                                         setProject(prev => prev ? ({ ...prev, assignedEditorId: selectedEditorId, editorPrice: shareAmount, assignmentStatus: 'pending', status: 'pending_assignment' }) : null);
                                                         toast.success("Editor assigned. Pending their acceptance.");
                                                         setIsAssignModalOpen(false);
@@ -1493,9 +1539,9 @@ export default function ProjectDetailsPage() {
                                 )}
 
                                 {/* Reference Files */}
-                                {(project as any).referenceFiles && (project as any).referenceFiles.length > 0 && (
+                                {projectStyleReferenceFiles.length > 0 && (
                                     <div className="grid gap-2">
-                                        {(project as any).referenceFiles.slice(0, 2).map((file: any, idx: number) => (
+                                        {projectStyleReferenceFiles.slice(0, 2).map((file: any, idx: number) => (
                                             <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                                     {file.type?.includes('image') ? (
@@ -1525,16 +1571,60 @@ export default function ProjectDetailsPage() {
                                                 </div>
                                             </div>
                                         ))}
-                                        {((project as any).referenceFiles?.length || 0) > 2 && (
-                                            <p className="text-xs text-muted-foreground text-center py-1">+{((project as any).referenceFiles?.length || 0) - 2} more files</p>
+                                        {(projectStyleReferenceFiles.length || 0) > 2 && (
+                                            <p className="text-xs text-muted-foreground text-center py-1">+{(projectStyleReferenceFiles.length || 0) - 2} more files</p>
                                         )}
                                     </div>
                                 )}
 
                                 {/* Empty State */}
-                                {!(project as any).referenceLink && (!((project as any).referenceFiles) || (project as any).referenceFiles.length === 0) && (
+                                {!(project as any).referenceLink && projectStyleReferenceFiles.length === 0 && (
                                     <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
                                         <p className="text-xs text-muted-foreground">Not uploaded yet</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 6. PM Uploaded Files */}
+                            <div className="space-y-3 pt-3 border-t border-border/30">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">📤 PM Uploaded Files</span>
+                                </div>
+                                {projectPmFiles.length > 0 ? (
+                                    <div className="grid gap-2">
+                                        {projectPmFiles.slice(0, 2).map((file: any, idx: number) => (
+                                            <div key={`${file.url}-${idx}`} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    {file.type?.includes('image') ? (
+                                                        <ImageIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    ) : (
+                                                        <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    )}
+                                                    <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => setPreviewFile({ url: file.url, type: file.type || 'application/octet-stream', name: file.name })}
+                                                        className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all"
+                                                    >
+                                                        Preview
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDirectDownload(file.url, file.name)}
+                                                        className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {projectPmFiles.length > 2 && (
+                                            <p className="text-xs text-muted-foreground text-center py-1">+{projectPmFiles.length - 2} more files</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
+                                        <p className="text-xs text-muted-foreground">No PM uploads yet</p>
                                     </div>
                                 )}
                             </div>

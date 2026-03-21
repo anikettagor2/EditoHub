@@ -75,7 +75,8 @@ export interface Project {
     videoFormat?: string; // e.g., 'Reel Format', 'Documentary', etc.
     aspectRatio?: '9:16' | '1:1' | '16:9' | string;
     referenceLink?: string;
-    referenceFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[];
+    referenceFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number; uploadedBy?: string }[];
+    pmFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number; uploadedBy?: string }[];
     budget?: number;
     totalCost?: number; // Calculated cost
     selectedPricingTier?: number; // Index of selected pricing tier from client's multiTierRates

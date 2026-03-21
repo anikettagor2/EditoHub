@@ -274,64 +274,81 @@ export default function NewProjectPage() {
             setReferenceFiles(prev => [...prev, ...newFileEntries]);
         }
 
-        // Start uploading each file
-        files.forEach((file, index) => {
-            const setState = type === 'raw' ? setRawFiles : type === 'brole' ? setBRoleFiles : type === 'script' ? setScriptFiles : setReferenceFiles;
-            
-            // Find the index in the new combined array
-            setTimeout(() => {
-                setState(prev => {
-                    const fileIndex = prev.findIndex(f => f.file === file && f.status === 'pending');
-                    if (fileIndex === -1) return prev;
-                    
-                    const updated = [...prev];
-                    updated[fileIndex] = { ...updated[fileIndex], status: 'uploading' };
-                    return updated;
-                });
+        // Start uploads with bounded concurrency for better throughput on large batches.
+        const setState = type === 'raw' ? setRawFiles : type === 'brole' ? setBRoleFiles : type === 'script' ? setScriptFiles : setReferenceFiles;
 
-                uploadFileImmediately(
-                    file,
-                    path,
-                    (progress) => {
-                        setState(prev => {
-                            const fileIndex = prev.findIndex(f => f.file === file);
-                            if (fileIndex === -1) return prev;
-                            const updated = [...prev];
-                            updated[fileIndex] = { ...updated[fileIndex], progress };
-                            return updated;
-                        });
-                    },
-                    (uploadedData) => {
-                        setState(prev => {
-                            const fileIndex = prev.findIndex(f => f.file === file);
-                            if (fileIndex === -1) return prev;
-                            const updated = [...prev];
-                            updated[fileIndex] = { 
-                                ...updated[fileIndex], 
-                                status: 'complete', 
-                                progress: 100,
-                                uploadedData 
-                            };
-                            return updated;
-                        });
-                    },
-                    (error) => {
-                        setState(prev => {
-                            const fileIndex = prev.findIndex(f => f.file === file);
-                            if (fileIndex === -1) return prev;
-                            const updated = [...prev];
-                            updated[fileIndex] = { 
-                                ...updated[fileIndex], 
-                                status: 'error', 
-                                error 
-                            };
-                            return updated;
-                        });
-                        toast.error(`Failed to upload ${file.name}`);
-                    }
-                );
-            }, index * 200); // Stagger uploads slightly
+        const uploadSingleFile = (file: File) => new Promise<void>((resolve) => {
+            setState(prev => {
+                const fileIndex = prev.findIndex(f => f.file === file && f.status === 'pending');
+                if (fileIndex === -1) return prev;
+
+                const updated = [...prev];
+                updated[fileIndex] = { ...updated[fileIndex], status: 'uploading' };
+                return updated;
+            });
+
+            uploadFileImmediately(
+                file,
+                path,
+                (progress) => {
+                    setState(prev => {
+                        const fileIndex = prev.findIndex(f => f.file === file);
+                        if (fileIndex === -1) return prev;
+                        const updated = [...prev];
+                        updated[fileIndex] = { ...updated[fileIndex], progress };
+                        return updated;
+                    });
+                },
+                (uploadedData) => {
+                    setState(prev => {
+                        const fileIndex = prev.findIndex(f => f.file === file);
+                        if (fileIndex === -1) return prev;
+                        const updated = [...prev];
+                        updated[fileIndex] = {
+                            ...updated[fileIndex],
+                            status: 'complete',
+                            progress: 100,
+                            uploadedData
+                        };
+                        return updated;
+                    });
+                    resolve();
+                },
+                (error) => {
+                    setState(prev => {
+                        const fileIndex = prev.findIndex(f => f.file === file);
+                        if (fileIndex === -1) return prev;
+                        const updated = [...prev];
+                        updated[fileIndex] = {
+                            ...updated[fileIndex],
+                            status: 'error',
+                            error
+                        };
+                        return updated;
+                    });
+                    toast.error(`Failed to upload ${file.name}`);
+                    resolve();
+                }
+            );
         });
+
+        const queue = [...files];
+        let activeUploads = 0;
+
+        const processQueue = () => {
+            while (activeUploads < MAX_CONCURRENT_UPLOADS && queue.length > 0) {
+                const nextFile = queue.shift();
+                if (!nextFile) return;
+
+                activeUploads += 1;
+                uploadSingleFile(nextFile).finally(() => {
+                    activeUploads -= 1;
+                    processQueue();
+                });
+            }
+        };
+
+        processQueue();
 
         // Reset input
         e.target.value = '';
