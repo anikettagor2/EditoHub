@@ -191,7 +191,6 @@ export function ClientDashboard() {
         return true;
     });
 
-    const totalSpent = projects.reduce((acc, curr) => acc + (curr.amountPaid || 0), 0);
     const pendingPayment = projects.reduce((acc, curr) => acc + ((curr.totalCost || 0) - (curr.amountPaid || 0)), 0);
     const activeProjects = projects.filter(p => !['completed', 'approved', 'archived', 'delivered'].includes(p.status)).length;
     const completedProjects = projects.filter(p => p.status === 'completed' || p.status === 'approved').length;
@@ -318,8 +317,8 @@ export function ClientDashboard() {
                     color="green"
                 />
                 <StatsCard 
-                    label="Total Spent"
-                    value={formatInrWithGst(totalSpent)}
+                    label="Pending Payments"
+                    value={formatInrWithGst(pendingPayment)}
                     icon={<Wallet className="h-5 w-5" />}
                     color="purple"
                 />
