@@ -1,6 +1,7 @@
 
 const AISENSY_API_KEY = process.env.AISENSY_API_KEY;
 const AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2";
+const AISENSY_CLIENT_FALLBACK_CAMPAIGN = process.env.AISENSY_CLIENT_FALLBACK_CAMPAIGN || "CLIENT_UTILITY";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { Project, User } from "@/types/schema";
@@ -106,8 +107,16 @@ interface WhatsAppSettings {
         client: string;
         editor: string;
         pm: string;
+        clientFallback?: string;
+        editorFallback?: string;
+        pmFallback?: string;
     };
-    notifications: Record<string, { enabled: boolean; message: string }>;
+    notifications: Record<string, {
+        enabled: boolean;
+        message: string;
+        campaignName?: string;
+        fallbackCampaignName?: string;
+    }>;
 }
 
 async function getWhatsAppSettings(): Promise<WhatsAppSettings | null> {
@@ -130,6 +139,50 @@ function replacePlaceholders(message: string, data: Record<string, string>): str
     return result;
 }
 
+function normalizeStatus(value: unknown): string {
+    if (typeof value !== 'string') return '';
+    return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function toErrorText(data: any): string {
+    const candidates = [
+        data?.message,
+        data?.error,
+        data?.errorMessage,
+        data?.description,
+        data?.details,
+        data?.statusMessage,
+        data?.data?.message,
+        data?.response?.message,
+        Array.isArray(data?.errors)
+            ? data.errors.map((entry: any) => entry?.message).filter(Boolean).join(' | ')
+            : undefined,
+    ];
+
+    const first = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+    return typeof first === 'string' ? first : '';
+}
+
+function isSemanticFailure(data: any): boolean {
+    if (!data || typeof data !== 'object') return false;
+
+    if (data.success === false || data.ok === false || data.sent === false || data.delivered === false) {
+        return true;
+    }
+
+    const failedStates = new Set(['failed', 'error', 'rejected', 'undelivered', 'not_delivered']);
+    if (failedStates.has(normalizeStatus(data?.status)) || failedStates.has(normalizeStatus(data?.data?.status))) {
+        return true;
+    }
+
+    const message = toErrorText(data).toLowerCase();
+    return message.includes('not delivered') || message.includes('delivery failed') || message.includes('rejected');
+}
+
+function isEngagementBlockReason(message: string): boolean {
+    return message.toLowerCase().includes('healthy ecosystem engagement');
+}
+
 // ============================================================================
 // CORE SEND FUNCTION
 // ============================================================================
@@ -137,7 +190,11 @@ export async function sendWhatsAppNotification(
     phoneNumber: string,
     params: string[],
     campaignName: string,
-    retryCount = 0
+    retryCount = 0,
+    options?: {
+        fallbackCampaignName?: string;
+        usedFallback?: boolean;
+    }
 ): Promise<{ success: boolean; error?: string; data?: any; requestId?: string }> {
     const requestId = `wa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     console.log(`[WhatsApp] [${requestId}] Attempting send to ${phoneNumber} via campaign "${campaignName}" (attempt ${retryCount + 1})`);
@@ -183,16 +240,36 @@ export async function sendWhatsAppNotification(
 
         clearTimeout(timeoutId);
         const data = await response.json();
-        
-        if (!response.ok) {
+        const semanticFailure = isSemanticFailure(data);
+        const semanticError = toErrorText(data) || `AiSensy semantic failure for campaign ${campaignName}`;
+        const shouldFallback =
+            semanticFailure &&
+            isEngagementBlockReason(semanticError) &&
+            !!options?.fallbackCampaignName &&
+            options.fallbackCampaignName !== campaignName &&
+            !options?.usedFallback;
+
+        if (!response.ok || semanticFailure) {
             console.error(`[WhatsApp] [${requestId}] AiSensy Error:`, data);
+
+            if (shouldFallback) {
+                console.warn(`[WhatsApp] [${requestId}] Engagement block detected. Retrying with fallback campaign "${options?.fallbackCampaignName}"`);
+                return sendWhatsAppNotification(phoneNumber, params, options!.fallbackCampaignName!, 0, {
+                    ...options,
+                    usedFallback: true,
+                });
+            }
             
             if (retryCount < MAX_RETRIES && (response.status >= 500 || response.status === 429)) {
                 await delay(RETRY_DELAY * (retryCount + 1));
-                return sendWhatsAppNotification(phoneNumber, params, campaignName, retryCount + 1);
+                return sendWhatsAppNotification(phoneNumber, params, campaignName, retryCount + 1, options);
             }
             
-            return { success: false, error: data.message || `Request failed with status ${response.status}`, requestId };
+            const statusError = response.ok
+                ? semanticError
+                : (toErrorText(data) || `Request failed with status ${response.status}`);
+
+            return { success: false, error: statusError, requestId, data };
         }
         
         console.log(`[WhatsApp] [${requestId}] Success:`, data);
@@ -226,7 +303,7 @@ export async function sendWhatsAppNotification(
             if (retryCount < MAX_RETRIES) {
                 console.log(`[WhatsApp] [${requestId}] Retrying... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
                 await delay(RETRY_DELAY * (retryCount + 1));
-                return sendWhatsAppNotification(phoneNumber, params, campaignName, retryCount + 1);
+                return sendWhatsAppNotification(phoneNumber, params, campaignName, retryCount + 1, options);
             }
             
             return { success: false, error: `Connection timeout after ${MAX_RETRIES + 1} attempts`, requestId };
@@ -285,8 +362,12 @@ export async function notifyClient(
             project.name || "Your Project"
         ];
 
-        const campaignName = settings?.campaigns?.client || CAMPAIGNS.CLIENT;
-        return await sendWhatsAppNotification(phoneNumber, params, campaignName);
+        const campaignName = notifSettings?.campaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
+        const fallbackCampaignName =
+            notifSettings?.fallbackCampaignName ||
+            settings?.campaigns?.clientFallback ||
+            AISENSY_CLIENT_FALLBACK_CAMPAIGN;
+        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
 
     } catch (error: any) {
         console.error("[WhatsApp] notifyClient Error:", error);
@@ -342,8 +423,9 @@ export async function notifyEditor(
             extraData?.extra || `Deadline: ${project.deadline || 'Not set'}`
         ];
 
-        const campaignName = settings?.campaigns?.editor || CAMPAIGNS.EDITOR;
-        return await sendWhatsAppNotification(phoneNumber, params, campaignName);
+        const campaignName = notifSettings?.campaignName || settings?.campaigns?.editor || CAMPAIGNS.EDITOR;
+        const fallbackCampaignName = notifSettings?.fallbackCampaignName || settings?.campaigns?.editorFallback;
+        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
 
     } catch (error: any) {
         console.error("[WhatsApp] notifyEditor Error:", error);
@@ -408,8 +490,9 @@ export async function notifyPM(
             extraData?.details || `Client: ${clientName}`
         ];
 
-        const campaignName = settings?.campaigns?.pm || CAMPAIGNS.PM;
-        return await sendWhatsAppNotification(phoneNumber, params, campaignName);
+        const campaignName = notifSettings?.campaignName || settings?.campaigns?.pm || CAMPAIGNS.PM;
+        const fallbackCampaignName = notifSettings?.fallbackCampaignName || settings?.campaigns?.pmFallback;
+        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
 
     } catch (error: any) {
         console.error("[WhatsApp] notifyPM Error:", error);
