@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { 
   FileText, 
   FileImage, 
@@ -11,6 +11,7 @@ import {
   X
 } from "lucide-react";
 import Image from "next/image";
+import { warmVideoInMemory } from "@/lib/video-preload";
 
 interface FilePreviewProps {
   file: {
@@ -59,6 +60,12 @@ export function FilePreview({ file, index }: FilePreviewProps) {
   const ext = getFileExtension(file.name);
   const fileSizeMB = file.size ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : null;
 
+  useEffect(() => {
+    if (fileType === 'video') {
+      warmVideoInMemory(file.url);
+    }
+  }, [fileType, file.url]);
+
   return (
     <>
       <div className="group relative rounded-xl border border-border/50 bg-card overflow-hidden hover:border-primary/50 hover:shadow-lg transition-all duration-300">
@@ -89,6 +96,9 @@ export function FilePreview({ file, index }: FilePreviewProps) {
             <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-black/20 to-black/40">
               <video
                 src={file.url}
+                controls
+                preload="metadata"
+                playsInline
                 className="w-full h-full object-cover"
                 onError={() => setPreviewError(true)}
               />
@@ -208,6 +218,8 @@ export function FilePreview({ file, index }: FilePreviewProps) {
             <video
               src={file.url}
               controls
+              preload="auto"
+              playsInline
               autoPlay
               className="w-full max-h-[80vh] rounded-lg shadow-2xl"
               onError={() => setPreviewError(true)}

@@ -51,6 +51,7 @@ import { ProjectChat } from "@/components/project-chat";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { uploadRawFileParallel } from "@/lib/services/parallel-raw-upload";
+import { preloadVideosIntoMemory } from "@/lib/video-preload";
 
 interface ExtendedProject extends Project {
     brand?: string;
@@ -75,6 +76,12 @@ function formatEta(seconds: number): string {
     const mins = Math.floor(seconds / 60);
     const secs = Math.round(seconds % 60);
     return `${mins}m ${secs}s`;
+}
+
+function isVideoFile(file: any) {
+    const type = file?.type || "";
+    const name = file?.name || "";
+    return type.startsWith("video/") || /\.(mp4|webm|mov|avi|mkv)$/i.test(name);
 }
 
 export default function ProjectDetailsPage() {
@@ -250,6 +257,15 @@ export default function ProjectDetailsPage() {
             });
         }
     }, [user, project?.assignedPMId, project?.assignedEditorId, project?.assignedSEId, user?.managedBy]);
+
+    useEffect(() => {
+        if (!project) return;
+
+        const raw = (project.rawFiles || []).filter(isVideoFile).map((file: any) => file?.url);
+        const delivered = (project.deliveredFiles || []).filter(isVideoFile).map((file: any) => file?.url);
+        const pmFiles = ((((project as any).pmFiles || []) as any[]).filter(isVideoFile).map((file) => file?.url));
+        preloadVideosIntoMemory([...raw, ...delivered, ...pmFiles], 30);
+    }, [project]);
 
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -1472,7 +1488,42 @@ export default function ProjectDetailsPage() {
                                 )}
                             </div>
 
-                            {/* 4. B-Roll Assets */}
+                            {/* 4. Audio Files */}
+                            <div className="space-y-3 pt-3 border-t border-border/30">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎧 Audio Files</span>
+                                </div>
+                                {project.audioFiles && project.audioFiles.length > 0 ? (
+                                    <div className="grid gap-2">
+                                        {project.audioFiles.slice(0, 2).map((file, idx) => (
+                                            <div key={`${file.url}-${idx}`} className="p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group space-y-2 overflow-hidden">
+                                                <div className="flex items-center justify-between gap-3 min-w-0">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                        <p className="text-xs font-semibold text-foreground truncate min-w-0 block">{file.name}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDirectDownload(file.url, file.name)}
+                                                        className="h-8 w-8 rounded-lg bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary flex items-center justify-center transition-all shrink-0"
+                                                    >
+                                                        <Download className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                                <audio controls className="w-full max-w-full h-8" src={file.url} preload="metadata" />
+                                            </div>
+                                        ))}
+                                        {(project.audioFiles.length || 0) > 2 && (
+                                            <p className="text-xs text-muted-foreground text-center py-1">+{(project.audioFiles.length || 0) - 2} more files</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
+                                        <p className="text-xs text-muted-foreground">Not uploaded yet</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 5. B-Roll Assets */}
                             <div className="space-y-3 pt-3 border-t border-border/30">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎞️ B-Roll Assets</span>
@@ -1640,7 +1691,7 @@ export default function ProjectDetailsPage() {
                                         {previewFile.type === 'image' || previewFile.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(previewFile.name) ? (
                                             <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
                                         ) : previewFile.type === 'video' || previewFile.type.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(previewFile.name) ? (
-                                            <video src={previewFile.url} controls className="w-full h-full" autoPlay />
+                                            <video src={previewFile.url} controls preload="auto" playsInline className="w-full h-full" autoPlay />
                                         ) : previewFile.type === 'pdf' || previewFile.type === 'application/pdf' || previewFile.name.toLowerCase().endsWith('.pdf') ? (
                                             <iframe src={previewFile.url} className="w-full h-screen border-none" />
                                         ) : (
@@ -1749,17 +1800,21 @@ export default function ProjectDetailsPage() {
 
                     <div className="space-y-3 px-1">
                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Total (100% Inc. GST)</span>
+                            <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Total Project Cost (Excl. GST)</span>
                             <span className="text-muted-foreground font-bold font-heading">₹{project?.totalCost?.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Initial 50% Paid</span>
-                            <span className="text-muted-foreground font-bold font-heading text-emerald-500">₹{(project?.amountPaid || 0).toLocaleString()}</span>
+                            <span className="font-bold font-heading text-emerald-500">₹{(project?.amountPaid || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground font-bold uppercase tracking-widest text-[10px]">GST on Final Billing (18%)</span>
+                            <span className="text-muted-foreground font-bold font-heading">₹{((((project?.totalCost || 0) - (project?.amountPaid || 0)) * 0.18)).toLocaleString()}</span>
                         </div>
                         <div className="h-px bg-muted/50 my-4" />
                         <div className="flex justify-between items-end">
-                            <span className="text-foreground font-bold uppercase tracking-widest text-[11px] mb-1">Final Amount Due</span>
-                            <span className="text-primary font-black font-heading text-4xl tracking-tighter text-glow">₹{((project?.totalCost || 0) - (project?.amountPaid || 0)).toLocaleString()}</span>
+                            <span className="text-foreground font-bold uppercase tracking-widest text-[11px] mb-1">Final Billing Amount (Incl. GST)</span>
+                            <span className="text-primary font-black font-heading text-4xl tracking-tighter text-glow">₹{((((project?.totalCost || 0) - (project?.amountPaid || 0)) * 1.18)).toLocaleString()}</span>
                         </div>
                     </div>
 
@@ -1767,7 +1822,9 @@ export default function ProjectDetailsPage() {
                         <PaymentButton 
                             projectId={id as string}
                             user={user}
-                            amount={(project?.totalCost || 0) - (project?.amountPaid || 0)}
+                            amount={((project?.totalCost || 0) - (project?.amountPaid || 0)) * 1.18}
+                            accountingAmount={(project?.totalCost || 0) - (project?.amountPaid || 0)}
+                            taxRate={18}
                             description={`Final Payment: ${project?.name}`}
                             prefill={{
                                 name: user?.displayName || "",

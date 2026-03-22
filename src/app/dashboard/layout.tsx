@@ -10,15 +10,17 @@ import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, firebaseUser, loading } = useAuth();
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
+    // Only redirect when Firebase session is truly gone.
+    // This avoids false logouts during transient profile sync states.
+    if (!loading && !firebaseUser) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [firebaseUser, loading, router]);
 
   // Close mobile menu on navigation
   useEffect(() => {
@@ -33,7 +35,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background selection:bg-primary/20 selection:text-primary relative transition-colors duration-300">

@@ -593,10 +593,15 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                         </div>
                         <button
                             onClick={() => {
+                                if (!selectedRevisionId) {
+                                    toast.error("No revision selected to share yet.");
+                                    return;
+                                }
                                 const url = `${window.location.origin}/review/${selectedRevisionId}`;
                                 navigator.clipboard.writeText(url);
                                 toast.success("Review link copied to clipboard!");
                             }}
+                            disabled={!selectedRevisionId}
                             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-widest hover:bg-primary/20 transition-all shrink-0 active:scale-95"
                         >
                             <Share2 className="h-3 w-3" />

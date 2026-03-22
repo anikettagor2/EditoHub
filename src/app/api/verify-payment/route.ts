@@ -14,6 +14,8 @@ export async function POST(request: Request) {
             razorpay_signature,
             projectId,
             amount,
+            accountingAmount,
+            taxRate,
             paymentType
         } = body;
 
@@ -40,9 +42,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
         }
 
+        const numericAmount = Number(amount) || 0;
+        const numericAccountingAmount = Number(accountingAmount ?? amount) || 0;
+        const numericTaxRate = Number(taxRate ?? 18);
+
         // Prepare Update Data using Admin SDK
         const updateData: any = {
-            amountPaid: FieldValue.increment(amount), // Admin SDK syntax
+            amountPaid: FieldValue.increment(numericAccountingAmount), // Project ledger stays GST-exclusive
             razorpayPaymentId: razorpay_payment_id,
             updatedAt: Date.now()
         };
@@ -84,12 +90,12 @@ export async function POST(request: Request) {
                     items: [{
                         description,
                         quantity: 1,
-                        rate: amount,
-                        amount: amount
+                        rate: numericAccountingAmount,
+                        amount: numericAccountingAmount
                     }],
-                    subtotal: amount,
-                    tax: 0,
-                    total: amount,
+                    subtotal: numericAccountingAmount,
+                    tax: numericTaxRate,
+                    total: numericAmount,
                     status: 'paid', // Automatically marked as paid
                     issueDate: Date.now(),
                     dueDate: Date.now(),

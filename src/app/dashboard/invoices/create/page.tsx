@@ -30,7 +30,7 @@ export default function CreateInvoicePage() {
     const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
     const [dueDate, setDueDate] = useState<string>("");
     const [items, setItems] = useState<InvoiceItem[]>([{ description: "", quantity: 1, rate: 0, amount: 0 }]);
-    const [taxRate, setTaxRate] = useState(0);
+    const [taxRate, setTaxRate] = useState(18);
     const [notes, setNotes] = useState("");
 
     // Fetch Clients

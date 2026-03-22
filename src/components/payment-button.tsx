@@ -25,6 +25,8 @@ interface PaymentButtonProps {
     projectId: string;
     user?: User | null;
     amount: number;
+    accountingAmount?: number;
+    taxRate?: number;
     description: string;
     prefill?: {
         name?: string;
@@ -36,7 +38,7 @@ interface PaymentButtonProps {
     allowPayLaterBypass?: boolean;
 }
 
-export function PaymentButton({ projectId, user, amount, description, prefill, onSuccess, className, allowPayLaterBypass = true }: PaymentButtonProps) {
+export function PaymentButton({ projectId, user, amount, accountingAmount, taxRate = 18, description, prefill, onSuccess, className, allowPayLaterBypass = true }: PaymentButtonProps) {
     const [isLoading, setIsLoading] = useState(false);
 
     const handlePayment = async (e: React.MouseEvent) => {
@@ -83,6 +85,8 @@ export function PaymentButton({ projectId, user, amount, description, prefill, o
                                 razorpay_signature: response.razorpay_signature,
                                 projectId,
                                 amount,
+                                accountingAmount: accountingAmount ?? amount,
+                                taxRate,
                                 paymentType: 'final' // Assuming PaymentButton is largely used for completion/final payments or we can pass this as prop
                             }),
                             headers: { "Content-Type": "application/json" }

@@ -66,7 +66,7 @@ export default function EditInvoicePage(props: { params: Promise<{ id: string }>
                 setIssueDate(new Date(invoice.issueDate).toISOString().split('T')[0]);
                 setDueDate(new Date(invoice.dueDate).toISOString().split('T')[0]);
                 setItems(invoice.items);
-                setTaxRate(invoice.tax || 0);
+                setTaxRate(invoice.tax ?? 18);
                 setNotes(invoice.notes || "");
                 setStatus(invoice.status || 'sent');
 

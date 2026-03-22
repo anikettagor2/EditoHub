@@ -2905,17 +2905,46 @@ export function AdminDashboard() {
                                                 </a>
                                             )}
                                         </div>
-                                        <div className="grid grid-cols-3 gap-3">
+                                        <div className="grid grid-cols-4 gap-3">
                                             {[
                                                 { label: 'Raw Files', count: inspectProject.rawFiles?.length || 0 },
                                                 { label: 'Scripts', count: inspectProject.scripts?.length || 0 },
-                                                { label: 'Refs', count: inspectProject.referenceFiles?.length || 0 }
+                                                { label: 'Refs', count: inspectProject.referenceFiles?.length || 0 },
+                                                { label: 'Audio', count: inspectProject.audioFiles?.length || 0 }
                                             ].map((item, i) => (
                                                 <div key={i} className="p-3 bg-card border border-border rounded-xl text-center">
                                                     <div className="text-sm font-black text-foreground">{item.count}</div>
                                                     <div className="text-[7px] font-black text-muted-foreground uppercase tracking-widest">{item.label}</div>
                                                 </div>
                                             ))}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <span className="text-[8px] font-black text-muted-foreground uppercase tracking-tight">Audio Assets</span>
+                                            {inspectProject.audioFiles && inspectProject.audioFiles.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {inspectProject.audioFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                        <div key={`${file.url}-${idx}`} className="p-2 bg-card border border-border rounded-lg space-y-2">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-[11px] font-bold text-foreground truncate">{file.name}</span>
+                                                                <a
+                                                                    href={file.url}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    download={file.name}
+                                                                    className="text-[10px] font-bold text-primary hover:underline"
+                                                                >
+                                                                    Download
+                                                                </a>
+                                                            </div>
+                                                            <audio controls className="w-full h-8" src={file.url} preload="metadata" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-2 bg-card border border-border rounded-lg">
+                                                    <p className="text-[10px] text-muted-foreground">No audio files uploaded.</p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

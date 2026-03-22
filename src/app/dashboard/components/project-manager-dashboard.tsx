@@ -71,6 +71,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { FilePreview } from "@/components/file-preview";
 import { ReviewSystemModal } from "./review-system-modal";
+import { preloadVideosIntoMemory } from "@/lib/video-preload";
+
+function isVideoFile(file: any) {
+    const type = file?.type || "";
+    const name = file?.name || "";
+    return type.startsWith("video/") || /\.(mp4|webm|mov|avi|mkv)$/i.test(name);
+}
 
 
 // Stats Card Component
@@ -228,6 +235,17 @@ export function ProjectManagerDashboard() {
             unsubUsers();
         };
     }, []);
+
+    useEffect(() => {
+        const urls = projects.flatMap((project) => {
+            const raw = (project.rawFiles || []).filter(isVideoFile).map((file: any) => file?.url);
+            const delivered = (project.deliveredFiles || []).filter(isVideoFile).map((file: any) => file?.url);
+            const pmFiles = ((((project as any).pmFiles || []) as any[]).filter(isVideoFile).map((file) => file?.url));
+            return [...raw, ...delivered, ...pmFiles];
+        });
+
+        preloadVideosIntoMemory(urls, 30);
+    }, [projects]);
 
     const handleAssignEditor = async (editorId: string) => {
         if (!selectedProject) return;
@@ -587,6 +605,7 @@ export function ProjectManagerDashboard() {
                             <tr className="bg-muted/50 border-b border-border">
                                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Project</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Client</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Project Cost</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Editor</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Editor Pay</th>
@@ -599,13 +618,13 @@ export function ProjectManagerDashboard() {
                         <tbody className="divide-y divide-border">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={9} className="px-4 py-16 text-center">
+                                    <td colSpan={10} className="px-4 py-16 text-center">
                                         <RefreshCw className="animate-spin h-5 w-5 mx-auto text-muted-foreground" />
                                     </td>
                                 </tr>
                             ) : filteredProjects.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="px-4 py-16 text-center text-muted-foreground text-sm">
+                                    <td colSpan={10} className="px-4 py-16 text-center text-muted-foreground text-sm">
                                         No projects found
                                     </td>
                                 </tr>
@@ -640,6 +659,11 @@ export function ProjectManagerDashboard() {
                                             {/* Client */}
                                             <td className="px-4 py-3">
                                                 <span className="text-sm text-foreground">{project.clientName || '—'}</span>
+                                            </td>
+
+                                            {/* Project Cost */}
+                                            <td className="px-4 py-3">
+                                                <span className="text-sm font-semibold text-foreground">₹{(project.totalCost || 0).toLocaleString()}</span>
                                             </td>
                                             
                                             {/* Status Dropdown */}
@@ -1699,7 +1723,42 @@ export function ProjectManagerDashboard() {
                                     )}
                                 </div>
 
-                                {/* 4. B-Roll Assets */}
+                                {/* 4. Audio Files */}
+                                <div className="space-y-3 pt-3 border-t border-border/30">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎧 Audio Files</span>
+                                    </div>
+                                    {inspectProject.audioFiles && inspectProject.audioFiles.length > 0 ? (
+                                        <div className="grid gap-2">
+                                            {inspectProject.audioFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                <div key={`${file.url}-${idx}`} className="p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group space-y-2 overflow-hidden">
+                                                    <div className="flex items-center justify-between gap-3 min-w-0">
+                                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                            <p className="text-xs font-semibold text-foreground truncate min-w-0 block">{file.name}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleDirectDownload(file.url, file.name)}
+                                                            className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all shrink-0"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                    <audio controls className="w-full max-w-full h-8" src={file.url} preload="metadata" />
+                                                </div>
+                                            ))}
+                                            {(inspectProject.audioFiles.length || 0) > 2 && (
+                                                <p className="text-xs text-muted-foreground text-center py-1">+{(inspectProject.audioFiles.length || 0) - 2} more files</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
+                                            <p className="text-xs text-muted-foreground">Not uploaded yet</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 5. B-Roll Assets */}
                                 <div className="space-y-3 pt-3 border-t border-border/30">
                                     <div className="flex items-center gap-2">
                                         <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎞️ B-Roll Assets</span>
@@ -1952,7 +2011,7 @@ export function ProjectManagerDashboard() {
                                 {previewFile.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewFile.name) ? (
                                     <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
                                 ) : previewFile.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(previewFile.name) ? (
-                                    <video src={previewFile.url} controls className="w-full h-full" autoPlay />
+                                    <video src={previewFile.url} controls preload="auto" playsInline className="w-full h-full" autoPlay />
                                 ) : (
                                     <div className="text-center text-white">
                                         <FileVideo className="h-12 w-12 mx-auto mb-4 opacity-50" />

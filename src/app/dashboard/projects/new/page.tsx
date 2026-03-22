@@ -25,7 +25,9 @@ import {
     FileText,
     Image as ImageIcon,
     CreditCard,
-    AlertCircle
+    AlertCircle,
+    Mic,
+    Square
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -127,9 +129,14 @@ export default function NewProjectPage() {
     const [bRoleFiles, setBRoleFiles] = useState<FileWithProgress[]>([]);
     const [scriptFiles, setScriptFiles] = useState<FileWithProgress[]>([]);
     const [referenceFiles, setReferenceFiles] = useState<FileWithProgress[]>([]);
+    const [audioFiles, setAudioFiles] = useState<FileWithProgress[]>([]);
     const [scriptText, setScriptText] = useState("");
     const [footageLink, setFootageLink] = useState("");
     const [referenceLink, setReferenceLink] = useState("");
+    const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordingStreamRef = useRef<MediaStream | null>(null);
+    const recordedAudioChunksRef = useRef<BlobPart[]>([]);
     
     // Misc
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -146,20 +153,16 @@ export default function NewProjectPage() {
         ? availablePrices[Math.min(selectedPriceIndex, availablePrices.length - 1)].price 
         : getResolvedClientRate(user?.customRates, videoType);
     
-    // Add 18% GST (9% CGST + 9% SGST)
+    // Project accounting is GST-exclusive; GST is only applied during billing/invoice.
     const gstRate = 0.18;
-    const pricingBeforeTax = basePrice;
-    const gstAmount = pricingBeforeTax * gstRate;
-    const basePriceWithGst = pricingBeforeTax + gstAmount;
-
     const urgentExtraCost = urgency === 'urgent' ? DEFAULT_URGENT_PRICE : 0;
-    const urgentExtraWithGst = urgentExtraCost * (1 + gstRate);
-    
-    // Final total for the project (100%)
-    const finalTotalWithGst = basePriceWithGst + urgentExtraWithGst;
-    
-    // Upfront is 50% of the total cost
-    const upfrontPayment = finalTotalWithGst / 2;
+    const projectTotalWithoutGst = basePrice + urgentExtraCost;
+    const gstAmount = projectTotalWithoutGst * gstRate;
+    const finalTotalWithGst = projectTotalWithoutGst + gstAmount;
+
+    // 50% upfront in project ledger (without GST), plus GST only at billing time.
+    const upfrontPaymentWithoutGst = projectTotalWithoutGst / 2;
+    const upfrontPaymentWithGst = upfrontPaymentWithoutGst * (1 + gstRate);
 
     const canPayLater = user?.payLater === true;
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -167,7 +170,7 @@ export default function NewProjectPage() {
     // Pay Later limit check
     const creditLimit = user?.creditLimit || 0;
     const pendingDues = user?.pendingDues || 0;
-    const canUsePayLater = canPayLater && (pendingDues + upfrontPayment <= creditLimit);
+    const canUsePayLater = canPayLater && (pendingDues + upfrontPaymentWithoutGst <= creditLimit);
     const remainingCredit = Math.max(0, creditLimit - pendingDues);
 
     useEffect(() => {
@@ -191,18 +194,30 @@ export default function NewProjectPage() {
     }, [videoType]);
 
     // Check if all files are uploaded
-    const allFilesUploaded = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles].every(
+    const allFilesUploaded = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles, ...audioFiles].every(
         f => f.status === 'complete'
     );
-    const hasUploadingFiles = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles].some(
+    const hasUploadingFiles = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles, ...audioFiles].some(
         f => f.status === 'uploading'
     );
     const totalUploadProgress = (() => {
-        const allFiles = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles];
+        const allFiles = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles, ...audioFiles];
         if (allFiles.length === 0) return 100;
         const total = allFiles.reduce((acc, f) => acc + f.progress, 0);
         return Math.round(total / allFiles.length);
     })();
+
+    useEffect(() => {
+        return () => {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stop();
+            }
+            if (recordingStreamRef.current) {
+                recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+                recordingStreamRef.current = null;
+            }
+        };
+    }, []);
 
     // Immediate file upload function
     const uploadFileImmediately = useCallback(async (
@@ -248,14 +263,22 @@ export default function NewProjectPage() {
     }, [user]);
 
     // Handle file selection and immediate upload
-    const handleFileUpload = useCallback((
-        e: React.ChangeEvent<HTMLInputElement>, 
-        type: 'raw' | 'brole' | 'script' | 'reference'
+    const enqueueFilesForUpload = useCallback((
+        files: File[],
+        type: 'raw' | 'brole' | 'script' | 'reference' | 'audio'
     ) => {
-        if (!e.target.files || !user) return;
-        
-        const files = Array.from(e.target.files);
-        const path = type === 'raw' ? 'raw_footage' : type === 'brole' ? 'brole_footage' : type === 'script' ? 'scripts' : 'references';
+        if (!files.length || !user) return;
+
+        const path =
+            type === 'raw'
+                ? 'raw_footage'
+                : type === 'brole'
+                    ? 'brole_footage'
+                    : type === 'script'
+                        ? 'scripts'
+                        : type === 'audio'
+                            ? 'audio_assets'
+                            : 'references';
         
         const newFileEntries: FileWithProgress[] = files.map(file => ({
             file,
@@ -270,12 +293,23 @@ export default function NewProjectPage() {
             setBRoleFiles(prev => [...prev, ...newFileEntries]);
         } else if (type === 'script') {
             setScriptFiles(prev => [...prev, ...newFileEntries]);
+        } else if (type === 'audio') {
+            setAudioFiles(prev => [...prev, ...newFileEntries]);
         } else {
             setReferenceFiles(prev => [...prev, ...newFileEntries]);
         }
 
         // Start uploads with bounded concurrency for better throughput on large batches.
-        const setState = type === 'raw' ? setRawFiles : type === 'brole' ? setBRoleFiles : type === 'script' ? setScriptFiles : setReferenceFiles;
+        const setState =
+            type === 'raw'
+                ? setRawFiles
+                : type === 'brole'
+                    ? setBRoleFiles
+                    : type === 'script'
+                        ? setScriptFiles
+                        : type === 'audio'
+                            ? setAudioFiles
+                            : setReferenceFiles;
 
         const uploadSingleFile = (file: File) => new Promise<void>((resolve) => {
             setState(prev => {
@@ -350,17 +384,85 @@ export default function NewProjectPage() {
 
         processQueue();
 
-        // Reset input
-        e.target.value = '';
     }, [user, uploadFileImmediately]);
 
-    const removeFile = (index: number, type: 'raw' | 'brole' | 'script' | 'reference') => {
+    // Handle file selection and immediate upload
+    const handleFileUpload = useCallback((
+        e: React.ChangeEvent<HTMLInputElement>,
+        type: 'raw' | 'brole' | 'script' | 'reference' | 'audio'
+    ) => {
+        if (!e.target.files || !user) return;
+        const files = Array.from(e.target.files);
+        enqueueFilesForUpload(files, type);
+
+        // Reset input
+        e.target.value = '';
+    }, [user, enqueueFilesForUpload]);
+
+    const startAudioRecording = async () => {
+        if (isRecordingAudio) return;
+        if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') {
+            toast.error('Audio recording is not supported in this browser.');
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recordingStreamRef.current = stream;
+
+            const recorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = recorder;
+            recordedAudioChunksRef.current = [];
+
+            recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    recordedAudioChunksRef.current.push(event.data);
+                }
+            };
+
+            recorder.onstop = () => {
+                const chunks = recordedAudioChunksRef.current;
+                if (chunks.length > 0) {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    const recordedFile = new File([blob], `recorded-audio-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+                    enqueueFilesForUpload([recordedFile], 'audio');
+                }
+
+                if (recordingStreamRef.current) {
+                    recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+                    recordingStreamRef.current = null;
+                }
+
+                mediaRecorderRef.current = null;
+                recordedAudioChunksRef.current = [];
+                setIsRecordingAudio(false);
+            };
+
+            recorder.start();
+            setIsRecordingAudio(true);
+            toast.success('Audio recording started.');
+        } catch (error) {
+            console.error('Audio recording failed:', error);
+            toast.error('Unable to access microphone. Please allow mic permission.');
+        }
+    };
+
+    const stopAudioRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+            toast.success('Audio recording stopped and uploading started.');
+        }
+    };
+
+    const removeFile = (index: number, type: 'raw' | 'brole' | 'script' | 'reference' | 'audio') => {
         if (type === 'raw') {
             setRawFiles(prev => prev.filter((_, i) => i !== index));
         } else if (type === 'brole') {
             setBRoleFiles(prev => prev.filter((_, i) => i !== index));
         } else if (type === 'script') {
             setScriptFiles(prev => prev.filter((_, i) => i !== index));
+        } else if (type === 'audio') {
+            setAudioFiles(prev => prev.filter((_, i) => i !== index));
         } else {
             setReferenceFiles(prev => prev.filter((_, i) => i !== index));
         }
@@ -380,7 +482,7 @@ export default function NewProjectPage() {
             if (hasUploadingFiles) {
                 return toast.error("Please wait for all files to finish uploading.");
             }
-            const failedFiles = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles].filter(f => f.status === 'error');
+            const failedFiles = [...rawFiles, ...bRoleFiles, ...scriptFiles, ...referenceFiles, ...audioFiles].filter(f => f.status === 'error');
             if (failedFiles.length > 0) {
                 return toast.error(`${failedFiles.length} file(s) failed to upload. Please remove and re-upload them.`);
             }
@@ -410,14 +512,18 @@ export default function NewProjectPage() {
             .filter(f => f.status === 'complete' && f.uploadedData)
             .map(f => f.uploadedData!);
 
-        return { uploadedRawFiles, uploadedBRoleFiles, uploadedScripts, uploadedReferences };
+        const uploadedAudioFiles = audioFiles
+            .filter(f => f.status === 'complete' && f.uploadedData)
+            .map(f => f.uploadedData!);
+
+        return { uploadedRawFiles, uploadedBRoleFiles, uploadedScripts, uploadedReferences, uploadedAudioFiles };
     };
 
     // Create project in Firestore
     const createProject = async (paymentOption: 'pay_now' | 'pay_later', razorpayPaymentId?: string) => {
         if (!user) throw new Error("User not authenticated");
 
-        const { uploadedRawFiles, uploadedBRoleFiles, uploadedScripts, uploadedReferences } = getUploadedFiles();
+        const { uploadedRawFiles, uploadedBRoleFiles, uploadedScripts, uploadedReferences, uploadedAudioFiles } = getUploadedFiles();
 
         // Prepare pricing tier info
         const pricingTierInfo = availablePrices.length > 0 ? {
@@ -431,11 +537,11 @@ export default function NewProjectPage() {
             videoType,
             description,
             urgency,
-            budget: finalTotalWithGst,
-            totalCost: finalTotalWithGst,
-            upfrontAmount: upfrontPayment,
-            remainingAmount: finalTotalWithGst - upfrontPayment,
-            amountPaid: paymentOption === 'pay_now' ? upfrontPayment : 0, 
+            budget: projectTotalWithoutGst,
+            totalCost: projectTotalWithoutGst,
+            upfrontAmount: upfrontPaymentWithoutGst,
+            remainingAmount: projectTotalWithoutGst - upfrontPaymentWithoutGst,
+            amountPaid: paymentOption === 'pay_now' ? upfrontPaymentWithoutGst : 0,
             paymentStatus: paymentOption === 'pay_now' ? 'half_paid' : 'unpaid',
             paymentOption,
             razorpayPaymentId: razorpayPaymentId || null,
@@ -444,6 +550,7 @@ export default function NewProjectPage() {
             rawFiles: uploadedRawFiles,
             bRoleFiles: uploadedBRoleFiles,
             scripts: uploadedScripts,
+            audioFiles: uploadedAudioFiles,
             referenceFiles: uploadedReferences,
             referenceLink,
             aspectRatio,
@@ -459,6 +566,8 @@ export default function NewProjectPage() {
             clientId: user.uid,
             isPayLaterRequest: paymentOption === 'pay_later',
             clientName: user.displayName || 'Anonymous Client',
+            gstRate: 18,
+            gstAppliedAtBilling: true,
             ...pricingTierInfo
         };
 
@@ -485,7 +594,7 @@ export default function NewProjectPage() {
             // Update user's pending dues
             const userRef = doc(db, "users", user.uid);
             await updateDoc(userRef, {
-                pendingDues: increment(upfrontPayment)
+                pendingDues: increment(upfrontPaymentWithoutGst)
             });
             
             toast.success("Project created successfully!");
@@ -517,7 +626,7 @@ export default function NewProjectPage() {
             // 3. Create Razorpay Order
             const orderRes = await fetch("/api/create-order", {
                 method: "POST",
-                body: JSON.stringify({ amount: upfrontPayment, projectId: tempOrderId }),
+                body: JSON.stringify({ amount: upfrontPaymentWithGst, projectId: tempOrderId }),
                 headers: { "Content-Type": "application/json" }
             });
             
@@ -1082,6 +1191,90 @@ export default function NewProjectPage() {
                                 )}
                             </div>
 
+                            {/* Audio Upload & Recording */}
+                            <div className="space-y-3 pt-4 border-t border-border">
+                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                                    <Mic className="w-4 h-4 text-primary" />
+                                    Audio Upload / Record
+                                </Label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <div className="border border-dashed border-border rounded-xl p-6 hover:bg-muted/50 hover:border-primary/50 transition-all text-center relative overflow-hidden group h-full flex flex-col items-center justify-center">
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="audio/*"
+                                                onChange={(e) => handleFileUpload(e, 'audio')}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            />
+                                            <UploadCloud className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
+                                            <p className="text-xs font-bold text-foreground">Upload Audio File</p>
+                                            <p className="text-[10px] text-muted-foreground">MP3, WAV, M4A, WEBM</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <Button
+                                            type="button"
+                                            onClick={isRecordingAudio ? stopAudioRecording : startAudioRecording}
+                                            className={cn(
+                                                "w-full h-11 rounded-xl font-bold tracking-wide",
+                                                isRecordingAudio
+                                                    ? "bg-red-600 hover:bg-red-700"
+                                                    : "bg-primary hover:bg-primary/90"
+                                            )}
+                                        >
+                                            {isRecordingAudio ? (
+                                                <>
+                                                    <Square className="w-4 h-4 mr-2" /> Stop Recording
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Mic className="w-4 h-4 mr-2" /> Record Audio
+                                                </>
+                                            )}
+                                        </Button>
+                                        <p className="text-[10px] text-muted-foreground font-medium">
+                                            Recorded audio is auto-saved and uploaded as soon as you stop recording.
+                                        </p>
+                                    </div>
+                                </div>
+                                {audioFiles.length > 0 && (
+                                    <div className="space-y-2 mt-4">
+                                        {audioFiles.map((fileItem, i) => (
+                                            <div key={i} className="bg-muted/50 border border-border rounded-lg p-3 group">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        <Mic className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                        <span className="text-xs text-foreground truncate font-medium">{fileItem.file.name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {fileItem.status === 'complete' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                                                        {fileItem.status === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
+                                                        {fileItem.status === 'uploading' && (
+                                                            <span className="text-[10px] text-primary font-bold">{Math.round(fileItem.progress)}%</span>
+                                                        )}
+                                                        <button type="button" onClick={() => removeFile(i, 'audio')} className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {fileItem.status === 'complete' && fileItem.uploadedData?.url && (
+                                                    <audio controls className="w-full h-8" src={fileItem.uploadedData.url} preload="metadata" />
+                                                )}
+                                                {(fileItem.status === 'uploading' || fileItem.status === 'pending') && (
+                                                    <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
+                                                        <div
+                                                            className="h-full bg-primary transition-all duration-300"
+                                                            style={{ width: `${fileItem.progress}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Google Drive Link */}
                             <div className="space-y-2 pt-4 border-t border-border">
                                 <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
@@ -1161,7 +1354,7 @@ export default function NewProjectPage() {
                         </div>
 
                         {/* Overall Upload Progress */}
-                        {(rawFiles.length > 0 || scriptFiles.length > 0 || referenceFiles.length > 0) && (
+                        {(rawFiles.length > 0 || scriptFiles.length > 0 || referenceFiles.length > 0 || audioFiles.length > 0) && (
                             <div className="bg-muted/30 border border-border rounded-xl p-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -1194,9 +1387,9 @@ export default function NewProjectPage() {
                                     />
                                 </div>
                                 <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-                                    <span>{rawFiles.length + scriptFiles.length + referenceFiles.length} file(s)</span>
+                                    <span>{rawFiles.length + scriptFiles.length + referenceFiles.length + audioFiles.length} file(s)</span>
                                     <span>
-                                        {[...rawFiles, ...scriptFiles, ...referenceFiles].filter(f => f.status === 'complete').length} uploaded
+                                        {[...rawFiles, ...scriptFiles, ...referenceFiles, ...audioFiles].filter(f => f.status === 'complete').length} uploaded
                                     </span>
                                 </div>
                             </div>
@@ -1278,12 +1471,12 @@ export default function NewProjectPage() {
                                 </div>
                                 <div className="flex justify-between items-center pt-2">
                                     <div className="flex flex-col">
-                                        <span className="text-lg text-foreground font-black">Total Project Value</span>
-                                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest italic">50% upfront required</span>
+                                        <span className="text-lg text-foreground font-black">Total Project Value (Excl. GST)</span>
+                                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest italic">50% upfront in project ledger</span>
                                     </div>
                                     <div className="flex items-center text-3xl font-black text-primary">
                                         <IndianRupee className="w-6 h-6 mr-1" />
-                                        {finalTotalWithGst.toLocaleString()}
+                                        {projectTotalWithoutGst.toLocaleString()}
                                     </div>
                                 </div>
                             </div>
@@ -1307,10 +1500,10 @@ export default function NewProjectPage() {
                                 <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-3">
                                     <div className="flex items-center gap-2 mb-2">
                                         <CreditCard className="w-5 h-5 text-green-400" />
-                                        <span className="text-sm font-bold text-green-400">Secure 50% Upfront Payment</span>
+                                        <span className="text-sm font-bold text-green-400">Secure 50% Upfront Billing</span>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Pay ₹{upfrontPayment.toLocaleString()} now (50%) to start the project. The remaining 50% will be paid upon final draft approval.
+                                        Base upfront: ₹{upfrontPaymentWithoutGst.toLocaleString()} + GST: ₹{(upfrontPaymentWithGst - upfrontPaymentWithoutGst).toLocaleString()} = ₹{upfrontPaymentWithGst.toLocaleString()} billed now.
                                     </p>
                                 </div>
                                 <Button 
@@ -1324,7 +1517,7 @@ export default function NewProjectPage() {
                                     ) : (
                                         <CreditCard className="w-5 h-5 mr-3" />
                                     )}
-                                    Pay ₹{upfrontPayment.toLocaleString()} & Start Project
+                                    Pay ₹{upfrontPaymentWithGst.toLocaleString()} & Start Project
                                 </Button>
                             </div>
 
@@ -1354,7 +1547,7 @@ export default function NewProjectPage() {
                                         </div>
                                         {canUsePayLater ? (
                                             <p className="text-xs text-muted-foreground">
-                                                Submit your project now and settle the 50% upfront payment (₹{upfrontPayment.toLocaleString()}) with your Project Manager later.
+                                                Submit now and settle the 50% upfront base amount (₹{upfrontPaymentWithoutGst.toLocaleString()}) with your Project Manager later. GST will be applied during billing.
                                                 <span className="block mt-1 text-blue-400 font-medium">
                                                     Available Credit: ₹{remainingCredit.toLocaleString()} / ₹{creditLimit.toLocaleString()}
                                                 </span>
@@ -1380,7 +1573,7 @@ export default function NewProjectPage() {
                                         )}
                                     >
                                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Clock className="w-5 h-5 mr-3" />}
-                                        Submit with ₹{upfrontPayment.toLocaleString()} (Pay Later)
+                                        Submit with ₹{upfrontPaymentWithoutGst.toLocaleString()} Base (Pay Later)
                                     </Button>
                                 </div>
                             )}
