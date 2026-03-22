@@ -86,8 +86,11 @@ export interface Project {
     paymentStatus?: string; // 'half_paid', 'full_paid'
     assignedEditorId?: string;
     footageLink?: string; // Link to cloud storage
+    footageLinks?: string[]; // Multiple cloud storage links
     rawFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[]; // Raw video files uploaded by client
+    deliveredFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[];
     audioFiles?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[];
+    referenceLinks?: string[];
     thumbnailUrl?: string; // Cover image
     status: ProjectStatus;
     createdAt: number;

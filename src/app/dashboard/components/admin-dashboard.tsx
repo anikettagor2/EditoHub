@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
     collection, 
     query, 
@@ -585,6 +585,22 @@ export function AdminDashboard() {
       }
   });
 
+  const projectSerialMap = useMemo(() => {
+      const serialMap = new Map<string, number>();
+      const orderedByCreatedAt = [...projects].sort((a, b) => {
+          const createdA = a.createdAt || 0;
+          const createdB = b.createdAt || 0;
+          if (createdA !== createdB) return createdA - createdB;
+          return a.id.localeCompare(b.id);
+      });
+
+      orderedByCreatedAt.forEach((project, index) => {
+          serialMap.set(project.id, index + 1);
+      });
+
+      return serialMap;
+  }, [projects]);
+
   const filteredUsers = users.filter(u => {
       const q = searchQuery.toLowerCase();
       return !q || 
@@ -910,7 +926,7 @@ export function AdminDashboard() {
                                     transition={{ delay: idx * 0.05 }}
                                     className="hover:bg-muted/50 transition-colors group"
                                >
-                                    <td className="px-3 py-3 text-xs font-bold text-foreground/80 tabular-nums">{idx + 1}</td>
+                                    <td className="px-3 py-3 text-xs font-bold text-foreground/80 tabular-nums">{projectSerialMap.get(project.id) ?? idx + 1}</td>
                                     <td className="px-3 py-3">
                                         <Link href={`/dashboard/projects/${project.id}`} className="text-xs font-bold text-foreground hover:text-primary transition-colors block leading-tight">{project.name}</Link>
                                         <div className="text-[9px] mt-1 text-muted-foreground font-bold uppercase tracking-widest">ID: {project.id.slice(0,10)}</div>
@@ -2922,7 +2938,7 @@ export function AdminDashboard() {
                                             <span className="text-[8px] font-black text-muted-foreground uppercase tracking-tight">Audio Assets</span>
                                             {inspectProject.audioFiles && inspectProject.audioFiles.length > 0 ? (
                                                 <div className="space-y-2">
-                                                    {inspectProject.audioFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                    {inspectProject.audioFiles.map((file: any, idx: number) => (
                                                         <div key={`${file.url}-${idx}`} className="p-2 bg-card border border-border rounded-lg space-y-2">
                                                             <div className="flex items-center justify-between gap-2">
                                                                 <span className="text-[11px] font-bold text-foreground truncate">{file.name}</span>

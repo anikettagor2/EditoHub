@@ -1730,7 +1730,7 @@ export function ProjectManagerDashboard() {
                                     </div>
                                     {inspectProject.audioFiles && inspectProject.audioFiles.length > 0 ? (
                                         <div className="grid gap-2">
-                                            {inspectProject.audioFiles.slice(0, 2).map((file: any, idx: number) => (
+                                            {inspectProject.audioFiles.map((file: any, idx: number) => (
                                                 <div key={`${file.url}-${idx}`} className="p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group space-y-2 overflow-hidden">
                                                     <div className="flex items-center justify-between gap-3 min-w-0">
                                                         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1747,9 +1747,6 @@ export function ProjectManagerDashboard() {
                                                     <audio controls className="w-full max-w-full h-8" src={file.url} preload="metadata" />
                                                 </div>
                                             ))}
-                                            {(inspectProject.audioFiles.length || 0) > 2 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{(inspectProject.audioFiles.length || 0) - 2} more files</p>
-                                            )}
                                         </div>
                                     ) : (
                                         <div className="p-3 rounded-lg border border-border/30 bg-muted/20">

@@ -431,6 +431,31 @@ export function EditorDashboardV2() {
         }
     };
 
+    const triggerAudioDownload = async (url: string, fileName?: string) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Failed to fetch file");
+
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = blobUrl;
+            anchor.download = fileName || "audio";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch {
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = fileName || "audio";
+            anchor.target = "_blank";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+        }
+    };
+
     const openFilePreview = (url: string) => {
         if (isVideoResource(url)) {
             warmVideoInMemory(url);
@@ -770,7 +795,7 @@ export function EditorDashboardV2() {
                                             </div>
                                             {selectedProjectDetails.audioFiles && selectedProjectDetails.audioFiles.length > 0 ? (
                                                 <div className="grid gap-2">
-                                                    {selectedProjectDetails.audioFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                    {selectedProjectDetails.audioFiles.map((file: any, idx: number) => (
                                                         <div key={`${file.url}-${idx}`} className="p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group space-y-2 overflow-hidden">
                                                             <div className="flex items-center justify-between gap-3 min-w-0">
                                                                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -778,9 +803,8 @@ export function EditorDashboardV2() {
                                                                     <p className="text-xs font-semibold text-foreground truncate min-w-0 block">{file.name}</p>
                                                                 </div>
                                                                 <button
-                                                                    onClick={() => triggerDirectDownload(file.url, file.name)}
-                                                                    className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                    disabled={!canEditorDownloadAssets}
+                                                                    onClick={() => triggerAudioDownload(file.url, file.name)}
+                                                                    className="h-8 w-8 rounded-lg bg-muted/50 group-hover:bg-primary/20 group-hover:text-primary text-muted-foreground flex items-center justify-center transition-all flex-shrink-0"
                                                                 >
                                                                     <Download className="h-3.5 w-3.5" />
                                                                 </button>
@@ -788,9 +812,6 @@ export function EditorDashboardV2() {
                                                             <audio controls className="w-full max-w-full h-8" src={file.url} preload="metadata" />
                                                         </div>
                                                     ))}
-                                                    {(selectedProjectDetails.audioFiles.length || 0) > 2 && (
-                                                        <p className="text-xs text-muted-foreground text-center py-1">+{(selectedProjectDetails.audioFiles.length || 0) - 2} more files</p>
-                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
