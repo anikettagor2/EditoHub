@@ -69,6 +69,19 @@ const CLIENT_VIDEO_TYPES = [
     "Cinematic Event"
 ];
 
+const GST_RATE = 0.18;
+
+function getGstInclusiveAmount(amount: number) {
+    return amount * (1 + GST_RATE);
+}
+
+function formatInrWithGst(amount: number) {
+    return `₹${getGstInclusiveAmount(amount).toLocaleString("en-IN", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    })}`;
+}
+
 function getClientVisibleRate(customRates: Record<string, number> | undefined, videoType: string) {
     const aliases = CLIENT_VIDEO_TYPE_ALIASES[videoType] || [videoType];
     for (const alias of aliases) {
@@ -255,7 +268,7 @@ export function ClientDashboard() {
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-red-500">Payment Required</p>
-                            <p className="text-xs text-red-400/80">Your outstanding balance (₹{pendingPayment.toLocaleString()}) exceeds your credit limit. Please clear your dues to continue.</p>
+                            <p className="text-xs text-red-400/80">Your outstanding balance ({formatInrWithGst(pendingPayment)}) exceeds your credit limit. Please clear your dues to continue.</p>
                         </div>
                     </div>
                     <Link href="/dashboard/payments">
@@ -306,7 +319,7 @@ export function ClientDashboard() {
                 />
                 <StatsCard 
                     label="Total Spent"
-                    value={`₹${totalSpent.toLocaleString()}`}
+                    value={formatInrWithGst(totalSpent)}
                     icon={<Wallet className="h-5 w-5" />}
                     color="purple"
                 />
@@ -407,7 +420,7 @@ export function ClientDashboard() {
                                                     </td>
                                                     <td className="px-4 py-3 hidden sm:table-cell">
                                                         <span className="font-semibold text-foreground">
-                                                            ₹{(project.totalCost || 0).toLocaleString()}
+                                                            {formatInrWithGst(project.totalCost || 0)}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-3 hidden md:table-cell">
@@ -959,7 +972,7 @@ export function ClientDashboard() {
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
                                     <span className="text-muted-foreground">Budget</span>
-                                    <span className="font-semibold text-foreground">₹{(selectedProject.totalCost || 0).toLocaleString()}</span>
+                                    <span className="font-semibold text-foreground">{formatInrWithGst(selectedProject.totalCost || 0)}</span>
                                 </div>
                             </div>
 

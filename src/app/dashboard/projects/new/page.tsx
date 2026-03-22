@@ -14,6 +14,7 @@ import {
     Loader2, 
     UploadCloud, 
     X, 
+    Plus,
     FileVideo, 
     IndianRupee,
     ChevronRight,
@@ -108,6 +109,7 @@ const ASPECT_RATIOS = [
 const DEFAULT_URGENT_PRICE = 500;
 const BASE_PROJECT_PRICE = 1000;
 const MAX_CONCURRENT_UPLOADS = 3; // Upload up to 3 files simultaneously
+const DESCRIPTION_WORD_LIMIT = 500;
 
 export default function NewProjectPage() {
     const router = useRouter();
@@ -131,8 +133,10 @@ export default function NewProjectPage() {
     const [referenceFiles, setReferenceFiles] = useState<FileWithProgress[]>([]);
     const [audioFiles, setAudioFiles] = useState<FileWithProgress[]>([]);
     const [scriptText, setScriptText] = useState("");
-    const [footageLink, setFootageLink] = useState("");
-    const [referenceLink, setReferenceLink] = useState("");
+    const [footageLinkInput, setFootageLinkInput] = useState("");
+    const [footageLinks, setFootageLinks] = useState<string[]>([]);
+    const [referenceLinkInput, setReferenceLinkInput] = useState("");
+    const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
     const [isRecordingAudio, setIsRecordingAudio] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const recordingStreamRef = useRef<MediaStream | null>(null);
@@ -468,15 +472,47 @@ export default function NewProjectPage() {
         }
     };
 
+    const addReferenceLink = () => {
+        const trimmedLink = referenceLinkInput.trim();
+        if (!trimmedLink) return;
+        if (referenceLinks.includes(trimmedLink)) {
+            toast.error("This reference link is already added.");
+            return;
+        }
+
+        setReferenceLinks((prev) => [...prev, trimmedLink]);
+        setReferenceLinkInput("");
+    };
+
+    const removeReferenceLink = (index: number) => {
+        setReferenceLinks((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const addFootageLink = () => {
+        const trimmedLink = footageLinkInput.trim();
+        if (!trimmedLink) return;
+        if (footageLinks.includes(trimmedLink)) {
+            toast.error("This Google Drive link is already added.");
+            return;
+        }
+
+        setFootageLinks((prev) => [...prev, trimmedLink]);
+        setFootageLinkInput("");
+    };
+
+    const removeFootageLink = (index: number) => {
+        setFootageLinks((prev) => prev.filter((_, i) => i !== index));
+    };
+
     const handleNextStep = () => {
         if (currentStep === 1) {
             if (!name) return toast.error("Project name is required.");
-            if (wordCount > 100) return toast.error("Description cannot exceed 100 words.");
+            if (wordCount > DESCRIPTION_WORD_LIMIT) return toast.error(`Description cannot exceed ${DESCRIPTION_WORD_LIMIT} words.`);
             setCurrentStep(2);
         } else if (currentStep === 2) {
             setCurrentStep(3);
         } else if (currentStep === 3) {
-            if (rawFiles.length === 0 && !footageLink) {
+            if (rawFiles.length === 0 && footageLinks.length === 0 && !footageLinkInput.trim()) {
                 return toast.error("Please provide either raw files or a Google Drive link.");
             }
             if (hasUploadingFiles) {
@@ -524,6 +560,12 @@ export default function NewProjectPage() {
         if (!user) throw new Error("User not authenticated");
 
         const { uploadedRawFiles, uploadedBRoleFiles, uploadedScripts, uploadedReferences, uploadedAudioFiles } = getUploadedFiles();
+        const normalizedFootageLinks = footageLinkInput.trim()
+            ? Array.from(new Set([...footageLinks, footageLinkInput.trim()]))
+            : footageLinks;
+        const normalizedReferenceLinks = referenceLinkInput.trim()
+            ? Array.from(new Set([...referenceLinks, referenceLinkInput.trim()]))
+            : referenceLinks;
 
         // Prepare pricing tier info
         const pricingTierInfo = availablePrices.length > 0 ? {
@@ -546,13 +588,15 @@ export default function NewProjectPage() {
             paymentOption,
             razorpayPaymentId: razorpayPaymentId || null,
             deadline: null,
-            footageLink, 
             rawFiles: uploadedRawFiles,
             bRoleFiles: uploadedBRoleFiles,
             scripts: uploadedScripts,
             audioFiles: uploadedAudioFiles,
+            footageLink: normalizedFootageLinks[0] || "",
+            footageLinks: normalizedFootageLinks,
             referenceFiles: uploadedReferences,
-            referenceLink,
+            referenceLink: normalizedReferenceLinks[0] || "",
+            referenceLinks: normalizedReferenceLinks,
             aspectRatio,
             videoFormat: videoType,
             scriptText,
@@ -816,7 +860,7 @@ export default function NewProjectPage() {
                             <div className="space-y-2">
                                 <div className="flex justify-between items-end">
                                     <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Project Description *</Label>
-                                    <span className={cn("text-xs font-bold", wordCount > 100 ? "text-red-500" : "text-muted-foreground")}>{wordCount} / 100 words</span>
+                                    <span className={cn("text-xs font-bold", wordCount > DESCRIPTION_WORD_LIMIT ? "text-red-500" : "text-muted-foreground")}>{wordCount} / {DESCRIPTION_WORD_LIMIT} words</span>
                                 </div>
                                 <Textarea 
                                     placeholder="Provide detailed instructions for the editor..."
@@ -824,10 +868,95 @@ export default function NewProjectPage() {
                                     onChange={e => setDescription(e.target.value)}
                                     className={cn(
                                         "min-h-[120px] resize-none bg-muted/50 border-border rounded-xl font-medium text-foreground placeholder:text-muted-foreground",
-                                        wordCount > 100 ? "border-red-500 focus:border-red-500" : "focus:border-primary/50"
+                                        wordCount > DESCRIPTION_WORD_LIMIT ? "border-red-500 focus:border-red-500" : "focus:border-primary/50"
                                     )}
                                 />
-                                {wordCount > 100 && <p className="text-xs text-red-500 font-medium">You have exceeded the 100 words limit.</p>}
+                                {wordCount > DESCRIPTION_WORD_LIMIT && <p className="text-xs text-red-500 font-medium">You have exceeded the {DESCRIPTION_WORD_LIMIT} words limit.</p>}
+                            </div>
+
+                            {/* Audio Upload & Recording */}
+                            <div className="space-y-3 pt-2">
+                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                                    <Mic className="w-4 h-4 text-primary" />
+                                    Audio File / Voice Note (Optional)
+                                </Label>
+                                <p className="text-[11px] text-muted-foreground ml-1">Add your voice brief below the description so editors understand your exact direction.</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <div className="border border-dashed border-border rounded-xl p-6 hover:bg-muted/50 hover:border-primary/50 transition-all text-center relative overflow-hidden group h-full flex flex-col items-center justify-center">
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="audio/*"
+                                                onChange={(e) => handleFileUpload(e, 'audio')}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            />
+                                            <UploadCloud className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
+                                            <p className="text-xs font-bold text-foreground">Upload Audio File</p>
+                                            <p className="text-[10px] text-muted-foreground">MP3, WAV, M4A, WEBM</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <Button
+                                            type="button"
+                                            onClick={isRecordingAudio ? stopAudioRecording : startAudioRecording}
+                                            className={cn(
+                                                "w-full h-11 rounded-xl font-bold tracking-wide",
+                                                isRecordingAudio
+                                                    ? "bg-red-600 hover:bg-red-700"
+                                                    : "bg-primary hover:bg-primary/90"
+                                            )}
+                                        >
+                                            {isRecordingAudio ? (
+                                                <>
+                                                    <Square className="w-4 h-4 mr-2" /> Stop Recording
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Mic className="w-4 h-4 mr-2" /> Record Audio
+                                                </>
+                                            )}
+                                        </Button>
+                                        <p className="text-[10px] text-muted-foreground font-medium">
+                                            Recorded audio is auto-saved and uploaded as soon as you stop recording.
+                                        </p>
+                                    </div>
+                                </div>
+                                {audioFiles.length > 0 && (
+                                    <div className="space-y-2 mt-4">
+                                        {audioFiles.map((fileItem, i) => (
+                                            <div key={i} className="bg-muted/50 border border-border rounded-lg p-3 group">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                        <Mic className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                        <span className="text-xs text-foreground truncate font-medium">{fileItem.file.name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {fileItem.status === 'complete' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                                                        {fileItem.status === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
+                                                        {fileItem.status === 'uploading' && (
+                                                            <span className="text-[10px] text-primary font-bold">{Math.round(fileItem.progress)}%</span>
+                                                        )}
+                                                        <button type="button" onClick={() => removeFile(i, 'audio')} className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {fileItem.status === 'complete' && fileItem.uploadedData?.url && (
+                                                    <audio controls className="w-full h-8" src={fileItem.uploadedData.url} preload="metadata" />
+                                                )}
+                                                {(fileItem.status === 'uploading' || fileItem.status === 'pending') && (
+                                                    <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
+                                                        <div
+                                                            className="h-full bg-primary transition-all duration-300"
+                                                            style={{ width: `${fileItem.progress}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -1191,102 +1320,50 @@ export default function NewProjectPage() {
                                 )}
                             </div>
 
-                            {/* Audio Upload & Recording */}
-                            <div className="space-y-3 pt-4 border-t border-border">
-                                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
-                                    <Mic className="w-4 h-4 text-primary" />
-                                    Audio Upload / Record
-                                </Label>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-4">
-                                        <div className="border border-dashed border-border rounded-xl p-6 hover:bg-muted/50 hover:border-primary/50 transition-all text-center relative overflow-hidden group h-full flex flex-col items-center justify-center">
-                                            <input
-                                                type="file"
-                                                multiple
-                                                accept="audio/*"
-                                                onChange={(e) => handleFileUpload(e, 'audio')}
-                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                            />
-                                            <UploadCloud className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors mb-2" />
-                                            <p className="text-xs font-bold text-foreground">Upload Audio File</p>
-                                            <p className="text-[10px] text-muted-foreground">MP3, WAV, M4A, WEBM</p>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <Button
-                                            type="button"
-                                            onClick={isRecordingAudio ? stopAudioRecording : startAudioRecording}
-                                            className={cn(
-                                                "w-full h-11 rounded-xl font-bold tracking-wide",
-                                                isRecordingAudio
-                                                    ? "bg-red-600 hover:bg-red-700"
-                                                    : "bg-primary hover:bg-primary/90"
-                                            )}
-                                        >
-                                            {isRecordingAudio ? (
-                                                <>
-                                                    <Square className="w-4 h-4 mr-2" /> Stop Recording
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Mic className="w-4 h-4 mr-2" /> Record Audio
-                                                </>
-                                            )}
-                                        </Button>
-                                        <p className="text-[10px] text-muted-foreground font-medium">
-                                            Recorded audio is auto-saved and uploaded as soon as you stop recording.
-                                        </p>
-                                    </div>
-                                </div>
-                                {audioFiles.length > 0 && (
-                                    <div className="space-y-2 mt-4">
-                                        {audioFiles.map((fileItem, i) => (
-                                            <div key={i} className="bg-muted/50 border border-border rounded-lg p-3 group">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                        <Mic className="w-3.5 h-3.5 text-primary shrink-0" />
-                                                        <span className="text-xs text-foreground truncate font-medium">{fileItem.file.name}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 shrink-0">
-                                                        {fileItem.status === 'complete' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                                                        {fileItem.status === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
-                                                        {fileItem.status === 'uploading' && (
-                                                            <span className="text-[10px] text-primary font-bold">{Math.round(fileItem.progress)}%</span>
-                                                        )}
-                                                        <button type="button" onClick={() => removeFile(i, 'audio')} className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
-                                                            <X className="w-3 h-3" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                {fileItem.status === 'complete' && fileItem.uploadedData?.url && (
-                                                    <audio controls className="w-full h-8" src={fileItem.uploadedData.url} preload="metadata" />
-                                                )}
-                                                {(fileItem.status === 'uploading' || fileItem.status === 'pending') && (
-                                                    <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
-                                                        <div
-                                                            className="h-full bg-primary transition-all duration-300"
-                                                            style={{ width: `${fileItem.progress}%` }}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
                             {/* Google Drive Link */}
                             <div className="space-y-2 pt-4 border-t border-border">
                                 <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
                                     <LinkIcon className="w-4 h-4 text-emerald-500" /> 
                                     Google Drive Link (Optional)
                                 </Label>
-                                <Input 
-                                    placeholder="Paste URL here..." 
-                                    value={footageLink}
-                                    onChange={e => setFootageLink(e.target.value)}
-                                    className="h-12 bg-muted/50 border-border focus:border-emerald-500/50 rounded-xl font-medium text-foreground placeholder:text-muted-foreground"
-                                />
+                                <div className="flex items-center gap-2">
+                                    <Input 
+                                        placeholder="Paste URL here..." 
+                                        value={footageLinkInput}
+                                        onChange={e => setFootageLinkInput(e.target.value)}
+                                        className="h-12 bg-muted/50 border-border focus:border-emerald-500/50 rounded-xl font-medium text-foreground placeholder:text-muted-foreground"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                addFootageLink();
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-12 px-3 rounded-xl"
+                                        onClick={addFootageLink}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                {footageLinks.length > 0 && (
+                                    <div className="space-y-1 pt-1">
+                                        {footageLinks.map((link, idx) => (
+                                            <div key={`${link}-${idx}`} className="flex items-center justify-between gap-2 bg-muted/30 border border-border rounded-lg px-2.5 py-1.5">
+                                                <span className="text-[10px] text-foreground truncate">{link}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeFootageLink(idx)}
+                                                    className="text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                                                >
+                                                    <X className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Reference Link & Files */}
@@ -1299,13 +1376,45 @@ export default function NewProjectPage() {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                      <div className="space-y-2">
-                                         <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Reference URL</Label>
-                                         <Input 
-                                            placeholder="Instagram/YouTube link..." 
-                                            value={referenceLink}
-                                            onChange={e => setReferenceLink(e.target.value)}
-                                            className="h-11 bg-background/50 border-border rounded-xl text-xs"
-                                         />
+                                         <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Reference URL(s)</Label>
+                                         <div className="flex items-center gap-2">
+                                            <Input 
+                                                placeholder="Instagram/YouTube link..." 
+                                                value={referenceLinkInput}
+                                                onChange={e => setReferenceLinkInput(e.target.value)}
+                                                className="h-11 bg-background/50 border-border rounded-xl text-xs"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        addReferenceLink();
+                                                    }
+                                                }}
+                                            />
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="h-11 px-3 rounded-xl"
+                                                onClick={addReferenceLink}
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                         </div>
+                                         {referenceLinks.length > 0 && (
+                                            <div className="space-y-1 pt-1">
+                                                {referenceLinks.map((link, idx) => (
+                                                    <div key={`${link}-${idx}`} className="flex items-center justify-between gap-2 bg-background/40 border border-border rounded-lg px-2.5 py-1.5">
+                                                        <span className="text-[10px] text-foreground truncate">{link}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeReferenceLink(idx)}
+                                                            className="text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                                                        >
+                                                            <X className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                         )}
                                      </div>
                                      <div className="space-y-2">
                                          <Label className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Reference File(s)</Label>
