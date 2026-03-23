@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { Loader2, Menu, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Desktop Sidebar (Permanent) */}
         <div className="hidden md:block border-r border-border">
-          <DashboardSidebar />
+          <DashboardSidebar collapsed />
         </div>
 
         {/* Mobile Sidebar (Slide-in) */}
@@ -75,7 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           "fixed inset-y-0 left-0 w-72 z-50 transform transition-transform duration-300 ease-in-out md:hidden border-r border-border",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}>
-          <DashboardSidebar />
+          <DashboardSidebar collapsed={false} />
           {/* Close button for mobile sidebar */}
           <button 
             onClick={() => setIsMobileMenuOpen(false)}

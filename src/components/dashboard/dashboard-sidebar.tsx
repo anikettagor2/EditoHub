@@ -34,13 +34,19 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, setDoc } from "firebase/firestore";
 import { toast } from "sonner";
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  collapsed?: boolean;
+}
+
+export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { logoUrl } = useBranding();
   const role = user?.role || 'client';
   
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const effectiveCollapsed = collapsed && !isHovered;
 
   const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
@@ -160,33 +166,38 @@ export function DashboardSidebar() {
   const links = getLinks();
 
   return (
-    <aside className="h-full w-72 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex shrink-0 relative z-50">
+    <aside
+      onMouseEnter={() => collapsed && setIsHovered(true)}
+      onMouseLeave={() => collapsed && setIsHovered(false)}
+      className={cn(
+      "h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex shrink-0 relative z-50 transition-all duration-500 ease-out",
+      effectiveCollapsed ? "w-20" : "w-72"
+    )}>
       {/* Brand Header */}
-      <div className="flex h-24 items-center px-8 mb-4 border-b border-sidebar-border bg-white/[0.02]">
-        <Link href="/dashboard" className="flex items-center gap-3 group w-full">
-          <div className="relative h-12 w-full flex items-center rounded-xl overflow-hidden text-white">
+      <div className={cn("flex h-24 items-center mb-4 border-b border-sidebar-border bg-white/[0.02]", effectiveCollapsed ? "px-3 justify-center" : "px-6")}> 
+        <Link href="/dashboard" className={cn("group flex items-center overflow-hidden", effectiveCollapsed ? "justify-center" : "w-full")}> 
+          <div className={cn("relative h-10 overflow-hidden transition-all duration-500 ease-out", effectiveCollapsed ? "w-10" : "w-40")}>
             {logoUrl ? (
               <Image 
                 src={logoUrl} 
                 alt="EditoHub Logo" 
                 fill 
-                className="object-contain object-left"
+                className={cn("object-contain transition-all duration-500 ease-out", effectiveCollapsed ? "object-center scale-95" : "object-left scale-100")}
                 priority
               />
             ) : (
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center font-bold text-black italic">E</div>
-                    <span className="text-xl font-heading font-black tracking-tighter">EDITO_HUB</span>
-                </div>
+              <div className="flex items-center h-full overflow-hidden">
+                <span className="text-xl font-heading font-black tracking-tighter text-white">EDITO_HUB</span>
+              </div>
             )}
           </div>
         </Link>
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto px-4 space-y-8 py-6 scrollbar-none">
+      <div className={cn("flex-1 overflow-y-auto space-y-8 py-6 scrollbar-none", effectiveCollapsed ? "px-2" : "px-4") }>
         <div className="space-y-2">
-          <div className="px-4 flex items-center justify-between mb-2">
+          <div className={cn("px-4 flex items-center justify-between transition-all duration-200", effectiveCollapsed ? "h-0 opacity-0 mb-0 overflow-hidden" : "h-4 opacity-100 mb-2")}>
               <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.25em]">Operational</span>
               <Activity className="h-3 w-3 text-muted-foreground/50" />
           </div>
@@ -200,14 +211,21 @@ export function DashboardSidebar() {
                   key={link.label}
                   href={link.href}
                   className={cn(
-                    "relative flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 group active:scale-[0.98]",
+                    "relative flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-300 group active:scale-[0.98]",
+                    effectiveCollapsed ? "px-3" : "px-4",
                     isActive ? "text-sidebar-accent-foreground bg-sidebar-accent border border-sidebar-border shadow-sm font-bold" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 border border-transparent"
                   )}
+                  title={effectiveCollapsed ? link.label : undefined}
                 >
-                  <Icon className={cn("h-4 w-4 transition-colors", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70")} />
-                  <span className="tracking-tight">{link.label}</span>
+                  <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                    <Icon className={cn("h-4 w-4 transition-colors", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70")} />
+                  </span>
+                  <span className={cn(
+                    "tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ease-out",
+                    effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100"
+                  )}>{link.label}</span>
                   
-                  {isActive && (
+                  {isActive && !effectiveCollapsed && (
                     <motion.div 
                         layoutId="active-nav-dot"
                         className="absolute right-3 h-1 w-1 rounded-xl bg-sidebar-primary shadow-[0_0_8px_rgba(var(--sidebar-primary),1)]"
@@ -220,23 +238,31 @@ export function DashboardSidebar() {
         </div>
 
         <div className="space-y-2">
-          <div className="px-4 flex items-center justify-between mb-2">
+          <div className={cn("px-4 flex items-center justify-between transition-all duration-200", effectiveCollapsed ? "h-0 opacity-0 mb-0 overflow-hidden" : "h-4 opacity-100 mb-2")}>
               <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.25em]">Support</span>
               <CircleHelp className="h-3 w-3 text-muted-foreground/50" />
           </div>
           <nav className="space-y-0.5">
-            <Link href="#" className="flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent border border-transparent hover:border-sidebar-border transition-all duration-200 group active:scale-[0.98]">
-              <CircleHelp className="h-4 w-4 text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70" />
-              <span className="tracking-tight">System Intel</span>
+            <Link href="#" className={cn(
+              "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent border border-transparent hover:border-sidebar-border transition-all duration-300 group active:scale-[0.98]",
+              effectiveCollapsed ? "px-3" : "px-4"
+            )} title={effectiveCollapsed ? "System Intel" : undefined}>
+              <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                <CircleHelp className="h-4 w-4 text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70" />
+              </span>
+              <span className={cn(
+                "tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ease-out",
+                effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100"
+              )}>System Intel</span>
             </Link>
           </nav>
         </div>
       </div>
 
       {/* Footer Profile */}
-      <div className="p-4 border-t border-sidebar-border">
-         <div className="p-4 rounded-xl bg-sidebar-accent/30 border border-sidebar-border space-y-4">
-            <div className="flex items-center gap-3">
+      <div className={cn("border-t border-sidebar-border", effectiveCollapsed ? "p-2" : "p-4")}>
+         <div className={cn("rounded-xl bg-sidebar-accent/30 border border-sidebar-border", effectiveCollapsed ? "p-2 space-y-2" : "p-4 space-y-4")}>
+            <div className={cn("flex items-center", effectiveCollapsed ? "justify-center" : "gap-3")}>
                <div className="relative group shrink-0">
                    <div className="h-10 w-10 rounded-xl bg-sidebar-primary/10 border border-sidebar-primary/20 flex items-center justify-center font-bold text-sidebar-primary overflow-hidden">
                       {user?.photoURL ? (
@@ -256,7 +282,10 @@ export function DashboardSidebar() {
                         />
                    </label>
                </div>
-               <div className="min-w-0">
+               <div className={cn(
+                 "min-w-0 overflow-hidden transition-all duration-200",
+                 effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100"
+               )}>
                   <p className="truncate text-sm font-bold text-sidebar-foreground tracking-tight">
                     {user?.displayName || "User"}
                   </p>
@@ -271,10 +300,17 @@ export function DashboardSidebar() {
 
             <button
               onClick={() => logout()}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/60 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 active:scale-95"
+              className={cn(
+                "flex w-full items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/50 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/60 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 active:scale-95",
+                effectiveCollapsed ? "h-10 px-0" : "gap-2 px-3 py-2"
+              )}
+              title={effectiveCollapsed ? "Disconnect" : undefined}
             >
               <LogOut className="h-3.5 w-3.5" />
-              Disconnect
+              <span className={cn(
+                "overflow-hidden whitespace-nowrap transition-all duration-200",
+                effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[120px] opacity-100"
+              )}>Disconnect</span>
             </button>
          </div>
       </div>
