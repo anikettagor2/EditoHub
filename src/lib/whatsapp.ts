@@ -139,6 +139,16 @@ function replacePlaceholders(message: string, data: Record<string, string>): str
     return result;
 }
 
+function formatDeliveredOn(value?: string): string {
+    const parsed = value ? new Date(value) : new Date();
+    const validDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    return validDate.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+}
+
 function normalizeStatus(value: unknown): string {
     if (typeof value !== 'string') return '';
     return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -351,16 +361,33 @@ export async function notifyClient(
         const phoneNumber = client.whatsappNumber || client.phoneNumber;
         if (!phoneNumber) return { success: false, error: "No phone number" };
 
-        // Get message (custom or default)
-        let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
-        message = replacePlaceholders(message, extraData || {});
+        // Draft upload template uses fixed placeholder positions.
+        let params: string[];
+        if (notificationType === 'client_draft_submitted') {
+            const deliveredOn = formatDeliveredOn(extraData?.deliveredOn);
+            const fileLink = extraData?.link || '';
+            const versionOrContext = extraData?.version || 'Latest draft';
 
-        // Build params: [name, message, projectName]
-        const params = [
-            client.displayName || "Client",
-            message,
-            project.name || "Your Project"
-        ];
+            // {{1}} name, {{2}} project name, {{4}} delivered date, {{5}} link.
+            // Keep {{3}} populated for templates that reference it.
+            params = [
+                client.displayName || 'Client',
+                project.name || 'Your Project',
+                versionOrContext,
+                deliveredOn,
+                fileLink,
+            ];
+        } else {
+            // Default parameter structure for existing templates.
+            let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
+            message = replacePlaceholders(message, extraData || {});
+
+            params = [
+                client.displayName || 'Client',
+                message,
+                project.name || 'Your Project',
+            ];
+        }
 
         const campaignName = notifSettings?.campaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
         const fallbackCampaignName =
