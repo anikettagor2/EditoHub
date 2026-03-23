@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,6 @@ import {
   FileText,
   Briefcase,
   Film,
-  CircleHelp,
   Activity,
   Layers,
   Cpu,
@@ -26,6 +25,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/context/auth-context";
 import { motion } from "framer-motion";
+import { ModeToggle } from "@/components/mode-toggle";
 
 import Image from "next/image";
 import { useBranding } from "@/lib/context/branding-context";
@@ -45,8 +45,36 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
   const role = user?.role || 'client';
   
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const effectiveCollapsed = collapsed && !isHovered;
+  const [isHoverExpanded, setIsHoverExpanded] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const effectiveCollapsed = collapsed && !isHoverExpanded;
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleMouseEnter = () => {
+    if (!collapsed) return;
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setIsHoverExpanded(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (!collapsed) return;
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = setTimeout(() => {
+      setIsHoverExpanded(false);
+    }, 220);
+  };
 
   const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
@@ -126,7 +154,6 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
       case 'admin':
         return [
           { href: "/dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
-          { href: "/dashboard/users", label: "Users", icon: Users },
           { href: "/dashboard/auto-assign", label: "Auto Assign", icon: Zap },
           { href: "/dashboard/invoices", label: "Invoices", icon: FileText },
           { href: "/dashboard/invoice-settings", label: "Invoice Settings", icon: ReceiptText },
@@ -167,22 +194,22 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
 
   return (
     <aside
-      onMouseEnter={() => collapsed && setIsHovered(true)}
-      onMouseLeave={() => collapsed && setIsHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={cn(
-      "h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex shrink-0 relative z-50 transition-all duration-500 ease-out",
-      effectiveCollapsed ? "w-20" : "w-72"
+      "h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex shrink-0 relative z-50 transition-[width] duration-200 ease-out will-change-[width]",
+      effectiveCollapsed ? "w-20" : "w-80"
     )}>
       {/* Brand Header */}
-      <div className={cn("flex h-24 items-center mb-4 border-b border-sidebar-border bg-white/[0.02]", effectiveCollapsed ? "px-3 justify-center" : "px-6")}> 
+      <div className={cn("flex h-24 items-center mb-4 border-b border-sidebar-border bg-white/2", effectiveCollapsed ? "px-3 justify-center" : "px-6")}> 
         <Link href="/dashboard" className={cn("group flex items-center overflow-hidden", effectiveCollapsed ? "justify-center" : "w-full")}> 
-          <div className={cn("relative h-10 overflow-hidden transition-all duration-500 ease-out", effectiveCollapsed ? "w-10" : "w-40")}>
+          <div className={cn("relative h-10 overflow-hidden", effectiveCollapsed ? "w-10" : "w-40")}>
             {logoUrl ? (
               <Image 
                 src={logoUrl} 
                 alt="EditoHub Logo" 
                 fill 
-                className={cn("object-contain transition-all duration-500 ease-out", effectiveCollapsed ? "object-center scale-95" : "object-left scale-100")}
+                className={cn("object-contain", effectiveCollapsed ? "object-center scale-95" : "object-left scale-100")}
                 priority
               />
             ) : (
@@ -211,8 +238,8 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
                   key={link.label}
                   href={link.href}
                   className={cn(
-                    "relative flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-300 group active:scale-[0.98]",
-                    effectiveCollapsed ? "px-3" : "px-4",
+                    "relative flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors duration-150 group active:scale-[0.98]",
+                    effectiveCollapsed ? "px-0 justify-center" : "px-4",
                     isActive ? "text-sidebar-accent-foreground bg-sidebar-accent border border-sidebar-border shadow-sm font-bold" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 border border-transparent"
                   )}
                   title={effectiveCollapsed ? link.label : undefined}
@@ -221,8 +248,8 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
                     <Icon className={cn("h-4 w-4 transition-colors", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70")} />
                   </span>
                   <span className={cn(
-                    "tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ease-out",
-                    effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100"
+                    "tracking-tight whitespace-nowrap overflow-hidden",
+                    effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-45 opacity-100"
                   )}>{link.label}</span>
                   
                   {isActive && !effectiveCollapsed && (
@@ -237,26 +264,6 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
           </nav>
         </div>
 
-        <div className="space-y-2">
-          <div className={cn("px-4 flex items-center justify-between transition-all duration-200", effectiveCollapsed ? "h-0 opacity-0 mb-0 overflow-hidden" : "h-4 opacity-100 mb-2")}>
-              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.25em]">Support</span>
-              <CircleHelp className="h-3 w-3 text-muted-foreground/50" />
-          </div>
-          <nav className="space-y-0.5">
-            <Link href="#" className={cn(
-              "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent border border-transparent hover:border-sidebar-border transition-all duration-300 group active:scale-[0.98]",
-              effectiveCollapsed ? "px-3" : "px-4"
-            )} title={effectiveCollapsed ? "System Intel" : undefined}>
-              <span className="w-4 h-4 flex items-center justify-center shrink-0">
-                <CircleHelp className="h-4 w-4 text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70" />
-              </span>
-              <span className={cn(
-                "tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ease-out",
-                effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100"
-              )}>System Intel</span>
-            </Link>
-          </nav>
-        </div>
       </div>
 
       {/* Footer Profile */}
@@ -283,8 +290,8 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
                    </label>
                </div>
                <div className={cn(
-                 "min-w-0 overflow-hidden transition-all duration-200",
-                 effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100"
+                 "min-w-0 overflow-hidden",
+                 effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-45 opacity-100"
                )}>
                   <p className="truncate text-sm font-bold text-sidebar-foreground tracking-tight">
                     {user?.displayName || "User"}
@@ -308,10 +315,22 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
             >
               <LogOut className="h-3.5 w-3.5" />
               <span className={cn(
-                "overflow-hidden whitespace-nowrap transition-all duration-200",
-                effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-[120px] opacity-100"
+                "overflow-hidden whitespace-nowrap",
+                effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-30 opacity-100"
               )}>Disconnect</span>
             </button>
+
+            <div className={cn(
+              "flex items-center rounded-lg border border-sidebar-border bg-sidebar-accent/50",
+              effectiveCollapsed ? "justify-center py-2" : "justify-between px-3 py-2"
+            )} title={effectiveCollapsed ? "Theme" : undefined}>
+              {!effectiveCollapsed && (
+                <span className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/60">
+                  Theme
+                </span>
+              )}
+              <ModeToggle />
+            </div>
          </div>
       </div>
     </aside>

@@ -93,15 +93,15 @@ export function StickyScroll() {
     }, []);
 
     return (
-        <section ref={sectionRef} className="relative bg-black py-32 px-6 overflow-hidden">
+        <section ref={sectionRef} className="relative bg-[#f8f6f2] py-32 px-6 overflow-hidden">
             {/* Section Header */}
             <div className="max-w-7xl mx-auto mb-20">
                 <span className="text-primary text-sm font-semibold uppercase tracking-wider mb-4 block">How It Works</span>
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                <h2 className="text-4xl md:text-5xl font-bold text-zinc-900 mb-6">
                     Three simple steps to
                     <span className="text-zinc-500"> professional videos</span>
                 </h2>
-                <p className="text-lg text-zinc-400 max-w-2xl">
+                <p className="text-lg text-zinc-600 max-w-2xl">
                     No complicated software. No lengthy contracts. Just upload, collaborate, and download.
                 </p>
             </div>
@@ -115,10 +115,10 @@ export function StickyScroll() {
                             <div className="flex items-center gap-4 mb-6">
                                 <span className="text-5xl font-bold text-primary/20">{item.step}</span>
                             </div>
-                            <h3 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                            <h3 className="text-3xl md:text-4xl font-bold text-zinc-900 mb-4">
                                 {item.title}
                             </h3>
-                            <p className="text-zinc-400 text-lg max-w-lg leading-relaxed">
+                            <p className="text-zinc-600 text-lg max-w-lg leading-relaxed">
                                 {item.description}
                             </p>
                         </div>
@@ -127,8 +127,8 @@ export function StickyScroll() {
 
                 {/* Right Side: Pinned Media Container */}
                 <div className="hidden md:block w-1/2 h-screen">
-                    <div ref={pinRef} className="relative w-full aspect-[4/3] max-h-[60vh] rounded-2xl overflow-hidden border border-white/10 bg-zinc-900">
-                        <div className="absolute inset-0 z-20 bg-linear-to-t from-black/40 via-transparent to-transparent" />
+                    <div ref={pinRef} className="relative w-full aspect-4/3 max-h-[60vh] rounded-2xl overflow-hidden border border-black/10 bg-white">
+                        <div className="absolute inset-0 z-20 bg-linear-to-t from-white/30 via-transparent to-transparent" />
                         
                         {PROCESS_STEPS.map((item, i) => (
                             <div key={i} className="sticky-image-item absolute inset-0 w-full h-full">
@@ -145,7 +145,7 @@ export function StickyScroll() {
                         {/* Step indicator */}
                         <div className="absolute bottom-6 left-6 z-30 flex gap-2">
                             {PROCESS_STEPS.map((_, i) => (
-                                <div key={i} className="w-8 h-1 rounded-full bg-white/20" />
+                                <div key={i} className="w-8 h-1 rounded-full bg-black/20" />
                             ))}
                         </div>
                     </div>

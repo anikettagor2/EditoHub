@@ -12,29 +12,36 @@ import { FuturisticCTA } from "@/components/futuristic-cta";
 import { CustomCursor } from "@/components/home/custom-cursor";
 import { ImmersiveBackground } from "@/components/home/immersive-background";
 import { EditingTimeline } from "@/components/home/editing-timeline";
-// mke the most of the imapoet that we can take the here we as we can so that we can hcome here so that i can mke a oerfract decsion 
+
 export default function Home() {
   return (
     <LenisProvider>
-      <main className="bg-black text-white overflow-x-hidden selection:bg-primary selection:text-white">
+      <main className="premium-light-bg text-zinc-900 overflow-x-hidden selection:bg-primary selection:text-white relative">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-linear-to-b from-white/60 to-transparent z-0" />
         <CustomCursor />
         <ImmersiveBackground />
         <Navbar />
-        
+
         <Hero />
-        
+
+        <div className="premium-light-divider" />
         <ScrollText />
-        
+
+        <div className="premium-light-divider" />
         <StickyScroll />
 
+        <div className="premium-light-divider" />
         <EditingTimeline />
-        
+
+        <div className="premium-light-divider" />
         <BeforeAfter />
-        
+
+        <div className="premium-light-divider" />
         <ParallaxGallery />
 
+        <div className="premium-light-divider" />
         <FuturisticCTA />
-        
+
         <Footer />
       </main>
     </LenisProvider>

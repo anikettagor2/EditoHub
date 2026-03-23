@@ -39,11 +39,11 @@ function ScrollText() {
     ];
 
     return (
-        <section className="bg-black py-32 md:py-48 px-6">
+        <section className="bg-[#f6f4ef] py-32 md:py-48 px-6">
             <div className="max-w-5xl mx-auto">
                 {/* Main Text */}
                 <div ref={textRef} className="mb-20">
-                    <p className="text-2xl sm:text-3xl md:text-5xl font-semibold text-white leading-snug tracking-tight">
+                    <p className="text-2xl sm:text-3xl md:text-5xl font-semibold text-zinc-900 leading-snug tracking-tight">
                         {text.split(" ").map((word, i) => (
                             <span key={i} className="word inline-block mr-[0.25em]">{word}</span>
                         ))}
@@ -55,10 +55,10 @@ function ScrollText() {
                     {features.map((feature, i) => (
                         <div 
                             key={i} 
-                            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-white/5 border border-white/10"
+                            className="flex items-center gap-3 px-5 py-4 rounded-xl bg-white/80 border border-black/10"
                         >
                             <CheckCircle className="w-5 h-5 text-primary shrink-0" />
-                            <span className="text-sm text-zinc-300 font-medium">{feature}</span>
+                            <span className="text-sm text-zinc-700 font-medium">{feature}</span>
                         </div>
                     ))}
                 </div>

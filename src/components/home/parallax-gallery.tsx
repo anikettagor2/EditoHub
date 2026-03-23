@@ -46,7 +46,7 @@ function TiltCard({ img, i }: { img: any, i: number }) {
             style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
-            className={`parallax-item relative overflow-hidden rounded-[2rem] border border-white/5 bg-zinc-900 ${img.size} min-h-[300px] md:min-h-[400px] group transition-shadow duration-500 hover:shadow-[0_0_50px_rgba(99,102,241,0.2)]`}
+            className={`parallax-item relative overflow-hidden rounded-4xl border border-black/10 bg-white ${img.size} min-h-75 md:min-h-100 group transition-shadow duration-500 hover:shadow-[0_0_50px_rgba(99,102,241,0.15)]`}
         >
             <div style={{ transform: "translateZ(50px)" }} className="absolute inset-0">
                 <Image 
@@ -57,7 +57,7 @@ function TiltCard({ img, i }: { img: any, i: number }) {
                     sizes="(max-width: 768px) 100vw, 33vw"
                 />
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 z-10" />
+            <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent opacity-40 z-10" />
             <div style={{ transform: "translateZ(75px)" }} className="absolute bottom-10 left-10 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
                 <span className="text-white font-black uppercase text-xs tracking-widest">Project 0{i+1}</span>
             </div>
@@ -94,14 +94,14 @@ export function ParallaxGallery() {
     }, []);
 
     return (
-        <section ref={sectionRef} className="bg-black py-40 px-6 overflow-hidden">
+        <section ref={sectionRef} className="bg-[#f6f4ef] py-40 px-6 overflow-hidden">
             <div className="max-w-7xl mx-auto space-y-32">
                 <div className="text-center">
                     <div className="premium-header text-primary">Portfolio</div>
-                    <h2 className="text-6xl md:text-9xl font-black uppercase tracking-tighter text-white mb-8">
+                    <h2 className="text-6xl md:text-9xl font-black uppercase tracking-tighter text-zinc-900 mb-8">
                         Visual <span className="text-primary italic">Vault</span>
                     </h2>
-                    <p className="text-zinc-500 max-w-xl mx-auto text-xl font-medium tracking-tight">
+                    <p className="text-zinc-600 max-w-xl mx-auto text-xl font-medium tracking-tight">
                         A curated archive of high-impact cinematic narratives crafted with surgical precision.
                     </p>
                 </div>

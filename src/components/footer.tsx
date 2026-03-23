@@ -9,11 +9,11 @@ export function Footer() {
   const { logoUrl } = useBranding();
   
   return (
-    <footer className="border-t border-white/10 bg-black py-16">
+    <footer className="border-t border-black/10 bg-[#fbfaf7] py-16">
       <div className="container mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand */}
-          <div className="space-y-6">
+          <div className="space-y-6 premium-light-surface rounded-2xl p-6">
             <Link href="/" className="block relative h-12 w-48 mb-2 rounded-xl overflow-hidden">
                {logoUrl ? (
                  <Image 
@@ -78,7 +78,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-16 pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between text-sm text-muted-foreground">
+        <div className="mt-16 pt-8 border-t border-black/10 flex flex-col md:flex-row items-center justify-between text-sm text-muted-foreground premium-light-surface rounded-2xl px-5 py-4">
           <p>© 2025 EDITOHUB. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">
             <Link href="#" className="hover:text-primary transition-colors">Privacy Policy</Link>
@@ -94,7 +94,7 @@ function SocialIcon({ href, icon }: { href: string; icon: React.ReactNode }) {
   return (
     <Link
       href={href}
-      className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-white transition-all duration-300"
+      className="w-10 h-10 rounded-full bg-black/5 flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-white transition-all duration-300"
     >
       {icon}
     </Link>

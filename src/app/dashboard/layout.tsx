@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/auth-context";
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
-import { DashboardHeader } from "@/components/dashboard/dashboard-header";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -52,6 +51,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       <div className="flex flex-1 overflow-hidden relative z-10">
+        {/* Mobile Sidebar Toggle (Header removed) */}
+        {!isMobileMenuOpen && (
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="md:hidden fixed top-5 left-5 z-50 h-11 w-11 rounded-xl border border-border bg-background/90 backdrop-blur text-foreground flex items-center justify-center"
+            aria-label="Open sidebar"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+
         {/* Mobile Sidebar Overlay */}
         <AnimatePresence>
           {isMobileMenuOpen && (
@@ -79,16 +89,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Close button for mobile sidebar */}
           <button 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="absolute top-6 right-[-48px] h-10 w-10 flex items-center justify-center rounded-xl bg-background border border-border text-foreground"
+            className="absolute top-6 -right-12 h-10 w-10 flex items-center justify-center rounded-xl bg-background border border-border text-foreground"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex flex-1 flex-col overflow-hidden relative">
-          <DashboardHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
+          <div className="flex flex-1 flex-col overflow-hidden relative">
           <main className="flex-1 overflow-y-auto relative flex flex-col scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent">
-             <div className="flex-1 p-4 md:p-8 lg:p-10 max-w-[1920px] mx-auto w-full page-fade-in">
+             <div className="flex-1 p-4 md:p-8 lg:p-10 max-w-480 mx-auto w-full page-fade-in">
                 {children}
              </div>
           </main>

@@ -15,6 +15,7 @@ type TimeRange = 'Day' | 'Week' | 'Month' | 'Year';
 
 export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProps) {
     const [timeRange, setTimeRange] = useState<TimeRange>('Week');
+    const [activeMiniChart, setActiveMiniChart] = useState<'completed' | 'clients' | 'team'>('completed');
 
     const chartData = useMemo(() => {
         const now = new Date();
@@ -250,12 +251,19 @@ export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProp
                     </div>
                 </motion.div>
 
-                <div className="flex flex-col gap-6 lg:h-[500px]">
+                <div className="flex flex-col gap-3 lg:h-[500px]">
                     <motion.div 
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="flex-1 enterprise-card bg-card/60 p-6 flex flex-col relative overflow-hidden group"
+                        onMouseEnter={() => setActiveMiniChart('completed')}
+                        onFocus={() => setActiveMiniChart('completed')}
+                        onClick={() => setActiveMiniChart('completed')}
+                        tabIndex={0}
+                        className={cn(
+                            "enterprise-card bg-card/60 p-5 flex flex-col relative overflow-hidden group cursor-pointer outline-none transition-all duration-300",
+                            activeMiniChart === 'completed' ? "flex-[3.2]" : "flex-1"
+                        )}
                     >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[40px] rounded-full pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
                         <div className="flex justify-between items-start mb-6 shrink-0 relative z-10">
@@ -269,7 +277,10 @@ export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProp
                                 </div>
                             </div>
                         </div>
-                        <div className="flex-1 min-h-0 relative z-10 w-full h-full -ml-4">
+                        <div className={cn(
+                            "flex-1 min-h-0 relative z-10 w-full h-full -ml-4 transition-all duration-300",
+                            activeMiniChart === 'completed' ? "opacity-100" : "opacity-0 h-0 pointer-events-none"
+                        )}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <defs>
@@ -298,7 +309,14 @@ export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProp
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
-                        className="flex-1 enterprise-card bg-card/60 p-6 flex flex-col relative overflow-hidden group"
+                        onMouseEnter={() => setActiveMiniChart('clients')}
+                        onFocus={() => setActiveMiniChart('clients')}
+                        onClick={() => setActiveMiniChart('clients')}
+                        tabIndex={0}
+                        className={cn(
+                            "enterprise-card bg-card/60 p-5 flex flex-col relative overflow-hidden group cursor-pointer outline-none transition-all duration-300",
+                            activeMiniChart === 'clients' ? "flex-[3.2]" : "flex-1"
+                        )}
                     >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[40px] rounded-full pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
                         <div className="flex justify-between items-start mb-6 shrink-0 relative z-10">
@@ -312,7 +330,10 @@ export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProp
                                 </div>
                             </div>
                         </div>
-                        <div className="flex-1 min-h-0 relative z-10 w-full h-full -ml-4">
+                        <div className={cn(
+                            "flex-1 min-h-0 relative z-10 w-full h-full -ml-4 transition-all duration-300",
+                            activeMiniChart === 'clients' ? "opacity-100" : "opacity-0 h-0 pointer-events-none"
+                        )}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <defs>
@@ -343,7 +364,14 @@ export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProp
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.3 }}
-                        className="flex-1 enterprise-card bg-card/60 p-6 flex flex-col relative overflow-hidden group"
+                        onMouseEnter={() => setActiveMiniChart('team')}
+                        onFocus={() => setActiveMiniChart('team')}
+                        onClick={() => setActiveMiniChart('team')}
+                        tabIndex={0}
+                        className={cn(
+                            "enterprise-card bg-card/60 p-5 flex flex-col relative overflow-hidden group cursor-pointer outline-none transition-all duration-300",
+                            activeMiniChart === 'team' ? "flex-[3.2]" : "flex-1"
+                        )}
                     >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-[40px] rounded-full pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
                         <div className="flex justify-between items-start mb-6 shrink-0 relative z-10">
@@ -357,7 +385,10 @@ export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProp
                                 </div>
                             </div>
                         </div>
-                        <div className="flex-1 min-h-0 relative z-10 w-full h-full -ml-4">
+                        <div className={cn(
+                            "flex-1 min-h-0 relative z-10 w-full h-full -ml-4 transition-all duration-300",
+                            activeMiniChart === 'team' ? "opacity-100" : "opacity-0 h-0 pointer-events-none"
+                        )}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <defs>
@@ -388,6 +419,3 @@ export function AdminOverviewGraphs({ projects, users }: AdminOverviewGraphsProp
         </div>
     );
 }
-
-// Ensure you have an Activity icon imported if it isn't already.
-// Note: I added Activity to the import at the top, but you need to make sure the lucide-react import holds it. 

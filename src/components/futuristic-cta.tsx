@@ -7,13 +7,13 @@ import { ArrowRight, MessageCircle, Clock, Shield, Users } from "lucide-react";
 
 export function FuturisticCTA() {
   return (
-    <section className="py-24 md:py-32 relative overflow-hidden bg-black">
+    <section className="py-24 md:py-32 relative overflow-hidden bg-[#f8f6f2]">
       <div className="max-w-7xl mx-auto px-6">
         {/* Main CTA Card */}
-        <div className="relative rounded-3xl p-8 md:p-16 overflow-hidden bg-linear-to-br from-zinc-900 to-zinc-950 border border-white/10">
+        <div className="relative rounded-3xl p-8 md:p-16 overflow-hidden bg-linear-to-br from-white to-[#fbfaf7] border border-black/10 shadow-[0_25px_80px_rgba(15,23,42,0.12)]">
           {/* Background Accent */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-300/10 rounded-full blur-3xl pointer-events-none" />
           
           <div className="relative z-10 grid lg:grid-cols-2 gap-12 items-center">
             {/* Left Content */}
@@ -31,7 +31,7 @@ export function FuturisticCTA() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
-                className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6 leading-tight"
+                className="text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-900 mb-6 leading-tight"
               >
                 Ready to scale your content production?
               </motion.h2>
@@ -40,7 +40,7 @@ export function FuturisticCTA() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                className="text-lg text-zinc-400 mb-8 leading-relaxed"
+                className="text-lg text-zinc-600 mb-8 leading-relaxed"
               >
                 Join hundreds of creators and brands who trust us with their video editing. Start your first project today with no commitment.
               </motion.p>
@@ -52,13 +52,13 @@ export function FuturisticCTA() {
                 className="flex flex-col sm:flex-row gap-4"
               >
                 <Link href="/signup">
-                  <button className="group flex items-center justify-center gap-3 px-8 py-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-all w-full sm:w-auto">
+                  <button className="group flex items-center justify-center gap-3 px-8 py-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-all w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/20">
                     Get Started Free
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </Link>
                 <Link href="/about">
-                  <button className="flex items-center justify-center gap-3 px-8 py-4 bg-white/5 border border-white/10 text-white font-semibold rounded-xl hover:bg-white/10 transition-all w-full sm:w-auto">
+                  <button className="flex items-center justify-center gap-3 px-8 py-4 bg-white border border-black/10 text-zinc-900 font-semibold rounded-xl hover:bg-zinc-50 transition-all w-full sm:w-auto shadow-sm hover:shadow-md">
                     <MessageCircle className="w-4 h-4" />
                     Talk to Us
                   </button>
@@ -98,7 +98,7 @@ export function FuturisticCTA() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-16 px-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16 px-0 md:px-2">
           <StatItem value="500+" label="Happy Clients" />
           <StatItem value="10,000+" label="Videos Delivered" />
           <StatItem value="1B+" label="Total Views Generated" />
@@ -111,21 +111,21 @@ export function FuturisticCTA() {
 
 function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <div className="p-6 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all">
+    <div className="p-6 rounded-2xl bg-white/80 border border-black/10 hover:border-black/20 transition-all">
       <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-4">
         {icon}
       </div>
-      <h3 className="text-white font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-zinc-500 leading-relaxed">{desc}</p>
+      <h3 className="text-zinc-900 font-semibold mb-2">{title}</h3>
+      <p className="text-sm text-zinc-600 leading-relaxed">{desc}</p>
     </div>
   );
 }
 
 function StatItem({ value, label }: { value: string; label: string }) {
   return (
-    <div className="text-center">
-      <div className="text-2xl md:text-3xl font-bold text-white mb-1">{value}</div>
-      <div className="text-sm text-zinc-500">{label}</div>
+    <div className="text-center premium-light-surface rounded-2xl py-5 px-4">
+      <div className="text-2xl md:text-3xl font-bold text-zinc-900 mb-1">{value}</div>
+      <div className="text-sm text-zinc-600">{label}</div>
     </div>
   );
 }

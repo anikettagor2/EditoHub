@@ -621,7 +621,7 @@ export function AdminDashboard() {
       .sort((a, b) => b.log.timestamp - a.log.timestamp);
 
   return (
-    <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
+    <div className="space-y-10 max-w-[1720px] mx-auto pb-20 pt-4">
        {clientsOverLimit.length > 0 && (
            <motion.div 
                initial={{ opacity: 0, y: -20 }}
@@ -677,23 +677,35 @@ export function AdminDashboard() {
             <motion.div 
                initial={{ opacity: 0, x: 20 }}
                animate={{ opacity: 1, x: 0 }}
-               className="flex flex-wrap items-center gap-3"
+               className="max-w-full"
             >
-                <div className="flex bg-muted/50 border border-border rounded-lg p-1">
-                    {['overview', 'projects', 'users', 'team', 'terminations', 'requests', 'whatsapp', 'finance', 'performance'].map(tab => (
-                        <button
-                            key={tab}
-                            onClick={() => { setActiveTab(tab as any); setSearchQuery(""); }}
-                            className={cn(
-                                "px-5 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all",
-                                activeTab === tab 
-                                    ? "bg-background text-foreground shadow-sm" 
-                                    : "text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            {tab}
-                        </button>
-                    ))}
+                <div className="inline-flex max-w-full overflow-x-auto scrollbar-none rounded-xl border border-border bg-muted/40 p-1">
+                    <div className="flex items-center gap-1">
+                        {[
+                            { key: 'overview', label: 'Overview' },
+                            { key: 'projects', label: 'Projects' },
+                            { key: 'users', label: 'Users' },
+                            { key: 'team', label: 'Team' },
+                            { key: 'terminations', label: 'Terminations' },
+                            { key: 'requests', label: 'Requests' },
+                            { key: 'whatsapp', label: 'WhatsApp' },
+                            { key: 'finance', label: 'Finance' },
+                            { key: 'performance', label: 'Performance' },
+                        ].map((tab) => (
+                            <button
+                                key={tab.key}
+                                onClick={() => { setActiveTab(tab.key as any); setSearchQuery(""); }}
+                                className={cn(
+                                    "px-4 md:px-5 py-2 text-[11px] md:text-xs font-heading font-semibold tracking-wide rounded-lg transition-all whitespace-nowrap",
+                                    activeTab === tab.key
+                                        ? "bg-background text-foreground border border-fuchsia-500/70 ring-1 ring-fuchsia-500/30 shadow-[0_0_18px_rgba(217,70,239,0.24)]"
+                                        : "text-foreground/70 hover:text-foreground hover:bg-background/70"
+                                )}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </motion.div>
        </div>
@@ -854,6 +866,10 @@ export function AdminDashboard() {
                          <thead>
                             <tr className="bg-muted/30">
                                 <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project Name</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">PM</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
+                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Completion Date</th>
                                 <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
                                 <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Last Updated</th>
                                 <th className="px-6 py-4 border-b border-border w-[80px]"></th>
@@ -871,6 +887,21 @@ export function AdminDashboard() {
                                     <td className="px-6 py-5">
                                         <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-bold text-foreground tracking-tight hover:text-primary transition-colors cursor-pointer">{project.name}</Link>
                                         <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">ID: {project.id.slice(0,12)}</div>
+                                    </td>
+                                    <td className="px-6 py-5 text-xs text-foreground font-semibold whitespace-nowrap">
+                                        {project.assignedPMId ? (users.find(u => u.uid === project.assignedPMId)?.displayName || 'Unknown PM') : 'Not Assigned'}
+                                    </td>
+                                    <td className="px-6 py-5 text-xs text-foreground font-semibold whitespace-nowrap">
+                                        {project.assignedEditorId ? (users.find(u => u.uid === project.assignedEditorId)?.displayName || 'Unknown Editor') : 'Not Assigned'}
+                                    </td>
+                                    <td className="px-6 py-5 text-xs font-black text-foreground tabular-nums whitespace-nowrap">
+                                        ₹{(project.totalCost || 0).toLocaleString()}
+                                    </td>
+                                    <td className="px-6 py-5 text-[11px] font-semibold whitespace-nowrap" suppressHydrationWarning>
+                                        {(project.completedAt || project.downloadUnlockedAt)
+                                            ? new Date((project.completedAt || project.downloadUnlockedAt) as number).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                            : <span className="text-amber-500">Pending</span>
+                                        }
                                     </td>
                                     <td className="px-6 py-5">
                                         <ProjectStatusBadges project={project} />
@@ -924,7 +955,7 @@ export function AdminDashboard() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: idx * 0.05 }}
-                                    className="hover:bg-muted/50 transition-colors group"
+                                 className="hover:bg-muted/50 transition-colors group"
                                >
                                     <td className="px-3 py-3 text-xs font-bold text-foreground/80 tabular-nums">{projectSerialMap.get(project.id) ?? idx + 1}</td>
                                     <td className="px-3 py-3">

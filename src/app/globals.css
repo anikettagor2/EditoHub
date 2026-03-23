@@ -147,7 +147,7 @@ body {
 }
 
 .dark .glass-panel {
-    @apply bg-white/[0.02] border-white/[0.08];
+    @apply bg-white/2 border-white/8;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
@@ -157,7 +157,7 @@ body {
 }
 
 .dark .enterprise-card {
-    @apply bg-white/[0.01] border-white/[0.06];
+    @apply bg-white/1 border-white/6;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
@@ -167,7 +167,7 @@ body {
 }
 
 .dark .enterprise-card:hover {
-    @apply border-white/[0.12] bg-white/[0.03];
+    @apply border-white/12 bg-white/3;
 }
 
 .premium-header {
@@ -222,7 +222,7 @@ body {
 }
 
 .dark ::-webkit-scrollbar-thumb {
-    @apply bg-white/[0.05] hover:bg-white/[0.1];
+    @apply bg-white/5 hover:bg-white/10;
 }
 
 @layer base {
@@ -326,4 +326,24 @@ body {
 /* For all button-like elements */
 button, a[role="button"], [role="button"] {
     cursor: pointer;
+}
+
+/* Premium light landing utilities */
+.premium-light-bg {
+    background-color: #f6f4ef;
+    background-image:
+        radial-gradient(circle at 10% -10%, rgba(99, 102, 241, 0.12), transparent 35%),
+        radial-gradient(circle at 90% 0%, rgba(245, 158, 11, 0.12), transparent 30%),
+        linear-gradient(180deg, #faf8f3 0%, #f6f4ef 45%, #f7f5f0 100%);
+}
+
+.premium-light-surface {
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(24, 24, 27, 0.08);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(10px);
+}
+
+.premium-light-divider {
+    border-top: 1px solid rgba(24, 24, 27, 0.08);
 }
