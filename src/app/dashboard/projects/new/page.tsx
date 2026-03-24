@@ -110,6 +110,70 @@ const DEFAULT_URGENT_PRICE = 500;
 const BASE_PROJECT_PRICE = 1000;
 const MAX_CONCURRENT_UPLOADS = 3; // Upload up to 3 files simultaneously
 const DESCRIPTION_WORD_LIMIT = 500;
+const PROJECT_DRAFT_TTL_MS = 60 * 60 * 1000;
+const PROJECT_DRAFT_STORAGE_PREFIX = "editohub:new-project-draft";
+
+interface PersistedFileItem {
+    name: string;
+    url: string;
+    size: number;
+    type: string;
+    uploadedAt: number;
+}
+
+interface ProjectDraftSnapshot {
+    version: 1;
+    createdAt: number;
+    expiresAt: number;
+    currentStep: number;
+    name: string;
+    videoType: string;
+    aspectRatio: string;
+    urgency: '24hrs' | 'urgent';
+    description: string;
+    selectedPriceIndex: number;
+    scriptText: string;
+    footageLinkInput: string;
+    footageLinks: string[];
+    referenceLinkInput: string;
+    referenceLinks: string[];
+    rawFiles: PersistedFileItem[];
+    bRoleFiles: PersistedFileItem[];
+    scriptFiles: PersistedFileItem[];
+    referenceFiles: PersistedFileItem[];
+    audioFiles: PersistedFileItem[];
+}
+
+function getProjectDraftStorageKey(uid: string) {
+    return `${PROJECT_DRAFT_STORAGE_PREFIX}:${uid}`;
+}
+
+function serializeCompletedFiles(files: FileWithProgress[]): PersistedFileItem[] {
+    return files
+        .filter((file) => file.status === 'complete' && file.uploadedData)
+        .map((file) => ({
+            name: file.uploadedData!.name,
+            url: file.uploadedData!.url,
+            size: file.uploadedData!.size,
+            type: file.uploadedData!.type,
+            uploadedAt: file.uploadedData!.uploadedAt,
+        }));
+}
+
+function restorePersistedFiles(items: PersistedFileItem[]): FileWithProgress[] {
+    return items.map((item) => ({
+        file: new File([], item.name || 'uploaded-file', { type: item.type || 'application/octet-stream' }),
+        progress: 100,
+        status: 'complete',
+        uploadedData: {
+            name: item.name,
+            url: item.url,
+            size: item.size,
+            type: item.type,
+            uploadedAt: item.uploadedAt,
+        },
+    }));
+}
 
 export default function NewProjectPage() {
     const router = useRouter();
@@ -144,6 +208,11 @@ export default function NewProjectPage() {
     
     // Misc
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [draftExpiresAt, setDraftExpiresAt] = useState<number | null>(null);
+    const [lastDraftSavedAt, setLastDraftSavedAt] = useState<number | null>(null);
+
+    const draftCreatedAtRef = useRef<number | null>(null);
+    const draftHydratedRef = useRef(false);
 
     // Derived Logic
     const wordCount = description.trim() === "" ? 0 : description.trim().split(/\s+/).length;
@@ -222,6 +291,145 @@ export default function NewProjectPage() {
             }
         };
     }, []);
+
+    const clearProjectDraft = useCallback(() => {
+        if (!user || typeof window === 'undefined') return;
+        localStorage.removeItem(getProjectDraftStorageKey(user.uid));
+        draftCreatedAtRef.current = null;
+        setDraftExpiresAt(null);
+        setLastDraftSavedAt(null);
+    }, [user]);
+
+    useEffect(() => {
+        if (!user || typeof window === 'undefined') return;
+
+        const storageKey = getProjectDraftStorageKey(user.uid);
+        const rawDraft = localStorage.getItem(storageKey);
+
+        if (!rawDraft) {
+            draftHydratedRef.current = true;
+            return;
+        }
+
+        try {
+            const draft = JSON.parse(rawDraft) as ProjectDraftSnapshot;
+
+            if (!draft?.createdAt || !draft?.expiresAt || Date.now() > draft.expiresAt) {
+                localStorage.removeItem(storageKey);
+                draftHydratedRef.current = true;
+                toast.info("Previous project draft expired and was removed.");
+                return;
+            }
+
+            draftCreatedAtRef.current = draft.createdAt;
+            setDraftExpiresAt(draft.expiresAt);
+
+            setCurrentStep(Math.min(4, Math.max(1, draft.currentStep || 1)));
+            setName(draft.name || "");
+            setVideoType(draft.videoType || "Reel Format");
+            setAspectRatio(draft.aspectRatio || "9:16");
+            setUrgency(draft.urgency === 'urgent' ? 'urgent' : '24hrs');
+            setDescription(draft.description || "");
+            setSelectedPriceIndex(Math.max(0, draft.selectedPriceIndex || 0));
+            setScriptText(draft.scriptText || "");
+            setFootageLinkInput(draft.footageLinkInput || "");
+            setFootageLinks(Array.isArray(draft.footageLinks) ? draft.footageLinks : []);
+            setReferenceLinkInput(draft.referenceLinkInput || "");
+            setReferenceLinks(Array.isArray(draft.referenceLinks) ? draft.referenceLinks : []);
+
+            setRawFiles(restorePersistedFiles(Array.isArray(draft.rawFiles) ? draft.rawFiles : []));
+            setBRoleFiles(restorePersistedFiles(Array.isArray(draft.bRoleFiles) ? draft.bRoleFiles : []));
+            setScriptFiles(restorePersistedFiles(Array.isArray(draft.scriptFiles) ? draft.scriptFiles : []));
+            setReferenceFiles(restorePersistedFiles(Array.isArray(draft.referenceFiles) ? draft.referenceFiles : []));
+            setAudioFiles(restorePersistedFiles(Array.isArray(draft.audioFiles) ? draft.audioFiles : []));
+
+            toast.success("Project draft restored.");
+        } catch {
+            localStorage.removeItem(storageKey);
+        } finally {
+            draftHydratedRef.current = true;
+        }
+    }, [user]);
+
+    useEffect(() => {
+        if (!user || typeof window === 'undefined') return;
+        if (!draftHydratedRef.current) return;
+
+        const saveTimer = setTimeout(() => {
+            const now = Date.now();
+            const createdAt = draftCreatedAtRef.current ?? now;
+            const expiresAt = createdAt + PROJECT_DRAFT_TTL_MS;
+
+            if (now > expiresAt) {
+                clearProjectDraft();
+                return;
+            }
+
+            draftCreatedAtRef.current = createdAt;
+
+            const snapshot: ProjectDraftSnapshot = {
+                version: 1,
+                createdAt,
+                expiresAt,
+                currentStep,
+                name,
+                videoType,
+                aspectRatio,
+                urgency,
+                description,
+                selectedPriceIndex,
+                scriptText,
+                footageLinkInput,
+                footageLinks,
+                referenceLinkInput,
+                referenceLinks,
+                rawFiles: serializeCompletedFiles(rawFiles),
+                bRoleFiles: serializeCompletedFiles(bRoleFiles),
+                scriptFiles: serializeCompletedFiles(scriptFiles),
+                referenceFiles: serializeCompletedFiles(referenceFiles),
+                audioFiles: serializeCompletedFiles(audioFiles),
+            };
+
+            localStorage.setItem(getProjectDraftStorageKey(user.uid), JSON.stringify(snapshot));
+            setLastDraftSavedAt(now);
+            setDraftExpiresAt(expiresAt);
+        }, 700);
+
+        return () => clearTimeout(saveTimer);
+    }, [
+        user,
+        currentStep,
+        name,
+        videoType,
+        aspectRatio,
+        urgency,
+        description,
+        selectedPriceIndex,
+        scriptText,
+        footageLinkInput,
+        footageLinks,
+        referenceLinkInput,
+        referenceLinks,
+        rawFiles,
+        bRoleFiles,
+        scriptFiles,
+        referenceFiles,
+        audioFiles,
+        clearProjectDraft,
+    ]);
+
+    useEffect(() => {
+        if (!user || typeof window === 'undefined') return;
+        if (!draftExpiresAt) return;
+
+        const interval = setInterval(() => {
+            if (Date.now() > draftExpiresAt) {
+                clearProjectDraft();
+            }
+        }, 30 * 1000);
+
+        return () => clearInterval(interval);
+    }, [user, draftExpiresAt, clearProjectDraft]);
 
     // Immediate file upload function
     const uploadFileImmediately = useCallback(async (
@@ -634,6 +842,7 @@ export default function NewProjectPage() {
 
         try {
             await createProject('pay_later');
+            clearProjectDraft();
             
             // Update user's pending dues
             const userRef = doc(db, "users", user.uid);
@@ -695,6 +904,7 @@ export default function NewProjectPage() {
                         
                         // Create project with payment details
                         await createProject('pay_now', response.razorpay_payment_id);
+                        clearProjectDraft();
                         
                         toast.success("Payment successful! Project created.");
                         router.push("/dashboard");
@@ -746,6 +956,18 @@ export default function NewProjectPage() {
                  <h1 className="text-4xl font-heading font-black tracking-tight text-foreground mb-8">
                      Create New <span className="text-primary">Project</span>
                  </h1>
+
+                 {draftExpiresAt && (
+                    <div className="mb-6 w-full max-w-2xl rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-center">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-primary">
+                            Draft Auto-Save Enabled
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                            {lastDraftSavedAt ? `Last saved: ${new Date(lastDraftSavedAt).toLocaleTimeString()}. ` : ""}
+                            Draft expires at {new Date(draftExpiresAt).toLocaleTimeString()}.
+                        </p>
+                    </div>
+                 )}
 
                  {/* Stepper */}
                  <div className="flex items-center gap-4 w-full max-w-2xl px-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -45,36 +45,8 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
   const role = user?.role || 'client';
   
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
-  const [isHoverExpanded, setIsHoverExpanded] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const effectiveCollapsed = collapsed && !isHoverExpanded;
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-      }
-    };
-  }, []);
-
-  const handleMouseEnter = () => {
-    if (!collapsed) return;
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    setIsHoverExpanded(true);
-  };
-
-  const handleMouseLeave = () => {
-    if (!collapsed) return;
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-    }
-    closeTimerRef.current = setTimeout(() => {
-      setIsHoverExpanded(false);
-    }, 220);
-  };
+  const [isHovered, setIsHovered] = useState(false);
+  const effectiveCollapsed = collapsed && !isHovered;
 
   const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
@@ -194,22 +166,22 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
 
   return (
     <aside
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={() => collapsed && setIsHovered(true)}
+      onMouseLeave={() => collapsed && setIsHovered(false)}
       className={cn(
-      "h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex shrink-0 relative z-50 transition-[width] duration-200 ease-out will-change-[width]",
+      "h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex shrink-0 relative z-50 transition-all duration-500 ease-out",
       effectiveCollapsed ? "w-20" : "w-80"
     )}>
       {/* Brand Header */}
       <div className={cn("flex h-24 items-center mb-4 border-b border-sidebar-border bg-white/2", effectiveCollapsed ? "px-3 justify-center" : "px-6")}> 
         <Link href="/dashboard" className={cn("group flex items-center overflow-hidden", effectiveCollapsed ? "justify-center" : "w-full")}> 
-          <div className={cn("relative h-10 overflow-hidden", effectiveCollapsed ? "w-10" : "w-40")}>
+          <div className={cn("relative h-10 overflow-hidden transition-all duration-500 ease-out", effectiveCollapsed ? "w-10" : "w-40")}>
             {logoUrl ? (
               <Image 
                 src={logoUrl} 
                 alt="EditoHub Logo" 
                 fill 
-                className={cn("object-contain", effectiveCollapsed ? "object-center scale-95" : "object-left scale-100")}
+                className={cn("object-contain transition-all duration-500 ease-out", effectiveCollapsed ? "object-center scale-95" : "object-left scale-100")}
                 priority
               />
             ) : (
@@ -238,7 +210,7 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
                   key={link.label}
                   href={link.href}
                   className={cn(
-                    "relative flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors duration-150 group active:scale-[0.98]",
+                    "relative flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-300 group active:scale-[0.98]",
                     effectiveCollapsed ? "px-0 justify-center" : "px-4",
                     isActive ? "text-sidebar-accent-foreground bg-sidebar-accent border border-sidebar-border shadow-sm font-bold" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 border border-transparent"
                   )}
@@ -248,7 +220,7 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
                     <Icon className={cn("h-4 w-4 transition-colors", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70")} />
                   </span>
                   <span className={cn(
-                    "tracking-tight whitespace-nowrap overflow-hidden",
+                    "tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300 ease-out",
                     effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-45 opacity-100"
                   )}>{link.label}</span>
                   
@@ -290,7 +262,7 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
                    </label>
                </div>
                <div className={cn(
-                 "min-w-0 overflow-hidden",
+                 "min-w-0 overflow-hidden transition-all duration-200",
                  effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-45 opacity-100"
                )}>
                   <p className="truncate text-sm font-bold text-sidebar-foreground tracking-tight">
@@ -315,7 +287,7 @@ export function DashboardSidebar({ collapsed = false }: DashboardSidebarProps) {
             >
               <LogOut className="h-3.5 w-3.5" />
               <span className={cn(
-                "overflow-hidden whitespace-nowrap",
+                "overflow-hidden whitespace-nowrap transition-all duration-200",
                 effectiveCollapsed ? "max-w-0 opacity-0" : "max-w-30 opacity-100"
               )}>Disconnect</span>
             </button>

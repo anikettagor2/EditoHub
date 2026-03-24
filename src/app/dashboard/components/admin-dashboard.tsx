@@ -621,7 +621,7 @@ export function AdminDashboard() {
       .sort((a, b) => b.log.timestamp - a.log.timestamp);
 
   return (
-    <div className="space-y-10 max-w-[1720px] mx-auto pb-20 pt-4">
+    <div className="space-y-10 max-w-[1600px] mx-auto pb-20 pt-4">
        {clientsOverLimit.length > 0 && (
            <motion.div 
                initial={{ opacity: 0, y: -20 }}
@@ -866,10 +866,6 @@ export function AdminDashboard() {
                          <thead>
                             <tr className="bg-muted/30">
                                 <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Project Name</th>
-                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">PM</th>
-                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor</th>
-                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
-                                <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Completion Date</th>
                                 <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Status</th>
                                 <th className="px-6 py-4 text-[11px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Last Updated</th>
                                 <th className="px-6 py-4 border-b border-border w-[80px]"></th>
@@ -887,21 +883,6 @@ export function AdminDashboard() {
                                     <td className="px-6 py-5">
                                         <Link href={`/dashboard/projects/${project.id}`} className="text-sm font-bold text-foreground tracking-tight hover:text-primary transition-colors cursor-pointer">{project.name}</Link>
                                         <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">ID: {project.id.slice(0,12)}</div>
-                                    </td>
-                                    <td className="px-6 py-5 text-xs text-foreground font-semibold whitespace-nowrap">
-                                        {project.assignedPMId ? (users.find(u => u.uid === project.assignedPMId)?.displayName || 'Unknown PM') : 'Not Assigned'}
-                                    </td>
-                                    <td className="px-6 py-5 text-xs text-foreground font-semibold whitespace-nowrap">
-                                        {project.assignedEditorId ? (users.find(u => u.uid === project.assignedEditorId)?.displayName || 'Unknown Editor') : 'Not Assigned'}
-                                    </td>
-                                    <td className="px-6 py-5 text-xs font-black text-foreground tabular-nums whitespace-nowrap">
-                                        ₹{(project.totalCost || 0).toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-5 text-[11px] font-semibold whitespace-nowrap" suppressHydrationWarning>
-                                        {(project.completedAt || project.downloadUnlockedAt)
-                                            ? new Date((project.completedAt || project.downloadUnlockedAt) as number).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                            : <span className="text-amber-500">Pending</span>
-                                        }
                                     </td>
                                     <td className="px-6 py-5">
                                         <ProjectStatusBadges project={project} />
@@ -955,7 +936,7 @@ export function AdminDashboard() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: idx * 0.05 }}
-                                 className="hover:bg-muted/50 transition-colors group"
+                                    className="hover:bg-muted/50 transition-colors group"
                                >
                                     <td className="px-3 py-3 text-xs font-bold text-foreground/80 tabular-nums">{projectSerialMap.get(project.id) ?? idx + 1}</td>
                                     <td className="px-3 py-3">
