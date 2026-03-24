@@ -12,6 +12,12 @@ import {
 import { adminDb } from "@/lib/firebase/admin";
 import { revalidatePath } from "next/cache";
 
+const DEFAULT_SHORT_LINK_BASE_URL = "https://ed.com";
+
+function normalizeBaseUrl(url: string) {
+    return url.replace(/\/+$/, "");
+}
+
 /**
  * Triggered by the client-side upload page once a revision is successfully saved.
  * Also updates project status to 'in_review'.
@@ -42,7 +48,12 @@ export async function handleRevisionUploaded(projectId: string) {
         });
 
         // 3. Build shareable link for review
-        const baseUrl = process.env.SHORT_LINK_BASE_URL || process.env.NEXT_PUBLIC_SHORT_LINK_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://editohub.io';
+        const baseUrl = normalizeBaseUrl(
+            process.env.SHORT_LINK_BASE_URL ||
+            process.env.NEXT_PUBLIC_SHORT_LINK_BASE_URL ||
+            process.env.NEXT_PUBLIC_APP_URL ||
+            DEFAULT_SHORT_LINK_BASE_URL
+        );
         const reviewLink = `${baseUrl}/r/${revisionId}`;
 
         // 4. Notify client about new draft with version number and link
