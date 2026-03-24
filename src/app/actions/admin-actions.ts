@@ -432,7 +432,7 @@ export async function respondToAssignment(projectId: string, response: 'accepted
         // Notify based on response
         if (response === 'accepted') {
             const acceptedResults = await Promise.all([
-                notifyClientEditorAccepted(projectId),
+                notifyClientEditorAccepted(projectId, editorName),
                 pmId ? notifyPMEditorAccepted(projectId, pmId, editorName) : Promise.resolve({ success: true, error: undefined as string | undefined }),
             ]);
 

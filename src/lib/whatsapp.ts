@@ -15,6 +15,13 @@ const CAMPAIGNS = {
     PM: "PROJECT_MANAGER"
 };
 
+const CAMPAIGN_BY_NOTIFICATION: Partial<Record<NotificationType, string>> = {
+    client_project_created: 'project_submitted_client',
+    client_editor_accepted: 'pr_accept_editor',
+    client_draft_submitted: 'first_draft_uploaded_client',
+    pm_project_assigned: 'project_manager_msg',
+};
+
 // ============================================================================
 // NOTIFICATION TYPES
 // ============================================================================
@@ -361,22 +368,44 @@ export async function notifyClient(
         const phoneNumber = client.whatsappNumber || client.phoneNumber;
         if (!phoneNumber) return { success: false, error: "No phone number" };
 
-        // Draft upload template uses fixed placeholder positions.
         let params: string[];
-        if (notificationType === 'client_draft_submitted') {
-            const deliveredOn = formatDeliveredOn(extraData?.deliveredOn);
-            const fileLink = extraData?.link || '';
-            const versionOrContext = extraData?.version || 'Latest draft';
 
-            // {{1}} name, {{2}} project name, {{4}} delivered date, {{5}} link.
-            // Keep {{3}} populated for templates that reference it.
+        if (notificationType === 'client_project_created') {
+            // Template: project_submitted_client
+            // {{1}} client name, {{2}} project name, {{3}} submitted date
             params = [
                 client.displayName || 'Client',
                 project.name || 'Your Project',
-                versionOrContext,
-                deliveredOn,
-                fileLink,
+                formatSubmissionDate(project.createdAt),
             ];
+        } else if (notificationType === 'client_editor_accepted') {
+            // Template: project_accpeted_editor
+            // {{1}} client name, {{2}} editor name, {{3}} project name
+            params = [
+                client.displayName || 'Client',
+                extraData?.editorName || 'Assigned Editor',
+                project.name || 'Your Project',
+            ];
+        } else if (notificationType === 'client_draft_submitted') {
+            const deliveredOn = formatDeliveredOn(extraData?.deliveredOn);
+            const fileLink = extraData?.link || '';
+            const revisionRound = Number(extraData?.versionNumber || '1');
+
+            // First draft template: {{1}} client, {{2}} project, {{3}} date, {{4}} link
+            // Second+ draft template: {{1}} client, {{2}} project, {{3}} round, {{4}} link
+            params = revisionRound <= 1
+                ? [
+                    client.displayName || 'Client',
+                    project.name || 'Your Project',
+                    deliveredOn,
+                    fileLink,
+                ]
+                : [
+                    client.displayName || 'Client',
+                    project.name || 'Your Project',
+                    String(revisionRound),
+                    fileLink,
+                ];
         } else {
             // Default parameter structure for existing templates.
             let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
@@ -389,7 +418,11 @@ export async function notifyClient(
             ];
         }
 
-        const campaignName = notifSettings?.campaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
+        const templateCampaignName = notificationType === 'client_draft_submitted'
+            ? (Number(extraData?.versionNumber || '1') <= 1 ? 'first_draft_uploaded_client' : 'second_draft_uploaded_client')
+            : CAMPAIGN_BY_NOTIFICATION[notificationType];
+
+        const campaignName = notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
         const fallbackCampaignName =
             notifSettings?.fallbackCampaignName ||
             settings?.campaigns?.clientFallback ||
@@ -505,19 +538,33 @@ export async function notifyPM(
             }
         }
 
-        // Get message (custom or default)
-        let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
-        message = replacePlaceholders(message, { client: clientName, ...extraData });
+        let params: string[];
+        if (notificationType === 'pm_project_assigned') {
+            const projectValue = formatInrAmount(project.totalCost || project.budget || 0);
+            const projectLink = `${normalizeAppBaseUrl()}/dashboard/projects/${projectId}`;
+            // Template: project_manager_msg
+            // {{1}} PM name, {{2}} project name, {{3}} client name, {{4}} value, {{5}} project link
+            params = [
+                pm.displayName || 'Manager',
+                project.name || 'Project',
+                clientName,
+                projectValue,
+                projectLink,
+            ];
+        } else {
+            // Existing fallback behavior for other PM notifications.
+            let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
+            message = replacePlaceholders(message, { client: clientName, ...extraData });
 
-        // Build params: [name, message, projectName, details]
-        const params = [
-            pm.displayName || "Manager",
-            message,
-            project.name || "Project",
-            extraData?.details || `Client: ${clientName}`
-        ];
+            params = [
+                pm.displayName || "Manager",
+                message,
+                project.name || "Project",
+                extraData?.details || `Client: ${clientName}`
+            ];
+        }
 
-        const campaignName = notifSettings?.campaignName || settings?.campaigns?.pm || CAMPAIGNS.PM;
+        const campaignName = notifSettings?.campaignName || CAMPAIGN_BY_NOTIFICATION[notificationType] || settings?.campaigns?.pm || CAMPAIGNS.PM;
         const fallbackCampaignName = notifSettings?.fallbackCampaignName || settings?.campaigns?.pmFallback;
         return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
 
@@ -547,8 +594,8 @@ export async function notifyClientEditorAssigned(projectId: string) {
 }
 
 /** Notify client that editor accepted */
-export async function notifyClientEditorAccepted(projectId: string) {
-    return notifyClient(projectId, 'client_editor_accepted');
+export async function notifyClientEditorAccepted(projectId: string, editorName: string) {
+    return notifyClient(projectId, 'client_editor_accepted', { editorName });
 }
 
 /** Notify client about new draft */
@@ -561,6 +608,10 @@ export async function notifyClientDraftSubmitted(projectId: string, versionNumbe
     
     if (reviewLink) {
         extraData.link = reviewLink;
+    }
+
+    if (versionNumber !== undefined) {
+        extraData.versionNumber = String(versionNumber);
     }
 
     extraData.deliveredOn = new Date().toISOString();
@@ -600,8 +651,8 @@ export async function notifyEditorFeedbackReceived(projectId: string, editorId: 
 }
 
 /** Notify PM about new project from SE */
-export async function notifyPMProjectAssigned(projectId: string, pmId: string, seName: string) {
-    return notifyPM(projectId, pmId, 'pm_project_assigned', { se: seName });
+export async function notifyPMProjectAssigned(projectId: string, pmId: string, _seName: string) {
+    return notifyPM(projectId, pmId, 'pm_project_assigned');
 }
 
 /** Notify PM that editor accepted */
@@ -644,4 +695,26 @@ export async function notifyClientLegacy(projectId: string, trigger: WhatsAppTri
         'PROJECT_COMPLETED': 'client_project_completed'
     };
     return notifyClient(projectId, triggerMap[trigger], extraData);
+}
+
+function formatSubmissionDate(timestamp?: number): string {
+    const parsed = timestamp ? new Date(timestamp) : new Date();
+    const validDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    return validDate.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+}
+
+function formatInrAmount(value?: number): string {
+    const amount = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    return new Intl.NumberFormat('en-IN', {
+        maximumFractionDigits: 0,
+    }).format(amount);
+}
+
+function normalizeAppBaseUrl(): string {
+    const raw = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://editohub.com';
+    return raw.replace(/\/+$/, '');
 }
