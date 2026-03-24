@@ -431,7 +431,7 @@ export async function respondToAssignment(projectId: string, response: 'accepted
 
         // Notify based on response
         if (response === 'accepted') {
-            const acceptedResults = await Promise.all([
+            let acceptedResults = await Promise.all([
                 notifyClientEditorAccepted(projectId, editorName),
                 pmId ? notifyPMEditorAccepted(projectId, pmId, editorName) : Promise.resolve({ success: true, error: undefined as string | undefined }),
             ]);
@@ -441,6 +441,21 @@ export async function respondToAssignment(projectId: string, response: 'accepted
                     projectId,
                     error: acceptedResults[0].error,
                 });
+
+                // Retry once explicitly to avoid silent misses in the critical accept flow.
+                const retryResult = await notifyClientEditorAccepted(projectId, editorName);
+                acceptedResults = [retryResult, acceptedResults[1]];
+
+                if (!retryResult.success) {
+                    console.error('[WhatsApp] Client editor-accepted notification retry failed', {
+                        projectId,
+                        error: retryResult.error,
+                    });
+                    return {
+                        success: false,
+                        error: retryResult.error || 'Editor accepted, but WhatsApp notification to client failed.',
+                    };
+                }
             }
 
             if (pmId && !acceptedResults[1].success) {
