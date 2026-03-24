@@ -623,8 +623,8 @@ export function ClientDashboard() {
                                         <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎬 Raw Video Files</span>
                                     </div>
                                     {selectedProject.rawFiles && selectedProject.rawFiles.length > 0 ? (
-                                        <div className="grid gap-2">
-                                            {selectedProject.rawFiles.slice(0, 3).map((file: any, idx: number) => (
+                                        <div className="grid gap-2 max-h-56 overflow-y-auto pr-1">
+                                            {selectedProject.rawFiles.map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -649,9 +649,6 @@ export function ClientDashboard() {
                                                     </div>
                                                 </div>
                                             ))}
-                                            {(selectedProject.rawFiles?.length || 0) > 3 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{(selectedProject.rawFiles?.length || 0) - 3} more files</p>
-                                            )}
                                         </div>
                                     ) : (
                                         <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
@@ -668,8 +665,8 @@ export function ClientDashboard() {
 
                                     {/* Uploaded Script Files */}
                                     {selectedProject.scripts && selectedProject.scripts.length > 0 && (
-                                        <div className="grid gap-2">
-                                            {selectedProject.scripts.slice(0, 2).map((file: any, idx: number) => (
+                                        <div className="grid gap-2 max-h-56 overflow-y-auto pr-1">
+                                            {selectedProject.scripts.map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -729,8 +726,8 @@ export function ClientDashboard() {
                                         <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎧 Audio Files</span>
                                     </div>
                                     {selectedProject.audioFiles && selectedProject.audioFiles.length > 0 ? (
-                                        <div className="grid gap-2">
-                                            {selectedProject.audioFiles.slice(0, 2).map((file: any, idx: number) => (
+                                        <div className="grid gap-2 max-h-56 overflow-y-auto pr-1">
+                                            {selectedProject.audioFiles.map((file: any, idx: number) => (
                                                 <div key={`${file.url}-${idx}`} className="p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group space-y-2 overflow-hidden">
                                                     <div className="flex items-center justify-between gap-3 min-w-0">
                                                         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -747,9 +744,6 @@ export function ClientDashboard() {
                                                     <audio controls className="w-full max-w-full h-8" src={file.url} preload="metadata" />
                                                 </div>
                                             ))}
-                                            {(selectedProject.audioFiles.length || 0) > 2 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{(selectedProject.audioFiles.length || 0) - 2} more files</p>
-                                            )}
                                         </div>
                                     ) : (
                                         <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
@@ -764,8 +758,8 @@ export function ClientDashboard() {
                                         <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎞️ B-Roll Assets</span>
                                     </div>
                                     {(selectedProject as any).bRoleFiles && (selectedProject as any).bRoleFiles.length > 0 ? (
-                                        <div className="grid gap-2">
-                                            {(selectedProject as any).bRoleFiles.slice(0, 2).map((file: any, idx: number) => (
+                                        <div className="grid gap-2 max-h-56 overflow-y-auto pr-1">
+                                            {(selectedProject as any).bRoleFiles.map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         {file.type?.includes('image') ? (
@@ -791,9 +785,6 @@ export function ClientDashboard() {
                                                     </div>
                                                 </div>
                                             ))}
-                                            {((selectedProject as any).bRoleFiles?.length || 0) > 2 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{((selectedProject as any).bRoleFiles?.length || 0) - 2} more files</p>
-                                            )}
                                         </div>
                                     ) : (
                                         <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
@@ -822,8 +813,8 @@ export function ClientDashboard() {
 
                                     {/* Reference Files */}
                                     {selectedProjectStyleReferenceFiles.length > 0 && (
-                                        <div className="grid gap-2">
-                                            {selectedProjectStyleReferenceFiles.slice(0, 2).map((file: any, idx: number) => (
+                                        <div className="grid gap-2 max-h-56 overflow-y-auto pr-1">
+                                            {selectedProjectStyleReferenceFiles.map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         {file.type?.includes('image') ? (
@@ -849,9 +840,6 @@ export function ClientDashboard() {
                                                     </div>
                                                 </div>
                                             ))}
-                                            {(selectedProjectStyleReferenceFiles.length || 0) > 2 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{(selectedProjectStyleReferenceFiles.length || 0) - 2} more files</p>
-                                            )}
                                         </div>
                                     )}
 
@@ -869,8 +857,8 @@ export function ClientDashboard() {
                                         <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">📤 PM Uploaded Files</span>
                                     </div>
                                     {selectedProjectPmFiles.length > 0 ? (
-                                        <div className="grid gap-2">
-                                            {selectedProjectPmFiles.slice(0, 2).map((file: any, idx: number) => (
+                                        <div className="grid gap-2 max-h-56 overflow-y-auto pr-1">
+                                            {selectedProjectPmFiles.map((file: any, idx: number) => (
                                                 <div key={`${file.url}-${idx}`} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
                                                         {file.type?.includes('image') ? (
@@ -896,9 +884,6 @@ export function ClientDashboard() {
                                                     </div>
                                                 </div>
                                             ))}
-                                            {selectedProjectPmFiles.length > 2 && (
-                                                <p className="text-xs text-muted-foreground text-center py-1">+{selectedProjectPmFiles.length - 2} more files</p>
-                                            )}
                                         </div>
                                     ) : (
                                         <div className="p-3 rounded-lg border border-border/30 bg-muted/20">
@@ -1050,7 +1035,6 @@ export function ClientDashboard() {
     );
 }
 
-// Stats Card Component
 function StatsCard({ label, value, icon, color }: { label: string; value: string | number; icon: React.ReactNode; color: 'blue' | 'amber' | 'green' | 'purple' }) {
     const colorClasses = {
         blue: 'bg-blue-500/10 text-blue-500',

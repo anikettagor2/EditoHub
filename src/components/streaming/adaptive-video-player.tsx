@@ -137,8 +137,11 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
           const hls = new HLS({
             autoStartLoad: true,
             startLevel: 0,
+            lowLatencyMode: true,
+            startFragPrefetch: true,
             maxBufferSize: 60 * 1000 * 1000, // 60MB
-            maxBufferLength: 30, // 30 seconds
+            maxBufferLength: 12,
+            maxMaxBufferLength: 20,
             liveSyncDuration: 30,
             levelLoadingRetryDelay: 1000,
             manifestLoadingRetryDelay: 1000,
@@ -148,6 +151,7 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
 
           if (src) {
             hls.loadSource(src);
+            hls.startLoad(0);
           }
           if (videoRef.current) {
             hls.attachMedia(videoRef.current);
@@ -331,6 +335,9 @@ const AdaptiveVideoPlayer = forwardRef<AdaptiveVideoPlayerRef, AdaptiveVideoPlay
           className="w-full h-full"
           controls
           crossOrigin="anonymous"
+          preload="metadata"
+          playsInline
+          data-video-managed-player="true"
           onTimeUpdate={handleTimeUpdate}
           onDurationChange={handleDurationChange}
           onWaiting={handleWaiting}

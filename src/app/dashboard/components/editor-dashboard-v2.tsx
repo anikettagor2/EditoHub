@@ -826,8 +826,8 @@ export function EditorDashboardV2() {
                                                 <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">🎞️ B-Roll Assets</span>
                                             </div>
                                             {(selectedProjectDetails as any).bRoleFiles && (selectedProjectDetails as any).bRoleFiles.length > 0 ? (
-                                                <div className="grid gap-2">
-                                                    {(selectedProjectDetails as any).bRoleFiles.slice(0, 2).map((file: any, idx: number) => (
+                                                <div className="grid gap-2 max-h-56 overflow-y-auto pr-1">
+                                                    {(selectedProjectDetails as any).bRoleFiles.map((file: any, idx: number) => (
                                                         <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                             <div className="flex items-center gap-2 min-w-0 flex-1">
                                                                 {file.type?.includes('image') ? (
@@ -854,9 +854,6 @@ export function EditorDashboardV2() {
                                                             </div>
                                                         </div>
                                                     ))}
-                                                    {((selectedProjectDetails as any).bRoleFiles?.length || 0) > 2 && (
-                                                        <p className="text-xs text-muted-foreground text-center py-1">+{((selectedProjectDetails as any).bRoleFiles?.length || 0) - 2} more files</p>
-                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="p-3 rounded-lg border border-border/30 bg-muted/20">

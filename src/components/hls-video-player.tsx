@@ -52,10 +52,19 @@ export function HlsVideoPlayer({ src, poster, className, autoPlay = false }: Hls
 
         // hls.js
         if (Hls.isSupported()) {
-            const hls = new Hls({ autoStartLoad: true, startLevel: -1 });
+            const hls = new Hls({
+                autoStartLoad: true,
+                startLevel: 0,
+                lowLatencyMode: true,
+                maxBufferLength: 12,
+                maxMaxBufferLength: 20,
+                backBufferLength: 30,
+                startFragPrefetch: true,
+            });
             hlsRef.current = hls;
             hls.attachMedia(video);
             hls.loadSource(src);
+            hls.startLoad(0);
 
             hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
                 const available = data.levels.map((l, i) => ({ height: l.height, index: i }));
@@ -97,6 +106,8 @@ export function HlsVideoPlayer({ src, poster, className, autoPlay = false }: Hls
                 poster={poster}
                 controls
                 playsInline
+                preload={autoPlay ? "auto" : "metadata"}
+                data-video-managed-player="true"
                 autoPlay={autoPlay && !isHlsUrl} // hls.js handles autoPlay internally
                 className="w-full h-full rounded-inherit object-contain bg-black"
             />

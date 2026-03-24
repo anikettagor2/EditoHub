@@ -50,6 +50,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator)) return;
+
+    const registerVideoSw = async () => {
+      try {
+        await navigator.serviceWorker.register('/video-streaming-sw.js');
+      } catch (error) {
+        console.warn('Video streaming service worker registration failed:', error);
+      }
+    };
+
+    void registerVideoSw();
+  }, []);
+
   return (
     <ThemeProvider
       attribute="class"

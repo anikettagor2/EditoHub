@@ -31,6 +31,8 @@ import { ContactProvider } from "@/providers/contact-provider";
 import { ContactModal } from "@/components/contact-modal";
 import { Providers } from "./providers";
 import { Toaster } from "sonner";
+import { GlobalVideoWatermark } from "@/components/global-video-watermark";
+import { GlobalVideoOptimizer } from "@/components/global-video-optimizer";
 
 export default function RootLayout({
   children,
@@ -50,6 +52,8 @@ export default function RootLayout({
       >
         <Providers>
           <ContactProvider>
+             <GlobalVideoOptimizer />
+             <GlobalVideoWatermark />
              <SmoothScroll />
              <ContactModal />
              <Toaster position="top-center" richColors />

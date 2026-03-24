@@ -1,0 +1,156 @@
+"use client";
+
+import { useEffect } from "react";
+
+type WatermarkState = {
+  wrapper: HTMLElement;
+  overlay: HTMLDivElement;
+  fullscreenOverlay: HTMLDivElement;
+  isSwitchingToWrapperFullscreen: boolean;
+  onFullscreenChange: () => void;
+};
+
+const DEFAULT_COMPANY_NAME = "EditoHub";
+
+function createWatermarkNode(text: string, isFullscreen: boolean) {
+  const node = document.createElement("div");
+  node.textContent = text;
+  node.style.position = isFullscreen ? "fixed" : "absolute";
+  node.style.left = "50%";
+  node.style.top = "50%";
+  node.style.transform = "translate(-50%, -50%)";
+  node.style.opacity = "0.24";
+  node.style.color = "#ffffff";
+  node.style.fontWeight = "700";
+  node.style.letterSpacing = "0.08em";
+  node.style.textTransform = "uppercase";
+  node.style.fontSize = "clamp(10px, 1.2vw, 18px)";
+  node.style.textShadow = "0 1px 2px rgba(0,0,0,0.35)";
+  node.style.pointerEvents = "none";
+  node.style.userSelect = "none";
+  node.style.webkitUserSelect = "none";
+  node.style.zIndex = isFullscreen ? "2147483646" : "20";
+  node.style.whiteSpace = "nowrap";
+  node.style.display = isFullscreen ? "none" : "block";
+  return node;
+}
+
+export function GlobalVideoWatermark() {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const companyName = process.env.NEXT_PUBLIC_COMPANY_NAME?.trim() || DEFAULT_COMPANY_NAME;
+    const states = new Map<HTMLVideoElement, WatermarkState>();
+
+    const setupVideo = (video: HTMLVideoElement) => {
+      if (states.has(video)) return;
+
+      const wrapper = video.parentElement;
+      if (!wrapper) return;
+
+      if (window.getComputedStyle(wrapper).position === "static") {
+        wrapper.style.position = "relative";
+      }
+
+      const overlay = createWatermarkNode(companyName, false);
+      wrapper.appendChild(overlay);
+
+      const fullscreenOverlay = createWatermarkNode(companyName, true);
+      document.body.appendChild(fullscreenOverlay);
+
+      const onFullscreenChange = () => {
+        const state = states.get(video);
+        if (!state) return;
+
+        const fullscreenElement = document.fullscreenElement as HTMLElement | null;
+        const isVideoInFullscreen = !!fullscreenElement && (fullscreenElement === video || fullscreenElement.contains(video));
+
+        if (isVideoInFullscreen) {
+          // If browser enters native fullscreen on <video>, switch to wrapper fullscreen
+          // so HTML watermark overlays remain visible.
+          if (fullscreenElement === video && !state.isSwitchingToWrapperFullscreen) {
+            state.isSwitchingToWrapperFullscreen = true;
+            document.exitFullscreen()
+              .then(() => state.wrapper.requestFullscreen().catch(() => undefined))
+              .finally(() => {
+                window.setTimeout(() => {
+                  const latestState = states.get(video);
+                  if (latestState) {
+                    latestState.isSwitchingToWrapperFullscreen = false;
+                  }
+                }, 250);
+              });
+            return;
+          }
+
+          const mountTarget = fullscreenElement === video ? state.wrapper : fullscreenElement;
+          if (fullscreenOverlay.parentElement !== mountTarget) {
+            mountTarget.appendChild(fullscreenOverlay);
+          }
+
+          fullscreenOverlay.style.position = "absolute";
+          fullscreenOverlay.style.left = "50%";
+          fullscreenOverlay.style.top = "50%";
+          fullscreenOverlay.style.transform = "translate(-50%, -50%)";
+          fullscreenOverlay.style.display = "block";
+          overlay.style.display = "none";
+          return;
+        }
+
+        if (fullscreenOverlay.parentElement !== document.body) {
+          document.body.appendChild(fullscreenOverlay);
+        }
+        fullscreenOverlay.style.position = "fixed";
+        fullscreenOverlay.style.display = "none";
+        overlay.style.display = "block";
+      };
+      document.addEventListener("fullscreenchange", onFullscreenChange);
+
+      states.set(video, {
+        wrapper,
+        overlay,
+        fullscreenOverlay,
+        isSwitchingToWrapperFullscreen: false,
+        onFullscreenChange,
+      });
+    };
+
+    const teardownVideo = (video: HTMLVideoElement) => {
+      const state = states.get(video);
+      if (!state) return;
+
+      document.removeEventListener("fullscreenchange", state.onFullscreenChange);
+
+      state.overlay.remove();
+      state.fullscreenOverlay.remove();
+      states.delete(video);
+    };
+
+    const scanVideos = () => {
+      const videos = Array.from(document.querySelectorAll("video"));
+      videos.forEach((video) => setupVideo(video as HTMLVideoElement));
+
+      for (const existingVideo of Array.from(states.keys())) {
+        if (!document.body.contains(existingVideo)) {
+          teardownVideo(existingVideo);
+        }
+      }
+    };
+
+    const observer = new MutationObserver(() => {
+      scanVideos();
+    });
+
+    scanVideos();
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      for (const video of Array.from(states.keys())) {
+        teardownVideo(video);
+      }
+    };
+  }, []);
+
+  return null;
+}
