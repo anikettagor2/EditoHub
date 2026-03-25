@@ -91,10 +91,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    await Promise.allSettled([
+    // Run cleanup asynchronously so users don't wait for hundreds of delete calls.
+    void Promise.allSettled([
       ...chunkPaths.map((path) => bucket.file(path).delete({ ignoreNotFound: true })),
       ...tempFiles.map((path) => bucket.file(path).delete({ ignoreNotFound: true })),
-    ]);
+    ]).catch((cleanupError) => {
+      console.warn("[UploadCompose] Cleanup warning:", cleanupError);
+    });
 
     const downloadURL = toDownloadUrl(bucket.name, destinationPath, downloadToken);
     return NextResponse.json({ downloadURL });

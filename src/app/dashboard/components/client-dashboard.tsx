@@ -124,6 +124,7 @@ export function ClientDashboard() {
     const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [previewFile, setPreviewFile] = useState<{ url: string; type: string; name: string } | null>(null);
+    const [draftProjectIds, setDraftProjectIds] = useState<string[]>([]);
 
 
     useEffect(() => {
@@ -144,6 +145,47 @@ export function ClientDashboard() {
 
         return () => unsubscribe();
     }, [user]);
+
+    useEffect(() => {
+        const projectIds = projects
+            .map((project) => project.id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+        if (projectIds.length === 0) {
+            setDraftProjectIds([]);
+            return;
+        }
+
+        const unsubscribers: Array<() => void> = [];
+        const draftSet = new Set<string>();
+        const IN_QUERY_LIMIT = 10;
+
+        for (let i = 0; i < projectIds.length; i += IN_QUERY_LIMIT) {
+            const chunk = projectIds.slice(i, i + IN_QUERY_LIMIT);
+            const revisionsQuery = query(
+                collection(db, "revisions"),
+                where("projectId", "in", chunk)
+            );
+
+            const unsubscribe = onSnapshot(revisionsQuery, (snapshot) => {
+                // Refresh only this chunk to avoid stale values when revisions are removed.
+                chunk.forEach((id) => draftSet.delete(id));
+                snapshot.docs.forEach((docSnap) => {
+                    const pid = docSnap.data()?.projectId;
+                    if (typeof pid === "string" && pid.length > 0) {
+                        draftSet.add(pid);
+                    }
+                });
+                setDraftProjectIds(Array.from(draftSet));
+            });
+
+            unsubscribers.push(unsubscribe);
+        }
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [projects]);
 
     useEffect(() => {
         const urls = projects.flatMap((project) => {
@@ -443,7 +485,7 @@ export function ClientDashboard() {
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-3 text-center space-x-1.5 flex items-center justify-center">
-                                                        {project.status === 'in_review' && (
+                                                        {draftProjectIds.includes(project.id || "") && (
                                                             <button
                                                                 onClick={() => handleReviewClick(project)}
                                                                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 text-xs font-medium hover:bg-emerald-500/20 transition-colors"

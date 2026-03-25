@@ -8,6 +8,7 @@ import { addDoc, collection, doc, getDocs, onSnapshot, query, updateDoc, where, 
 import { Loader2, MessageSquare, Upload, Play, Share2, Copy, Download, Star, X, Send, Image as ImageIcon, Clock, Users } from "lucide-react";
 import { toast } from "sonner";
 import { registerDownload, submitEditorRating } from "@/app/actions/project-actions";
+import { handleNewComment } from "@/app/actions/notification-actions";
 import { PaymentButton } from "@/components/payment-button";
 import { uploadCommentImage } from "@/lib/firebase/storage-utils";
 
@@ -56,6 +57,15 @@ type CommentDoc = {
     isDirectConnection?: boolean;
 };
 
+type PendingComment = {
+    id: string;
+    content: string;
+    timestamp: number;
+    isDirectConnection: boolean;
+    imageFile?: File;
+    imagePreview?: string;
+};
+
 interface ReviewSystemModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -101,10 +111,13 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     const [newReply, setNewReply] = useState<{ [commentId: string]: string }>({});
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [selectedImagePreview, setSelectedImagePreview] = useState<string>("");
+    const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [savingComment, setSavingComment] = useState(false);
     const [expandedReplies, setExpandedReplies] = useState<{ [commentId: string]: boolean }>({});
     const [replyingTo, setReplyingTo] = useState<string | null>(null);
+    const pendingCommentsRef = useRef<PendingComment[]>([]);
+    const selectedImagePreviewRef = useRef<string>("");
 
     // Video state
     const [currentTime, setCurrentTime] = useState(0);
@@ -233,12 +246,36 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     };
 
     const clearImageSelection = () => {
+        if (selectedImagePreview) {
+            URL.revokeObjectURL(selectedImagePreview);
+        }
         setSelectedImage(null);
         setSelectedImagePreview("");
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
     };
+
+    useEffect(() => {
+        pendingCommentsRef.current = pendingComments;
+    }, [pendingComments]);
+
+    useEffect(() => {
+        selectedImagePreviewRef.current = selectedImagePreview;
+    }, [selectedImagePreview]);
+
+    useEffect(() => {
+        return () => {
+            if (selectedImagePreviewRef.current) {
+                URL.revokeObjectURL(selectedImagePreviewRef.current);
+            }
+            pendingCommentsRef.current.forEach((comment) => {
+                if (comment.imagePreview) {
+                    URL.revokeObjectURL(comment.imagePreview);
+                }
+            });
+        };
+    }, []);
 
     const startDownload = async () => {
         if (!project?.id || !selectedRevisionId || !selectedRevision) return;
@@ -339,47 +376,131 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         }
     };
 
-    // Enhanced comment handler with image support
-    const handleAddComment = async () => {
+    const buildDraftComment = (): PendingComment | null => {
+        const content = newComment.trim();
+        if (!content && !selectedImage) {
+            return null;
+        }
+
+        return {
+            id: `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            content,
+            timestamp: activeTab === 'timeline' ? currentTime : 0,
+            isDirectConnection: activeTab === 'direct',
+            imageFile: selectedImage || undefined,
+            imagePreview: selectedImagePreview || undefined,
+        };
+    };
+
+    const removeQueuedComment = (queuedId: string) => {
+        setPendingComments((prev) => {
+            const target = prev.find((item) => item.id === queuedId);
+            if (target?.imagePreview) {
+                URL.revokeObjectURL(target.imagePreview);
+            }
+            return prev.filter((item) => item.id !== queuedId);
+        });
+    };
+
+    const handleQueueComment = () => {
         if (!project?.id || !selectedRevisionId) return;
-        if (!newComment.trim() && !selectedImage) {
+        const draft = buildDraftComment();
+        if (!draft) {
             toast.error("Write a comment or upload an image.");
+            return;
+        }
+
+        setPendingComments((prev) => [...prev, draft]);
+        setNewComment("");
+        setSelectedImage(null);
+        setSelectedImagePreview("");
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+
+        const timeLabel = draft.isDirectConnection ? " (Direct Connection)" : ` at ${formatTime(draft.timestamp)}`;
+        toast.success(`Comment queued${timeLabel}`);
+    };
+
+    const handleSendQueuedComments = async () => {
+        if (!project?.id || !selectedRevisionId) return;
+
+        const draft = buildDraftComment();
+        const commentsToSend = [...pendingComments, ...(draft ? [draft] : [])];
+
+        if (commentsToSend.length === 0) {
+            toast.error("Add at least one comment to send.");
             return;
         }
 
         setSavingComment(true);
         try {
-            let imageUrl = "";
-            
-            if (selectedImage) {
-                setUploadingImage(true);
-                imageUrl = await uploadCommentImage(selectedImage, project.id, selectedRevisionId);
-                setUploadingImage(false);
-            }
+            const failedQueue: PendingComment[] = [];
+            let sentCount = 0;
 
-            await addDoc(collection(db, "comments"), {
-                projectId: project.id,
-                revisionId: selectedRevisionId,
-                userId: user?.uid || "guest",
-                userName: user?.displayName || "User",
-                userRole: (user as any)?.role || "guest",
-                content: newComment.trim(),
-                imageUrl: imageUrl || null,
-                timestamp: activeTab === 'timeline' ? currentTime : 0,
-                createdAt: Date.now(),
-                status: "open",
-                replies: [],
-                isDirectConnection: activeTab === 'direct',
-            });
+            for (const queued of commentsToSend) {
+                let imageUrl = "";
+
+                if (queued.imageFile) {
+                    setUploadingImage(true);
+                    imageUrl = await uploadCommentImage(queued.imageFile, project.id, selectedRevisionId);
+                    setUploadingImage(false);
+                }
+
+                try {
+                    await addDoc(collection(db, "comments"), {
+                        projectId: project.id,
+                        revisionId: selectedRevisionId,
+                        userId: user?.uid || "guest",
+                        userName: user?.displayName || "User",
+                        userRole: (user as any)?.role || "guest",
+                        content: queued.content,
+                        imageUrl: imageUrl || null,
+                        timestamp: queued.timestamp,
+                        createdAt: Date.now(),
+                        status: "open",
+                        replies: [],
+                        isDirectConnection: queued.isDirectConnection,
+                    });
+
+                    const notifyResult = await handleNewComment(
+                        project.id,
+                        user?.uid || "guest",
+                        user?.displayName || "User",
+                        (user as any)?.role || "guest",
+                        queued.content,
+                        selectedRevisionId
+                    );
+
+                    if (!notifyResult.success) {
+                        console.error("[WhatsApp] Comment notification failed:", notifyResult.error);
+                    }
+
+                    if (queued.imagePreview) {
+                        URL.revokeObjectURL(queued.imagePreview);
+                    }
+                    sentCount += 1;
+                } catch (commentError) {
+                    console.error("[Review] Failed to send queued comment", commentError);
+                    failedQueue.push(queued);
+                }
+            }
 
             setNewComment("");
             clearImageSelection();
-            const timeLabel = activeTab === 'timeline' ? ` at ${formatTime(currentTime)}` : " (Direct Connection)";
-            toast.success(`Comment added${timeLabel}`);
+            setPendingComments(failedQueue);
+
+            if (sentCount > 0) {
+                toast.success(`${sentCount} comment${sentCount > 1 ? 's' : ''} sent.`);
+            }
+            if (failedQueue.length > 0) {
+                toast.error(`${failedQueue.length} comment${failedQueue.length > 1 ? 's' : ''} failed. Kept in queue.`);
+            }
         } catch (error) {
             console.error("Add comment failed:", error);
-            toast.error("Failed to add comment.");
+            toast.error("Failed to send queued comments.");
         } finally {
+            setUploadingImage(false);
             setSavingComment(false);
         }
     };
@@ -751,8 +872,15 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                                 Image
                             </button>
                             <button
-                                onClick={handleAddComment}
+                                onClick={handleQueueComment}
                                 disabled={savingComment || uploadingImage || (!newComment.trim() && !selectedImage) || !selectedRevisionId}
+                                className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/40 text-muted-foreground text-xs font-bold uppercase tracking-widest disabled:opacity-50 hover:bg-muted/60"
+                            >
+                                Add
+                            </button>
+                            <button
+                                onClick={handleSendQueuedComments}
+                                disabled={savingComment || uploadingImage || (pendingComments.length === 0 && !newComment.trim() && !selectedImage) || !selectedRevisionId}
                                 className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest disabled:opacity-50 hover:bg-primary/90"
                             >
                                 {savingComment || uploadingImage ? (
@@ -760,9 +888,48 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                                 ) : (
                                     <Send className="h-3.5 w-3.5" />
                                 )}
-                                {activeTab === 'timeline' ? `@${formatTime(currentTime)}` : "Send"}
+                                {pendingComments.length > 0 ? `Send (${pendingComments.length + ((newComment.trim() || selectedImage) ? 1 : 0)})` : "Send"}
                             </button>
                         </div>
+
+                        {pendingComments.length > 0 && (
+                            <div className="space-y-2 rounded-lg border border-border bg-background/70 p-2.5">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Queued Comments ({pendingComments.length})</p>
+                                    <button
+                                        onClick={() => {
+                                            pendingComments.forEach((item) => {
+                                                if (item.imagePreview) URL.revokeObjectURL(item.imagePreview);
+                                            });
+                                            setPendingComments([]);
+                                        }}
+                                        className="text-[10px] font-bold uppercase tracking-widest text-destructive/70 hover:text-destructive"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                                <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                                    {pendingComments.map((queued) => (
+                                        <div key={queued.id} className="flex items-start justify-between gap-2 rounded-md border border-border/80 bg-muted/30 px-2 py-1.5">
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] font-bold text-primary">
+                                                    {queued.isDirectConnection ? 'Direct' : `@${formatTime(queued.timestamp)}`}
+                                                </p>
+                                                <p className="text-[11px] text-foreground whitespace-pre-wrap break-words">
+                                                    {queued.content || 'Image comment'}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => removeQueuedComment(queued.id)}
+                                                className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-destructive"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Comments Display */}

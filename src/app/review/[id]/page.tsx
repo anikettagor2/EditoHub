@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { handleNewComment } from "@/app/actions/notification-actions";
 
 type RevisionDoc = {
     id: string;
@@ -240,6 +241,19 @@ export default function GuestReviewPage() {
                 createdAt: Date.now(),
                 status: "open",
             });
+
+            const notifyResult = await handleNewComment(
+                revision.projectId,
+                "guest",
+                `${guestName} (Guest)`,
+                "client",
+                newComment.trim(),
+                revision.id
+            );
+
+            if (!notifyResult.success) {
+                console.error("[WhatsApp] Guest comment notification failed:", notifyResult.error);
+            }
 
             setNewComment("");
             toast.success(`Comment added at ${formatTime(currentTime)}`);

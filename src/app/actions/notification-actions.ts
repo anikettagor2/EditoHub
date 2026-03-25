@@ -119,12 +119,23 @@ export async function handleNewComment(
     projectId: string, 
     commenterId: string, 
     commenterName: string, 
-    commenterRole: string
+    commenterRole: string,
+    commentText?: string,
+    revisionId?: string
 ) {
     try {
         const projectSnap = await adminDb.collection('projects').doc(projectId).get();
         if (!projectSnap.exists) return { success: false, error: "Project not found" };
         const project = projectSnap.data();
+        const baseUrl = normalizeBaseUrl(
+            process.env.SHORT_LINK_BASE_URL ||
+            process.env.NEXT_PUBLIC_SHORT_LINK_BASE_URL ||
+            process.env.NEXT_PUBLIC_APP_URL ||
+            DEFAULT_SHORT_LINK_BASE_URL
+        );
+        const safeRevisionId = revisionId || '';
+        const reviewLink = safeRevisionId ? `${baseUrl}/r/${safeRevisionId}` : `${baseUrl}/dashboard/projects/${projectId}`;
+        const commentSnippet = (commentText || '').trim();
 
         // Determine who to notify based on commenter role
         if (commenterRole === 'client') {
@@ -132,7 +143,7 @@ export async function handleNewComment(
             if (project?.assignedEditorId) {
                 const clientSnap = await adminDb.collection('users').doc(commenterId).get();
                 const clientName = clientSnap.exists ? clientSnap.data()?.displayName || 'Client' : 'Client';
-                const editorCommentResult = await notifyEditorNewComment(projectId, project.assignedEditorId, clientName);
+                const editorCommentResult = await notifyEditorNewComment(projectId, project.assignedEditorId, clientName, commentSnippet, reviewLink);
                 if (!editorCommentResult.success) {
                     console.error('[WhatsApp] Editor new-comment notification failed', {
                         projectId,
@@ -154,7 +165,7 @@ export async function handleNewComment(
         } else if (commenterRole === 'editor' || commenterRole === 'video_editor') {
             // Editor commented -> notify client and PM
             if (project?.clientId) {
-                const clientCommentResult = await notifyClientNewComment(projectId, commenterName);
+                const clientCommentResult = await notifyClientNewComment(projectId, commenterName, commentSnippet, reviewLink);
                 if (!clientCommentResult.success) {
                     console.error('[WhatsApp] Client editor-comment notification failed', {
                         projectId,
@@ -175,7 +186,7 @@ export async function handleNewComment(
         } else if (commenterRole === 'project_manager') {
             // PM commented -> notify client and editor
             if (project?.clientId) {
-                const clientCommentResult = await notifyClientNewComment(projectId, commenterName);
+                const clientCommentResult = await notifyClientNewComment(projectId, commenterName, commentSnippet, reviewLink);
                 if (!clientCommentResult.success) {
                     console.error('[WhatsApp] Client PM-comment notification failed', {
                         projectId,
@@ -186,7 +197,7 @@ export async function handleNewComment(
             if (project?.assignedEditorId) {
                 const clientSnap = project.clientId ? await adminDb.collection('users').doc(project.clientId).get() : null;
                 const clientName = clientSnap?.exists ? clientSnap.data()?.displayName || 'Client' : 'Client';
-                const editorCommentResult = await notifyEditorNewComment(projectId, project.assignedEditorId, clientName);
+                const editorCommentResult = await notifyEditorNewComment(projectId, project.assignedEditorId, clientName, commentSnippet, reviewLink);
                 if (!editorCommentResult.success) {
                     console.error('[WhatsApp] Editor PM-comment notification failed', {
                         projectId,

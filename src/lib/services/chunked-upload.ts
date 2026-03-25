@@ -25,9 +25,12 @@ import {
 const MIN_CHUNK_SIZE = 4 * 1024 * 1024;   // 4 MB
 const MID_CHUNK_SIZE = 8 * 1024 * 1024;   // 8 MB
 const MAX_CHUNK_SIZE = 16 * 1024 * 1024;  // 16 MB
+const ULTRA_CHUNK_SIZE = 32 * 1024 * 1024; // 32 MB
 const DEFAULT_CONCURRENT = 4;
-const MAX_CONCURRENT = 10;
+const MAX_CONCURRENT = 16;
 const COMPOSE_BATCH_LIMIT = 32;
+const CHUNK_RETRY_LIMIT = 3;
+const PROGRESS_THROTTLE_MS = 120;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -88,12 +91,22 @@ function getUploadTuning(fileSize: number) {
   const downlink = Number(connection?.downlink || 0);
   const saveData = Boolean(connection?.saveData);
   const effectiveType = String(connection?.effectiveType || "").toLowerCase();
+  const cpuCores = Number((navigator as any)?.hardwareConcurrency || 4);
+  const memoryGb = Number((navigator as any)?.deviceMemory || 4);
 
   if (saveData || effectiveType === "slow-2g" || effectiveType === "2g") {
     return { chunkSize: MIN_CHUNK_SIZE, concurrency: 2 };
   }
 
-  if (downlink >= 25 && fileSize >= 200 * 1024 * 1024) {
+  if (downlink >= 80 && fileSize >= 1024 * 1024 * 1024) {
+    return { chunkSize: ULTRA_CHUNK_SIZE, concurrency: Math.min(MAX_CONCURRENT, 12) };
+  }
+
+  if (downlink >= 40 && fileSize >= 350 * 1024 * 1024) {
+    return { chunkSize: ULTRA_CHUNK_SIZE, concurrency: Math.min(MAX_CONCURRENT, 10) };
+  }
+
+  if (downlink >= 20 && fileSize >= 200 * 1024 * 1024) {
     return { chunkSize: MAX_CHUNK_SIZE, concurrency: Math.min(MAX_CONCURRENT, 8) };
   }
 
@@ -103,6 +116,10 @@ function getUploadTuning(fileSize: number) {
 
   if (downlink > 0 && downlink < 3) {
     return { chunkSize: MIN_CHUNK_SIZE, concurrency: 3 };
+  }
+
+  if (cpuCores >= 8 && memoryGb >= 8 && fileSize >= 150 * 1024 * 1024) {
+    return { chunkSize: MAX_CHUNK_SIZE, concurrency: Math.min(MAX_CONCURRENT, 7) };
   }
 
   return { chunkSize: MID_CHUNK_SIZE, concurrency: DEFAULT_CONCURRENT };
@@ -172,6 +189,36 @@ async function uploadChunk(
       }
     );
   });
+}
+
+async function uploadChunkWithRetry(
+  blob: Blob,
+  path: string,
+  onProgress: (bytes: number) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= CHUNK_RETRY_LIMIT; attempt += 1) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    try {
+      return await uploadChunk(blob, path, onProgress, signal);
+    } catch (error) {
+      lastError = error;
+      const isAbort = error instanceof DOMException && error.name === "AbortError";
+      if (isAbort || attempt >= CHUNK_RETRY_LIMIT) {
+        throw error;
+      }
+
+      const backoffMs = 300 * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Chunk upload failed");
 }
 
 /**
@@ -290,17 +337,24 @@ export async function startChunkedUpload(
 
   let sampleBytes = bytesFromCompleted();
   let sampleTime = Date.now();
+  let lastProgressEmit = 0;
   let speedBps = 0;
+  let lastPersistAt = 0;
 
-  const emitProgress = (status: ChunkedUploadProgress["status"]) => {
+  const emitProgress = (status: ChunkedUploadProgress["status"], force = false) => {
     const uploaded = Math.min(file.size, bytesFromCompleted() + bytesFromLive());
     const now = Date.now();
+    if (!force && status === "uploading" && now - lastProgressEmit < PROGRESS_THROTTLE_MS) {
+      return;
+    }
+
     const dt = (now - sampleTime) / 1000;
     if (dt >= 0.3) {
       speedBps = Math.max(0, (uploaded - sampleBytes) / dt);
       sampleBytes = uploaded;
       sampleTime = now;
     }
+    lastProgressEmit = now;
 
     const remaining = Math.max(0, file.size - uploaded);
     onProgress({
@@ -317,9 +371,30 @@ export async function startChunkedUpload(
 
   emitProgress("uploading");
 
+  const persistCompletedChunks = (force = false) => {
+    if (!canPersistSession) return;
+
+    const now = Date.now();
+    if (!force && completedSet.size !== totalChunks) {
+      const shouldBatchPersist = completedSet.size % 6 === 0;
+      const shouldTimePersist = now - lastPersistAt >= 2000;
+      if (!shouldBatchPersist && !shouldTimePersist) {
+        return;
+      }
+    }
+
+    lastPersistAt = now;
+    void updateDoc(sessionRef, {
+      completedChunks: Array.from(completedSet).sort((a, b) => a - b),
+      updatedAt: Date.now(),
+    }).catch(() => {
+      // best-effort persistence only
+    });
+  };
+
   try {
     const uploadFns = pendingIndices.map((index) => () =>
-      uploadChunk(
+      uploadChunkWithRetry(
         chunks[index],
         chunkPaths[index],
         (bytes) => {
@@ -334,21 +409,12 @@ export async function startChunkedUpload(
       const chunkIndex = pendingIndices[localIndex];
       completedSet.add(chunkIndex);
       chunkTransferred.delete(chunkIndex);
-      emitProgress("uploading");
-
-      if (canPersistSession) {
-        try {
-          await updateDoc(sessionRef, {
-            completedChunks: Array.from(completedSet).sort((a, b) => a - b),
-            updatedAt: Date.now(),
-          });
-        } catch {
-          // best-effort persistence only
-        }
-      }
+      emitProgress("uploading", true);
+      persistCompletedChunks();
     });
 
-    emitProgress("assembling");
+    persistCompletedChunks(true);
+    emitProgress("assembling", true);
 
     const downloadURL = await composeUploadedChunks({
       projectId,

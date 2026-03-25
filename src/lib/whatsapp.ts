@@ -19,6 +19,8 @@ const CAMPAIGN_BY_NOTIFICATION: Partial<Record<NotificationType, string>> = {
     client_project_created: 'project_submitted_client',
     client_editor_accepted: 'pr_accept_editor',
     client_draft_submitted: 'first_draft_uploaded_client',
+    client_new_comment: 'comment',
+    editor_new_comment: 'comment',
     pm_project_assigned: 'project_manager_msg',
 };
 
@@ -408,6 +410,17 @@ export async function notifyClient(
                     String(revisionRound),
                     fileLink,
                 ];
+        } else if (notificationType === 'client_new_comment') {
+            const commentText = (extraData?.commentText || '').trim();
+            const compactComment = commentText.length > 110
+                ? `${commentText.slice(0, 107)}...`
+                : commentText;
+            const reviewLink = extraData?.reviewLink || extraData?.link || '';
+            params = [
+                client.displayName || 'Client',
+                compactComment ? `${project.name || 'Your Project'} - ${compactComment}` : (project.name || 'Your Project'),
+                reviewLink,
+            ];
         } else {
             // Default parameter structure for existing templates.
             let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
@@ -424,7 +437,8 @@ export async function notifyClient(
             ? (Number(extraData?.versionNumber || '1') <= 1 ? 'first_draft_uploaded_client' : 'second_draft_uploaded_client')
             : CAMPAIGN_BY_NOTIFICATION[notificationType];
 
-        const campaignName = notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
+        const forcedCommentCampaign = notificationType === 'client_new_comment' ? 'comment' : undefined;
+        const campaignName = forcedCommentCampaign || notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
         const fallbackCampaignName =
             notifSettings?.fallbackCampaignName ||
             settings?.campaigns?.clientFallback ||
@@ -473,19 +487,35 @@ export async function notifyEditor(
         const phoneNumber = editor.whatsappNumber || editor.phoneNumber;
         if (!phoneNumber) return { success: false, error: "No phone number" };
 
-        // Get message (custom or default)
-        let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
-        message = replacePlaceholders(message, extraData || {});
+        let params: string[];
+        if (notificationType === 'editor_new_comment') {
+            const commentText = (extraData?.commentText || '').trim();
+            const compactComment = commentText.length > 110
+                ? `${commentText.slice(0, 107)}...`
+                : commentText;
+            const reviewLink = extraData?.reviewLink || extraData?.link || '';
+            params = [
+                editor.displayName || 'Editor',
+                compactComment ? `${project.name || 'Project'} - ${compactComment}` : (project.name || 'Project'),
+                reviewLink,
+            ];
+        } else {
+            // Get message (custom or default)
+            let message = notifSettings?.message || DEFAULT_MESSAGES[notificationType];
+            message = replacePlaceholders(message, extraData || {});
 
-        // Build params: [name, message, projectName, extraInfo]
-        const params = [
-            editor.displayName || "Editor",
-            message,
-            project.name || "Project",
-            extraData?.extra || `Deadline: ${project.deadline || 'Not set'}`
-        ];
+            // Build params: [name, message, projectName, extraInfo]
+            params = [
+                editor.displayName || "Editor",
+                message,
+                project.name || "Project",
+                extraData?.extra || `Deadline: ${project.deadline || 'Not set'}`
+            ];
+        }
 
-        const campaignName = notifSettings?.campaignName || settings?.campaigns?.editor || CAMPAIGNS.EDITOR;
+        const templateCampaignName = CAMPAIGN_BY_NOTIFICATION[notificationType];
+        const forcedCommentCampaign = notificationType === 'editor_new_comment' ? 'comment' : undefined;
+        const campaignName = forcedCommentCampaign || notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.editor || CAMPAIGNS.EDITOR;
         const fallbackCampaignName = notifSettings?.fallbackCampaignName || settings?.campaigns?.editorFallback;
         return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
 
@@ -659,8 +689,8 @@ export async function notifyClientDraftSubmitted(projectId: string, versionNumbe
 }
 
 /** Notify client about new comment */
-export async function notifyClientNewComment(projectId: string, commenterName: string) {
-    return notifyClient(projectId, 'client_new_comment', { name: commenterName });
+export async function notifyClientNewComment(projectId: string, commenterName: string, commentText?: string, reviewLink?: string) {
+    return notifyClient(projectId, 'client_new_comment', { name: commenterName, commentText: commentText || '', reviewLink: reviewLink || '' });
 }
 
 /** Notify client about project completion */
@@ -677,8 +707,8 @@ export async function notifyEditorProjectAssigned(projectId: string, editorId: s
 }
 
 /** Notify editor about new comment from client */
-export async function notifyEditorNewComment(projectId: string, editorId: string, clientName: string) {
-    return notifyEditor(projectId, editorId, 'editor_new_comment', { client: clientName });
+export async function notifyEditorNewComment(projectId: string, editorId: string, clientName: string, commentText?: string, reviewLink?: string) {
+    return notifyEditor(projectId, editorId, 'editor_new_comment', { client: clientName, commentText: commentText || '', reviewLink: reviewLink || '' });
 }
 
 /** Notify editor about client feedback */
