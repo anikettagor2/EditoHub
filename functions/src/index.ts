@@ -98,17 +98,17 @@ function campaignByRole(role?: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Send WhatsApp notification to PM when editor doesn't accept assignment
+// Send WhatsApp notification to PM when editor rejects or doesn't accept
 // ---------------------------------------------------------------------------
-async function sendAssignmentTimeoutWhatsApp(params: {
+async function sendAssignmentRejectedWhatsApp(params: {
     pmName: string;
     pmPhone: string;
     projectName: string;
-    editorName?: string;
+    rejectionReason: string;
 }): Promise<void> {
     const apiKey = process.env.AISENSY_API_KEY;
     if (!apiKey) {
-        console.warn("[WhatsApp] AISENSY_API_KEY missing; skipping assignment-timeout notification");
+        console.warn("[WhatsApp] AISENSY_API_KEY missing; skipping assignment-rejected notification");
         return;
     }
 
@@ -116,8 +116,7 @@ async function sendAssignmentTimeoutWhatsApp(params: {
     const settings = settingsSnap.exists ? settingsSnap.data() : null;
     if (settings && settings.enabled === false) return;
 
-    const message = `Editor did not respond to project assignment within 15 minutes: "${params.projectName}". Please reassign to another editor or take appropriate action.`;
-    const campaignName = settings?.campaigns?.pm || "PROJECT_MANAGER";
+    const campaignName = "pro_delay";
 
     const payload = {
         apiKey,
@@ -125,9 +124,10 @@ async function sendAssignmentTimeoutWhatsApp(params: {
         destination: params.pmPhone,
         userName: params.pmPhone,
         templateParams: [
-            params.pmName || "Project Manager",
-            message,
-            "EditoHub Assignment Timeout",
+            params.pmName || "Project Manager",     // {{1}} PM Name
+            params.projectName || "Unknown Project",// {{2}} Project Name
+            params.rejectionReason || "rejected",   // {{3}} Rejection reason ("delayed in accepting" or editor reason)
+            params.projectName || "Unknown Project",// {{4}} Project name again
         ],
         source: "EditoHub-Functions",
     };
@@ -143,9 +143,9 @@ async function sendAssignmentTimeoutWhatsApp(params: {
 
     if (!response.ok) {
         const text = await response.text();
-        console.error("[WhatsApp] assignment-timeout send failed:", response.status, text);
+        console.error("[WhatsApp] assignment-rejected send failed:", response.status, text);
     } else {
-        console.log(`[WhatsApp] PM notified of assignment timeout for project: ${params.projectName}`);
+        console.log(`[WhatsApp] PM notified of assignment rejection for project: ${params.projectName}`);
     }
 }
 
@@ -223,39 +223,52 @@ export const handleAssignmentTimeout = functions.pubsub
 
             if (!editorId || !pmId) continue;
 
-            // Get editor and PM details
-            const editorSnap = await admin.firestore().collection("users").doc(editorId).get();
-            const pmSnap = await admin.firestore().collection("users").doc(pmId).get();
-
-            const editor = editorSnap.data();
-            const pm = pmSnap.data();
-
-            // Mark assignment as automatically rejected
+            // Mark assignment as automatically rejected 
+            // This triggers onProjectAssignmentRejected which sends the WhatsApp message.
             await projectDoc.ref.update({
                 assignmentStatus: "rejected",
-                rejectionReason: "Auto-rejected: Editor did not accept assignment within 15 minutes",
+                rejectionReason: "delayed in accepting",
                 autoRejectedAt: now,
                 updatedAt: now,
             });
-
-            // Send WhatsApp notification to PM
-            if (pm?.whatsappNumber || pm?.phoneNumber) {
-                const pmPhone = pm.whatsappNumber || pm.phoneNumber;
-                const normalizedPhone = normalizePhone(pmPhone);
-                if (normalizedPhone) {
-                    await sendAssignmentTimeoutWhatsApp({
-                        pmName: pm.displayName || "Project Manager",
-                        pmPhone: normalizedPhone,
-                        projectName: project.name || "Unknown Project",
-                        editorName: editor?.displayName,
-                    });
-                }
-            }
 
             console.log(`[AssignmentTimeout] Project auto-rejected: ${projectDoc.id}, Editor: ${editorId}`);
         }
 
         return null;
+    });
+
+// ---------------------------------------------------------------------------
+// Trigger: Send pro_delay WhatsApp notification on assignment rejection
+// ---------------------------------------------------------------------------
+export const onProjectAssignmentRejected = functions.firestore
+    .document("projects/{projectId}")
+    .onUpdate(async (change: any, context: any) => {
+        const newData = change.after.data();
+        const oldData = change.before.data();
+
+        // Check if transition is uniquely to "rejected" state
+        if (newData.assignmentStatus === "rejected" && oldData.assignmentStatus !== "rejected") {
+            const pmId = newData.assignedPMId;
+            if (!pmId) return;
+
+            const pmSnap = await admin.firestore().collection("users").doc(pmId).get();
+            if (!pmSnap.exists) return;
+
+            const pm = pmSnap.data();
+            if (pm?.whatsappNumber || pm?.phoneNumber) {
+                const pmPhone = pm.whatsappNumber || pm.phoneNumber;
+                const normalizedPhone = normalizePhone(pmPhone);
+                if (normalizedPhone) {
+                    await sendAssignmentRejectedWhatsApp({
+                        pmName: pm.displayName || "Project Manager",
+                        pmPhone: normalizedPhone,
+                        projectName: newData.name || "Unknown Project",
+                        rejectionReason: newData.rejectionReason || "rejected",
+                    });
+                }
+            }
+        }
     });
 
 // ---------------------------------------------------------------------------
