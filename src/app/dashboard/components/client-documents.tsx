@@ -9,6 +9,8 @@ import { motion } from "framer-motion";
 import { FileText, Download, Upload, Trash2, Eye, Loader2, Link as LinkIcon, FileCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
+
 
 interface ClientDocumentsProps {
     userProfile: User;
@@ -23,6 +25,14 @@ export function ClientDocuments({ userProfile, isClient }: ClientDocumentsProps)
         if (!e.target.files || !e.target.files[0] || !userProfile.uid) return;
         
         const file = e.target.files[0];
+
+        // File size validation
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`File is too large. Max size allowed is ${MAX_FILE_SIZE_GB}GB.`);
+            e.target.value = '';
+            return;
+        }
+
         setUploadingDocType(docType);
         
         try {

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { 
@@ -61,7 +61,8 @@ import {
     Bell,
     Film,
     Settings,
-    Phone
+    Phone,
+    Download
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -1751,12 +1752,12 @@ export function AdminDashboard() {
                             />
                         </div>
 
-                        {/* System Settings Section */}
                         <div className="space-y-3 pt-4 border-t border-border">
                             <h3 className="text-sm font-bold text-foreground flex items-center gap-2 px-1">
                                 <Settings className="h-4 w-4 text-orange-500" />
                                 System Settings
                             </h3>
+                            
                             <div className="p-4 border border-border bg-muted/50 rounded-2xl flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
@@ -1770,11 +1771,41 @@ export function AdminDashboard() {
                                 <Switch 
                                     checked={systemSettings.allowDuplicatePhone === true}
                                     onCheckedChange={async (checked) => {
-                                        setSystemSettings({ ...systemSettings, allowDuplicatePhone: checked });
-                                        await updateSystemSettings({ allowDuplicatePhone: checked });
+                                        const newSettings = { ...systemSettings, allowDuplicatePhone: checked };
+                                        setSystemSettings(newSettings);
+                                        await updateSystemSettings(newSettings);
                                         toast.success(checked ? "Duplicate phone numbers allowed" : "Phone numbers must be unique");
                                     }}
                                 />
+                            </div>
+
+                            <div className="p-4 border border-border bg-muted/50 rounded-2xl flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                        <Download className="h-5 w-5 text-blue-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-foreground">Default Download Limit</p>
+                                        <p className="text-[10px] text-muted-foreground">Maximum number of times a client can download a revision</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Input 
+                                        type="number"
+                                        value={systemSettings.downloadLimit ?? 3}
+                                        onChange={(e) => setSystemSettings({ ...systemSettings, downloadLimit: parseInt(e.target.value) || 0 })}
+                                        onBlur={async () => {
+                                            const limit = systemSettings.downloadLimit ?? 3;
+                                            const newSettings = { ...systemSettings, downloadLimit: limit };
+                                            setSystemSettings(newSettings);
+                                            await updateSystemSettings(newSettings);
+                                            toast.success(`Download limit updated to ${limit}`);
+                                        }}
+                                        className="w-20 text-center font-bold"
+                                        min={1}
+                                        max={100}
+                                    />
+                                </div>
                             </div>
                         </div>
 

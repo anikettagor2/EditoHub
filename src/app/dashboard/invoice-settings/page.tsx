@@ -9,6 +9,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
 import {
     Loader2,
     Save,
@@ -108,8 +109,8 @@ export default function InvoiceSettingsPage() {
             return;
         }
 
-        if (file.size > 2 * 1024 * 1024) {
-            toast.error("Image must be less than 2MB");
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`Image must be less than ${MAX_FILE_SIZE_GB}GB`);
             return;
         }
 
@@ -251,7 +252,7 @@ export default function InvoiceSettingsPage() {
                                     {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                                     {uploading ? "Uploading..." : "Upload Logo"}
                                 </button>
-                                <p className="text-xs text-muted-foreground mt-1">PNG, JPG (max 2MB)</p>
+                                <p className="text-xs text-muted-foreground mt-1">PNG, JPG (max {MAX_FILE_SIZE_GB}GB)</p>
                             </div>
                         </div>
                     </motion.div>

@@ -58,6 +58,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
+
 import { 
     DropdownMenu, 
     DropdownMenuContent, 
@@ -394,9 +396,19 @@ export function ProjectManagerDashboard() {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
+        const file = files[0];
+
+        // File size validation
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`File is too large. Max size allowed is ${MAX_FILE_SIZE_GB}GB.`);
+            if (pmFileInput) {
+                pmFileInput.value = '';
+            }
+            return;
+        }
+
         setIsUploadingPMFile(true);
         try {
-            const file = files[0];
             const timestamp = Date.now();
             const fileName = `${timestamp}-${file.name}`;
             const storageRef = ref(storage, `projects/${inspectProject.id}/pm-files/${fileName}`);

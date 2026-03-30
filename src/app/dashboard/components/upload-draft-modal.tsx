@@ -24,6 +24,8 @@ import { cn } from "@/lib/utils";
 import { handleRevisionUploaded } from "@/app/actions/notification-actions";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
+
 
 interface UploadDraftModalProps {
     isOpen: boolean;
@@ -76,8 +78,8 @@ export function UploadDraftModal({
         e.preventDefault();
         if (!file || !user || !projectId) return;
 
-        if (file.size > 5 * 1024 * 1024 * 1024) {
-            toast.error("File is too large. Max size is 5 GB.");
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`File is too large. Max size allowed is ${MAX_FILE_SIZE_GB}GB.`);
             return;
         }
 
@@ -297,7 +299,7 @@ export function UploadDraftModal({
                                                         Upload Video
                                                     </p>
                                                     <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-                                                        MP4 · MOV · WEBM // MAX 5 GB
+                                                        MP4 · MOV · WEBM // MAX {MAX_FILE_SIZE_GB} GB
                                                     </p>
                                                 </div>
                                             </div>

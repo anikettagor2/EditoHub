@@ -128,10 +128,15 @@ export async function registerDownload(projectId: string, revisionId: string) {
         const projectData = projectSnap.data() as Project;
         const currentCount = data.downloadCount || 0;
 
-        console.log(`[registerDownload] Current count: ${currentCount}/${DOWNLOAD_LIMIT}`);
+        // Fetch dynamic download limit from system settings
+        const settingsSnap = await adminDb.collection('settings').doc('system').get();
+        const settings = settingsSnap.data();
+        const limit = settings?.downloadLimit ?? DOWNLOAD_LIMIT;
+
+        console.log(`[registerDownload] Current count: ${currentCount}/${limit}`);
 
         // If limit reached, ensure final videos are purged and block further downloads.
-        if (currentCount >= DOWNLOAD_LIMIT) {
+        if (currentCount >= limit) {
             console.warn(`[registerDownload] Limit reached for revision: ${revisionId}`);
             if (!projectData.finalVideoPurged) {
                 await purgeProjectRevisionVideos(projectId);
@@ -213,12 +218,12 @@ export async function registerDownload(projectId: string, revisionId: string) {
         }
 
         // On final allowed download, purge all revision videos to keep only metadata/history.
-        if (nextCount >= DOWNLOAD_LIMIT && !projectData.finalVideoPurged) {
+        if (nextCount >= limit && !projectData.finalVideoPurged) {
             await purgeProjectRevisionVideos(projectId);
         }
 
         revalidatePath(`/dashboard/projects/${projectId}`);
-        return { success: true, count: nextCount, remaining: Math.max(0, DOWNLOAD_LIMIT - nextCount), downloadUrl };
+        return { success: true, count: nextCount, remaining: Math.max(0, limit - nextCount), downloadUrl };
 
     } catch (error: any) {
         console.error("[registerDownload] Fatal error:", error);

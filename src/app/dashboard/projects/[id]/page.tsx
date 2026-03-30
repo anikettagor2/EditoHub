@@ -51,6 +51,7 @@ import { PaymentButton } from "@/components/payment-button";
 import { ProjectChat } from "@/components/project-chat";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
 import { uploadRawFileParallel } from "@/lib/services/parallel-raw-upload";
 import { preloadVideosIntoMemory } from "@/lib/video-preload";
 
@@ -116,6 +117,11 @@ export default function ProjectDetailsPage() {
         if (!e.target.files || !e.target.files[0] || !project) return;
         const file = e.target.files[0];
         
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`File is too large. Max size allowed is ${MAX_FILE_SIZE_GB}GB.`);
+            return;
+        }
+
         setIsUploadingAsset(true);
         try {
             const downloadURL = await uploadRawFileParallel({

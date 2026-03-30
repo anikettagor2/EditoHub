@@ -34,6 +34,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
 
 import { handleProjectCreated } from "@/app/actions/admin-actions";
 import { CURRENCY } from "@/lib/razorpay";
@@ -482,6 +483,24 @@ export default function NewProjectPage() {
     ) => {
         if (!files.length || !user) return;
 
+        // Filter files by size
+        const validFiles: File[] = [];
+        const tooLargeFiles: File[] = [];
+
+        files.forEach(file => {
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                tooLargeFiles.push(file);
+            } else {
+                validFiles.push(file);
+            }
+        });
+
+        if (tooLargeFiles.length > 0) {
+            toast.error(`${tooLargeFiles.length} file(s) exceed the ${MAX_FILE_SIZE_GB}GB limit and were skipped.`);
+        }
+
+        if (!validFiles.length) return;
+
         const path =
             type === 'raw'
                 ? 'raw_footage'
@@ -493,7 +512,7 @@ export default function NewProjectPage() {
                             ? 'audio_assets'
                             : 'references';
         
-        const newFileEntries: FileWithProgress[] = files.map(file => ({
+        const newFileEntries: FileWithProgress[] = validFiles.map(file => ({
             file,
             progress: 0,
             status: 'pending' as const
@@ -579,7 +598,7 @@ export default function NewProjectPage() {
             );
         });
 
-        const queue = [...files];
+        const queue = [...validFiles];
         let activeUploads = 0;
 
         const processQueue = () => {

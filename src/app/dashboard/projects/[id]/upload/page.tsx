@@ -27,6 +27,9 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { handleRevisionUploaded } from "@/app/actions/notification-actions";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
+
 
 export default function UploadRevisionPage() {
     const params = useParams();
@@ -65,8 +68,8 @@ export default function UploadRevisionPage() {
         e.preventDefault();
         if (!file || !user || typeof id !== "string") return;
 
-        if (file.size > 2 * 1024 * 1024 * 1024) {
-            alert("File is too large. Max size is 2 GB.");
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`File is too large. Max size allowed is ${MAX_FILE_SIZE_GB}GB.`);
             return;
         }
 
@@ -243,7 +246,7 @@ export default function UploadRevisionPage() {
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-base font-black text-muted-foreground group-hover:text-foreground/90 transition-colors">INITIATE_HANDOVER_PROTOCOL</p>
-                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">MP4 · MOV · WEBM // LIMIT 2 GB</p>
+                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">MP4 · MOV · WEBM // LIMIT {MAX_FILE_SIZE_GB} GB</p>
                                         </div>
                                     </div>
                                 </motion.div>

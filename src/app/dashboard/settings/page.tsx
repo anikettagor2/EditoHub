@@ -15,6 +15,8 @@ import { Upload, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
+
 
 export default function SettingsPage() {
     const { user, requestAccountDeletion } = useAuth();
@@ -113,8 +115,8 @@ export default function SettingsPage() {
         if (!file) return;
 
         // Validation
-        if (file.size > 2 * 1024 * 1024) {
-            toast.error("File too large. Max 2MB.");
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`File is too large. Max size allowed is ${MAX_FILE_SIZE_GB}GB.`);
             return;
         }
 
@@ -420,7 +422,7 @@ export default function SettingsPage() {
                                                 />
                                             </label>
                                         </Button>
-                                        <p className="text-[10px] text-muted-foreground font-medium">PNG or SVG recommended. Max 2MB.</p>
+                                        <p className="text-[10px] text-muted-foreground font-medium">PNG or SVG recommended. Max {MAX_FILE_SIZE_GB}GB.</p>
                                     </div>
                                 </div>
                             </div>
