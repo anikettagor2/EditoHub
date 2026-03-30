@@ -28,8 +28,7 @@ export const db = getApps().length > 0
     : initializeFirestore(app, {
         localCache: persistentLocalCache({
             tabManager: persistentMultipleTabManager()
-        }),
-        experimentalForceLongPolling: true, // Helps with "Could not reach backend" errors
+        })
     });
 
 export const storage = getStorage(app);

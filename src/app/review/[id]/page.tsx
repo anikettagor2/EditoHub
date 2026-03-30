@@ -432,6 +432,7 @@ export default function GuestReviewPage() {
                                 }}
                                 controlsList="nodownload"
                                 onContextMenu={(e) => e.preventDefault()}
+                                data-watermark-name={project?.clientName || project?.name || "Client Review"}
                             />
                             
                             {/* Custom Overlay for better UI */}

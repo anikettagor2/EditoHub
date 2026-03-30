@@ -2,15 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
-import { db } from "@/lib/firebase/config";
+import { db, storage } from "@/lib/firebase/config";
 import { collection, addDoc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
-import {
-    startChunkedUpload,
-    ChunkedUploadProgress,
-    formatBytes,
-    formatSpeed,
-    formatEta,
-} from "@/lib/services/chunked-upload";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { formatBytes } from "@/lib/services/chunked-upload";
 import { Revision } from "@/types/schema";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -50,7 +45,7 @@ export function UploadDraftModal({
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [description, setDescription] = useState("");
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProg, setUploadProg] = useState<ChunkedUploadProgress | null>(null);
+    const [uploadProg, setUploadProg] = useState<number | null>(null);
     const abortRef = useRef<AbortController | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,12 +101,36 @@ export function UploadDraftModal({
                 nextVersion = latest.version + 1;
             }
 
-            const downloadURL = await startChunkedUpload(
-                projectId,
-                file,
-                (p) => setUploadProg(p),
-                controller.signal
-            );
+            const storageRef = ref(storage, `projects/${projectId}/revisions/${Date.now()}_${file.name}`);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+            
+            const handleAbort = () => {
+                uploadTask.cancel();
+            };
+            controller.signal.addEventListener("abort", handleAbort);
+
+            const downloadURL = await new Promise<string>((resolve, reject) => {
+                uploadTask.on(
+                    "state_changed",
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        setUploadProg(progress);
+                    },
+                    (error) => {
+                        controller.signal.removeEventListener("abort", handleAbort);
+                        reject(error);
+                    },
+                    async () => {
+                        controller.signal.removeEventListener("abort", handleAbort);
+                        try {
+                            const url = await getDownloadURL(uploadTask.snapshot.ref);
+                            resolve(url);
+                        } catch (err) {
+                            reject(err);
+                        }
+                    }
+                );
+            });
 
             const newRevision: Omit<Revision, "id"> = {
                 projectId,
@@ -148,13 +167,11 @@ export function UploadDraftModal({
         }
     };
 
-    const statusLabel = !uploadProg
-        ? "Uploading..."
-        : uploadProg.status === "assembling"
-        ? "Finalizing..."
-        : uploadProg.status === "done"
-        ? "Complete"
-        : "Uploading...";
+    const statusLabel = uploadProg === null 
+        ? "Uploading..." 
+        : uploadProg === 100 
+            ? "Complete" 
+            : "Uploading...";
 
     return (
         <AnimatePresence>
@@ -305,7 +322,7 @@ export function UploadDraftModal({
 
                             {/* Upload Progress */}
                             <AnimatePresence>
-                                {isUploading && uploadProg && (
+                                {isUploading && uploadProg !== null && (
                                     <motion.div
                                         key="progress"
                                         initial={{ opacity: 0, y: 8 }}
@@ -319,56 +336,17 @@ export function UploadDraftModal({
                                                     {statusLabel}
                                                 </span>
                                                 <span className="text-[10px] font-black text-foreground uppercase tracking-widest">
-                                                    {Math.round(uploadProg.overallPct)}%
+                                                    {Math.round(uploadProg)}%
                                                 </span>
                                             </div>
                                             <div className="h-2 w-full bg-muted/50 rounded-full overflow-hidden border border-border">
                                                 <motion.div
-                                                    animate={{ width: `${uploadProg.overallPct}%` }}
+                                                    animate={{ width: `${uploadProg}%` }}
                                                     transition={{ ease: "linear", duration: 0.2 }}
                                                     className="h-full bg-primary shadow-[0_0_20px_rgba(var(--primary),0.8)]"
                                                 />
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 border border-border">
-                                                <Layers className="h-3.5 w-3.5 text-primary shrink-0" />
-                                                <div>
-                                                    <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                                                        Chunks
-                                                    </p>
-                                                    <p className="text-[10px] font-black text-foreground">
-                                                        {uploadProg.chunksComplete} / {uploadProg.chunksTotal}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 border border-border">
-                                                <Gauge className="h-3.5 w-3.5 text-primary shrink-0" />
-                                                <div>
-                                                    <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                                                        Speed
-                                                    </p>
-                                                    <p className="text-[10px] font-black text-foreground">
-                                                        {formatSpeed(uploadProg.speedBps)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 border border-border">
-                                                <Timer className="h-3.5 w-3.5 text-primary shrink-0" />
-                                                <div>
-                                                    <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">
-                                                        ETA
-                                                    </p>
-                                                    <p className="text-[10px] font-black text-foreground">
-                                                        {formatEta(uploadProg.etaSeconds)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <p className="text-[9px] font-bold text-muted-foreground text-center">
-                                            {formatBytes(uploadProg.bytesUploaded)} of{" "}
-                                            {formatBytes(uploadProg.totalBytes)} transferred
-                                        </p>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -417,7 +395,7 @@ export function UploadDraftModal({
                             <div className="flex items-center justify-center gap-2 pt-3 border-t border-border">
                                 <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
                                 <span className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-                                    Encrypted Chunked Transfer · Resumable · Fast
+                                    Direct High-Speed Transfer · Resumable · Cloud Proxied
                                 </span>
                             </div>
                         </form>
