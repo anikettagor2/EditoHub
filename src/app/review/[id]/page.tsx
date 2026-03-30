@@ -120,6 +120,14 @@ export default function GuestReviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [revisionId]);
 
+    // ── Watermark: push client name to <body> the moment project loads ──
+    useEffect(() => {
+        const name = project?.clientName || project?.name;
+        if (!name) return;
+        document.body.dataset.watermarkName = name;
+        return () => { delete document.body.dataset.watermarkName; };
+    }, [project]);
+
     useEffect(() => {
         if (!revisionId || !isIdentified) return;
 
@@ -380,7 +388,10 @@ export default function GuestReviewPage() {
                 {/* Video Player Section */}
                 <div className="lg:col-span-8 flex flex-col p-6 bg-black/20">
                     <div className="flex-1 flex flex-col min-h-0">
-                        <div className="relative rounded-2xl overflow-hidden bg-black aspect-video group shadow-2xl border border-white/5">
+                        <div 
+                            className="relative rounded-2xl overflow-hidden bg-black aspect-video group shadow-2xl border border-white/5"
+                            data-watermark-name={project?.clientName || project?.name || "Client Review"}
+                        >
                             {/* Loading skeleton — shown until video metadata is ready */}
                             {!videoReady && (
                                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black gap-3">
@@ -432,10 +443,33 @@ export default function GuestReviewPage() {
                                 }}
                                 controlsList="nodownload"
                                 onContextMenu={(e) => e.preventDefault()}
-                                data-watermark-name={project?.clientName || project?.name || "Client Review"}
                             />
-                            
+
+                            {/* ── React-rendered watermark overlay (always correct, no observer needed) ── */}
+                            {(project?.clientName || project?.name) && (
+                                <div
+                                    className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10"
+                                    style={{ userSelect: "none", WebkitUserSelect: "none" }}
+                                >
+                                    <span
+                                        style={{
+                                            color: "#ffffff",
+                                            opacity: 0.22,
+                                            fontWeight: 700,
+                                            letterSpacing: "0.08em",
+                                            textTransform: "uppercase",
+                                            fontSize: "clamp(10px, 1.2vw, 18px)",
+                                            textShadow: "0 1px 2px rgba(0,0,0,0.35)",
+                                            whiteSpace: "nowrap",
+                                        }}
+                                    >
+                                        {project?.clientName || project?.name}
+                                    </span>
+                                </div>
+                            )}
+
                             {/* Custom Overlay for better UI */}
+
                             <div className="absolute top-4 left-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span className="px-2 py-1 bg-black/60 backdrop-blur-sm rounded text-[10px] font-bold border border-white/10 uppercase tracking-widest">
                                     Guest Review Mode

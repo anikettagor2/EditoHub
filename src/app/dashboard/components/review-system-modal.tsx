@@ -15,6 +15,7 @@ import { uploadCommentImage } from "@/lib/firebase/storage-utils";
 type ReviewProject = {
     id: string;
     name?: string;
+    clientName?: string;
     totalCost?: number;
     amountPaid?: number;
     paymentStatus?: string;
@@ -731,7 +732,10 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                         </button>
                     </div>
 
-                    <div className="rounded-xl border border-border bg-black overflow-hidden aspect-video relative">
+                    <div 
+                        className="rounded-xl border border-border bg-black overflow-hidden aspect-video relative"
+                        data-watermark-name={project?.clientName || project?.name || "Client Review"}
+                    >
                         {loadingRevisions ? (
                             <div className="h-full w-full flex items-center justify-center text-muted-foreground gap-2">
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -753,7 +757,31 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                                 No uploaded draft available for this project.
                             </div>
                         )}
+
+                        {/* ── React-rendered watermark (always correct, no observer needed) ── */}
+                        {selectedRevision?.videoUrl && (project?.clientName || project?.name) && (
+                            <div
+                                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10"
+                                style={{ userSelect: "none", WebkitUserSelect: "none" }}
+                            >
+                                <span
+                                    style={{
+                                        color: "#ffffff",
+                                        opacity: 0.22,
+                                        fontWeight: 700,
+                                        letterSpacing: "0.08em",
+                                        textTransform: "uppercase",
+                                        fontSize: "clamp(10px, 1.2vw, 18px)",
+                                        textShadow: "0 1px 2px rgba(0,0,0,0.35)",
+                                        whiteSpace: "nowrap",
+                                    }}
+                                >
+                                    {project?.clientName || project?.name}
+                                </span>
+                            </div>
+                        )}
                     </div>
+
 
                     {duration > 0 && (
                         <div className="space-y-2">

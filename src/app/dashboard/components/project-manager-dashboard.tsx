@@ -2056,6 +2056,7 @@ export function ProjectManagerDashboard() {
                 project={reviewProject ? { 
                     id: reviewProject.id, 
                     name: reviewProject.name,
+                    clientName: reviewProject.clientName || reviewProject.name,
                     paymentStatus: reviewProject.paymentStatus,
                     editorRating: reviewProject.editorRating
                 } : null}

@@ -18,17 +18,21 @@ function sanitizeWatermarkText(value?: string | null) {
 }
 
 function resolveWatermarkText(video: HTMLVideoElement) {
-  const fromVideo = sanitizeWatermarkText(video.dataset.watermarkName);
-  if (fromVideo) return fromVideo;
-
-  const fromContainer = sanitizeWatermarkText(
-    video.closest("[data-watermark-name]")?.getAttribute("data-watermark-name")
-  );
-  if (fromContainer) return fromContainer;
-
+  // 1. Body-level override (set imperatively by the review page once project loads)
   const fromBody = sanitizeWatermarkText(document.body.dataset.watermarkName);
   if (fromBody) return fromBody;
 
+  // 2. Closest ancestor with data-watermark-name (wrapper div)
+  const fromContainer = sanitizeWatermarkText(
+    video.closest("[data-watermark-name]")?.getAttribute("data-watermark-name")
+  );
+  if (fromContainer && fromContainer !== "Client Review") return fromContainer;
+
+  // 3. Attribute directly on the <video> element
+  const fromVideo = sanitizeWatermarkText(video.getAttribute("data-watermark-name") || video.dataset.watermarkName);
+  if (fromVideo && fromVideo !== "Client Review") return fromVideo;
+
+  // 4. Environment variable fallback
   const fromEnv = sanitizeWatermarkText(process.env.NEXT_PUBLIC_COMPANY_NAME);
   if (fromEnv) return fromEnv;
 
@@ -139,6 +143,16 @@ export function GlobalVideoWatermark() {
       });
     };
 
+    const updateVideoWatermarks = () => {
+      for (const [video, state] of states.entries()) {
+        const newText = resolveWatermarkText(video);
+        if (state.overlay.textContent !== newText) {
+          state.overlay.textContent = newText;
+          state.fullscreenOverlay.textContent = newText;
+        }
+      }
+    };
+
     const teardownVideo = (video: HTMLVideoElement) => {
       const state = states.get(video);
       if (!state) return;
@@ -163,13 +177,30 @@ export function GlobalVideoWatermark() {
 
     const observer = new MutationObserver(() => {
       scanVideos();
+      updateVideoWatermarks();
     });
 
     scanVideos();
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Watch entire document for data-watermark-name changes (subtree covers body itself)
+    observer.observe(document.documentElement, { 
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-watermark-name"]
+    });
+
+    // Polling fallback: once project data loads asynchronously (Firebase), 
+    // re-resolve watermarks every 500ms for the first 8 seconds
+    let polls = 0;
+    const pollInterval = setInterval(() => {
+      updateVideoWatermarks();
+      polls++;
+      if (polls >= 16) clearInterval(pollInterval); // stop after 8 s
+    }, 500);
 
     return () => {
       observer.disconnect();
+      clearInterval(pollInterval);
       for (const video of Array.from(states.keys())) {
         teardownVideo(video);
       }

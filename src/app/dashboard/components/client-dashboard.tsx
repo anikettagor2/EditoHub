@@ -1065,6 +1065,7 @@ export function ClientDashboard() {
                 project={selectedProject ? { 
                     id: selectedProject.id, 
                     name: selectedProject.name,
+                    clientName: selectedProject.clientName || user?.displayName || selectedProject.name,
                     totalCost: selectedProject.totalCost,
                     amountPaid: selectedProject.amountPaid,
                     paymentStatus: selectedProject.paymentStatus,

@@ -1496,6 +1496,7 @@ export function EditorDashboardV2() {
                 project={reviewProject ? { 
                     id: reviewProject.id, 
                     name: reviewProject.name,
+                    clientName: (reviewProject as any).clientName || reviewProject.name,
                     paymentStatus: reviewProject.paymentStatus,
                     editorRating: reviewProject.editorRating
                 } : null}
