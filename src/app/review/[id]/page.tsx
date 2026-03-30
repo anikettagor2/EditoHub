@@ -52,20 +52,13 @@ function formatTime(seconds: number): string {
     return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Route Firebase Storage URLs through our proxy to avoid CORS + improve caching */
-function videoProxy(url: string): string {
-    if (!url) return url;
-    // Already a proxy URL or a relative URL — don't double-wrap
-    if (url.startsWith("/api/video") || url.startsWith("blob:")) return url;
-    return `/api/video?url=${encodeURIComponent(url)}`;
-}
-
 export default function GuestReviewPage() {
     const params = useParams();
     const router = useRouter();
     const revisionId = params.id as string;
 
     const [revision, setRevision] = useState<RevisionDoc | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     
@@ -82,9 +75,10 @@ export default function GuestReviewPage() {
     const [duration, setDuration] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isBuffering, setIsBuffering] = useState(false);
-    const [networkTier, setNetworkTier] = useState<"low" | "medium" | "high">("high");
+    const [networkTier] = useState<"low" | "medium" | "high">("high");
     const [streamMode, setStreamMode] = useState<"hls" | "direct">("direct");
     const [videoReady, setVideoReady] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const hlsInstanceRef = useRef<any>(null);
 
     useEffect(() => {
@@ -132,6 +126,7 @@ export default function GuestReviewPage() {
         const q = query(collection(db, "comments"), where("revisionId", "==", revisionId));
         const unsub = onSnapshot(q, (snap) => {
             const next = snap.docs
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .map((doc) => ({ id: doc.id, ...(doc.data() as any) } as CommentDoc))
                 .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
             setComments(next);
@@ -150,31 +145,6 @@ export default function GuestReviewPage() {
     };
 
     useEffect(() => {
-        const connection = (navigator as any)?.connection;
-        if (!connection) return;
-
-        const updateTier = () => {
-            const effectiveType = connection.effectiveType as string | undefined;
-            const downlink = Number(connection.downlink || 0);
-            const saveData = Boolean(connection.saveData);
-
-            if (saveData || effectiveType === "slow-2g" || effectiveType === "2g" || downlink < 1.2) {
-                setNetworkTier("low");
-                return;
-            }
-            if (effectiveType === "3g" || downlink < 3) {
-                setNetworkTier("medium");
-                return;
-            }
-            setNetworkTier("high");
-        };
-
-        updateTier();
-        connection.addEventListener?.("change", updateTier);
-        return () => connection.removeEventListener?.("change", updateTier);
-    }, []);
-
-    useEffect(() => {
         if (!isIdentified || !videoRef.current || !revision?.videoUrl) return;
 
         const videoElement = videoRef.current;
@@ -182,6 +152,7 @@ export default function GuestReviewPage() {
         let disposed = false;
 
         setVideoReady(false);
+        setIsBuffering(false);
 
         const cleanupHls = () => {
             if (hlsInstanceRef.current) {
@@ -194,8 +165,8 @@ export default function GuestReviewPage() {
             cleanupHls();
 
             if (!hlsSource) {
-                // Direct MP4 — route through proxy to avoid CORS and enable proper range requests
-                videoElement.src = videoProxy(revision.videoUrl || "");
+                // Direct MP4 — set src directly, same as review-system-modal
+                videoElement.src = revision.videoUrl || "";
                 videoElement.load();
                 setStreamMode("direct");
                 return;
@@ -205,23 +176,15 @@ export default function GuestReviewPage() {
             if (disposed) return;
 
             if (Hls.isSupported()) {
-                const startLevel = networkTier === "low" ? 0 : networkTier === "medium" ? 1 : -1;
                 const hls = new Hls({
                     enableWorker: true,
-                    // Faster initial start — load first fragment immediately
+                    lowLatencyMode: true,
                     startFragPrefetch: true,
-                    startLevel,
-                    // Buffer tuning — small initial buffer so playback starts faster
-                    maxBufferLength: networkTier === "low" ? 8 : networkTier === "medium" ? 16 : 30,
-                    maxMaxBufferLength: networkTier === "low" ? 20 : 60,
-                    // Fill gaps quickly to prevent micro-stalls
-                    maxBufferHole: 0.3,
-                    // Keep less behind the playhead to save memory
+                    maxBufferLength: 20,
+                    maxMaxBufferLength: 40,
                     backBufferLength: 15,
-                    // Auto-drop quality on low bandwidth
                     capLevelToPlayerSize: true,
-                    abrEwmaDefaultEstimate: networkTier === "low" ? 500_000 : networkTier === "medium" ? 2_000_000 : 10_000_000,
-                    // Faster error recovery
+                    startLevel: -1,
                     fragLoadingRetryDelay: 500,
                     manifestLoadingRetryDelay: 500,
                 });
@@ -233,21 +196,21 @@ export default function GuestReviewPage() {
                 return;
             }
 
+            // Safari native HLS
             if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-                // Safari native HLS — proxy the m3u8 URL
-                videoElement.src = videoProxy(hlsSource);
+                videoElement.src = hlsSource;
                 setStreamMode("hls");
                 return;
             }
 
-            // Final fallback — proxy the direct MP4
-            videoElement.src = videoProxy(revision.videoUrl || "");
+            // Final fallback — direct MP4
+            videoElement.src = revision.videoUrl || "";
             videoElement.load();
             setStreamMode("direct");
         };
 
         initPlayback().catch(() => {
-            videoElement.src = videoProxy(revision.videoUrl || "");
+            videoElement.src = revision.videoUrl || "";
             setStreamMode("direct");
         });
 
@@ -255,7 +218,7 @@ export default function GuestReviewPage() {
             disposed = true;
             cleanupHls();
         };
-    }, [isIdentified, revision?.id, revision?.videoUrl, revision?.hlsUrl, networkTier]);
+    }, [isIdentified, revision?.id, revision?.videoUrl, revision?.hlsUrl]);
 
     const handleAddComment = async () => {
         if (!revision || !guestName) return;
@@ -445,7 +408,6 @@ export default function GuestReviewPage() {
                             <video
                                 ref={videoRef}
                                 className="h-full w-full outline-none"
-                                data-watermark-name={project?.brand || project?.clientName || project?.name || "Client"}
                                 controls
                                 preload="metadata"
                                 playsInline
@@ -460,15 +422,10 @@ export default function GuestReviewPage() {
                                     setIsBuffering(false);
                                 }}
                                 onPause={() => setIsPlaying(false)}
-                                onWaiting={() => {
-                                    // Only show buffering if video is already loaded (not initial load)
-                                    if (videoReady) setIsBuffering(true);
-                                }}
+                                onWaiting={() => { if (videoReady) setIsBuffering(true); }}
                                 onCanPlay={() => setIsBuffering(false)}
                                 onCanPlayThrough={() => setIsBuffering(false)}
-                                onStalled={() => {
-                                    if (videoReady) setIsBuffering(true);
-                                }}
+                                onStalled={() => { if (videoReady) setIsBuffering(true); }}
                                 onError={() => {
                                     setIsBuffering(false);
                                     setVideoReady(false);
