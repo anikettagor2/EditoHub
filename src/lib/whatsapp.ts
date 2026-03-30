@@ -11,13 +11,22 @@ import { Project, User } from "@/types/schema";
 // ============================================================================
 const CAMPAIGNS = {
     CLIENT: "CLIENT",
-    EDITOR: "EDITOR", 
+    EDITOR: "comment", 
     PM: "PROJECT_MANAGER"
 };
 
+const ALLOWED_CAMPAIGNS = new Set<string>([
+    'comment',
+    'second_draft_uploaded_client',
+    'first_draft_uploaded_client',
+    'project_manager_msg',
+    'project_submitted_client',
+    'editor_assigned',
+    'pro_delay',
+]);
+
 const CAMPAIGN_BY_NOTIFICATION: Partial<Record<NotificationType, string>> = {
     client_project_created: 'project_submitted_client',
-    client_editor_accepted: 'pr_accept_editor',
     client_draft_submitted: 'first_draft_uploaded_client',
     client_new_comment: 'comment',
     editor_new_comment: 'comment',
@@ -31,7 +40,6 @@ export type ClientNotificationType =
     | 'client_project_created'
     | 'client_pm_assigned'
     | 'client_editor_assigned'
-    | 'client_editor_accepted'
     | 'client_draft_submitted'
     | 'client_new_comment'
     | 'client_project_completed';
@@ -58,7 +66,6 @@ const DEFAULT_MESSAGES: Record<NotificationType, string> = {
     client_project_created: "Your project has been received. Our team will review and assign a manager shortly.",
     client_pm_assigned: "{pm} has been assigned as your Project Manager. They'll coordinate your project.",
     client_editor_assigned: "An expert editor has been assigned and is reviewing your requirements.",
-    client_editor_accepted: "Production has officially started! We'll notify you when the first draft is ready.",
     client_draft_submitted: "🎬 Draft Version {version} is ready! Review it here: {link}",
     client_new_comment: "You have a new message from {name}. Please check the review tool to respond.",
     client_project_completed: "Congratulations! Your project is complete. Thank you for choosing EditoHub!",
@@ -202,6 +209,15 @@ function isEngagementBlockReason(message: string): boolean {
     return message.toLowerCase().includes('healthy ecosystem engagement');
 }
 
+function sanitizeCampaignName(campaignName?: string, fallbackCampaignName = 'comment'): string {
+    const normalized = (campaignName || '').trim();
+    if (ALLOWED_CAMPAIGNS.has(normalized)) {
+        return normalized;
+    }
+    console.warn(`[WhatsApp] Campaign "${normalized || 'undefined'}" is not allowed. Falling back to "${fallbackCampaignName}".`);
+    return fallbackCampaignName;
+}
+
 // ============================================================================
 // CORE SEND FUNCTION
 // ============================================================================
@@ -263,6 +279,10 @@ export async function sendWhatsAppNotification(
         const data = await response.json();
         const semanticFailure = isSemanticFailure(data);
         const semanticError = toErrorText(data) || `AiSensy semantic failure for campaign ${campaignName}`;
+        const shouldRetryWithoutTemplateName =
+            semanticFailure &&
+            !!options?.templateName &&
+            !options?.usedFallback;
         const shouldFallback =
             semanticFailure &&
             isEngagementBlockReason(semanticError) &&
@@ -272,6 +292,15 @@ export async function sendWhatsAppNotification(
 
         if (!response.ok || semanticFailure) {
             console.error(`[WhatsApp] [${requestId}] AiSensy Error:`, data);
+
+            if (shouldRetryWithoutTemplateName) {
+                console.warn(`[WhatsApp] [${requestId}] Semantic failure with templateName. Retrying without templateName on same campaign "${campaignName}"`);
+                const { templateName, ...restOptions } = options || {};
+                return sendWhatsAppNotification(phoneNumber, params, campaignName, 0, {
+                    ...restOptions,
+                    usedFallback: true,
+                });
+            }
 
             if (shouldFallback) {
                 console.warn(`[WhatsApp] [${requestId}] Engagement block detected. Retrying with fallback campaign "${options?.fallbackCampaignName}"`);
@@ -290,7 +319,12 @@ export async function sendWhatsAppNotification(
                 ? semanticError
                 : (toErrorText(data) || `Request failed with status ${response.status}`);
 
-            return { success: false, error: statusError, requestId, data };
+            return {
+                success: false,
+                error: `[campaign=${campaignName} template=${options?.templateName || 'none'} requestId=${requestId}] ${statusError}`,
+                requestId,
+                data,
+            };
         }
         
         console.log(`[WhatsApp] [${requestId}] Success:`, data);
@@ -310,9 +344,9 @@ export async function sendWhatsAppNotification(
             });
             
             // Don't retry DNS errors - they won't resolve on retry
-            return { 
-                success: false, 
-                error: `Network connectivity error (${errorCode}): Cannot reach AiSensy backend. Check firewall/DNS.`,
+            return {
+                success: false,
+                error: `[campaign=${campaignName} template=${options?.templateName || 'none'} requestId=${requestId}] Network connectivity error (${errorCode}): Cannot reach AiSensy backend. Check firewall/DNS.`,
                 requestId
             };
         }
@@ -327,12 +361,20 @@ export async function sendWhatsAppNotification(
                 return sendWhatsAppNotification(phoneNumber, params, campaignName, retryCount + 1, options);
             }
             
-            return { success: false, error: `Connection timeout after ${MAX_RETRIES + 1} attempts`, requestId };
+            return {
+                success: false,
+                error: `[campaign=${campaignName} template=${options?.templateName || 'none'} requestId=${requestId}] Connection timeout after ${MAX_RETRIES + 1} attempts`,
+                requestId
+            };
         }
         
         // Generic network error
         console.error(`[WhatsApp] [${requestId}] Network Error:`, error);
-        return { success: false, error: errorMessage, requestId };
+        return {
+            success: false,
+            error: `[campaign=${campaignName} template=${options?.templateName || 'none'} requestId=${requestId}] ${errorMessage}`,
+            requestId
+        };
     }
 }
 
@@ -382,14 +424,6 @@ export async function notifyClient(
                 project.name || 'Your Project',
                 formatSubmissionDate(project.createdAt),
             ];
-        } else if (notificationType === 'client_editor_accepted') {
-            // Template: project_accpeted_editor
-            // {{1}} client name, {{2}} editor name, {{3}} project name
-            params = [
-                client.displayName || 'Client',
-                extraData?.editorName || 'Assigned Editor',
-                project.name || 'Your Project',
-            ];
         } else if (notificationType === 'client_draft_submitted') {
             const deliveredOn = formatDeliveredOn(extraData?.deliveredOn);
             const fileLink = extraData?.link || '';
@@ -438,12 +472,15 @@ export async function notifyClient(
             : CAMPAIGN_BY_NOTIFICATION[notificationType];
 
         const forcedCommentCampaign = notificationType === 'client_new_comment' ? 'comment' : undefined;
-        const campaignName = forcedCommentCampaign || notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
+        const rawCampaignName = forcedCommentCampaign || notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.client || CAMPAIGNS.CLIENT;
+        const campaignName = sanitizeCampaignName(rawCampaignName, notificationType === 'client_new_comment' ? 'comment' : 'project_submitted_client');
         const fallbackCampaignName =
             notifSettings?.fallbackCampaignName ||
             settings?.campaigns?.clientFallback ||
             AISENSY_CLIENT_FALLBACK_CAMPAIGN;
-        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
+        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, {
+            fallbackCampaignName: sanitizeCampaignName(fallbackCampaignName, 'comment')
+        });
 
     } catch (error: any) {
         console.error("[WhatsApp] notifyClient Error:", error);
@@ -515,9 +552,12 @@ export async function notifyEditor(
 
         const templateCampaignName = CAMPAIGN_BY_NOTIFICATION[notificationType];
         const forcedCommentCampaign = notificationType === 'editor_new_comment' ? 'comment' : undefined;
-        const campaignName = forcedCommentCampaign || notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.editor || CAMPAIGNS.EDITOR;
+        const rawCampaignName = forcedCommentCampaign || notifSettings?.campaignName || templateCampaignName || settings?.campaigns?.editor || CAMPAIGNS.EDITOR;
+        const campaignName = sanitizeCampaignName(rawCampaignName, 'comment');
         const fallbackCampaignName = notifSettings?.fallbackCampaignName || settings?.campaigns?.editorFallback;
-        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
+        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, {
+            fallbackCampaignName: sanitizeCampaignName(fallbackCampaignName, 'comment')
+        });
 
     } catch (error: any) {
         console.error("[WhatsApp] notifyEditor Error:", error);
@@ -596,9 +636,12 @@ export async function notifyPM(
             ];
         }
 
-        const campaignName = notifSettings?.campaignName || CAMPAIGN_BY_NOTIFICATION[notificationType] || settings?.campaigns?.pm || CAMPAIGNS.PM;
+        const rawCampaignName = notifSettings?.campaignName || CAMPAIGN_BY_NOTIFICATION[notificationType] || settings?.campaigns?.pm || CAMPAIGNS.PM;
+        const campaignName = sanitizeCampaignName(rawCampaignName, 'project_manager_msg');
         const fallbackCampaignName = notifSettings?.fallbackCampaignName || settings?.campaigns?.pmFallback;
-        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, { fallbackCampaignName });
+        return await sendWhatsAppNotification(phoneNumber, params, campaignName, 0, {
+            fallbackCampaignName: sanitizeCampaignName(fallbackCampaignName, 'comment')
+        });
 
     } catch (error: any) {
         console.error("[WhatsApp] notifyPM Error:", error);
@@ -623,48 +666,6 @@ export async function notifyClientPMAssigned(projectId: string, pmName: string) 
 /** Notify client about editor assignment */
 export async function notifyClientEditorAssigned(projectId: string) {
     return notifyClient(projectId, 'client_editor_assigned');
-}
-
-/** Notify client that editor accepted */
-export async function notifyClientEditorAccepted(projectId: string, editorName: string) {
-    try {
-        const projectSnap = await adminDb.collection('projects').doc(projectId).get();
-        if (!projectSnap.exists) return { success: false, error: 'Project not found' };
-        const project = projectSnap.data() as Project;
-
-        if (!project.clientId) return { success: false, error: 'No client assigned' };
-        const clientSnap = await adminDb.collection('users').doc(project.clientId).get();
-        if (!clientSnap.exists) return { success: false, error: 'Client not found' };
-        const client = clientSnap.data() as User;
-
-        const phoneNumber = client.whatsappNumber || client.phoneNumber;
-        if (!phoneNumber) return { success: false, error: 'No phone number' };
-
-        // Exact template mapping requested by business flow:
-        // campaign: pr_accept_editor
-        // {{1}} client name, {{2}} editor name, {{3}} project name
-        const params = [
-            client.displayName || 'Client',
-            editorName || 'Assigned Editor',
-            project.name || 'Your Project',
-        ];
-
-        const result = await sendWhatsAppNotification(
-            phoneNumber,
-            params,
-            'pr_accept_editor',
-            0,
-            {
-                fallbackCampaignName: AISENSY_CLIENT_FALLBACK_CAMPAIGN,
-                templateName: 'project_accpeted_editor',
-            }
-        );
-
-        return { success: result.success, error: result.error };
-    } catch (error: any) {
-        console.error('[WhatsApp] notifyClientEditorAccepted Error:', error);
-        return { success: false, error: error.message };
-    }
 }
 
 /** Notify client about new draft */
@@ -698,12 +699,45 @@ export async function notifyClientProjectCompleted(projectId: string) {
     return notifyClient(projectId, 'client_project_completed');
 }
 
-/** Notify editor about new project assignment */
-export async function notifyEditorProjectAssigned(projectId: string, editorId: string, pmName: string, deadline?: string) {
-    return notifyEditor(projectId, editorId, 'editor_project_assigned', { 
-        pm: pmName, 
-        extra: deadline ? `Deadline: ${deadline}` : '' 
-    });
+/** Notify editor about new project assignment — uses editor_assigned AiSensy template.
+ *  Template params: {{1}} editor name, {{2}} project name, {{3}} price (₹), {{4}} project link
+ */
+export async function notifyEditorProjectAssigned(
+    projectId: string,
+    editorId: string,
+    _pmName: string,
+    _deadline?: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const settings = await getWhatsAppSettings();
+        if (settings && !settings.enabled) return { success: true };
+
+        const projectSnap = await adminDb.collection('projects').doc(projectId).get();
+        if (!projectSnap.exists) return { success: false, error: 'Project not found' };
+        const project = projectSnap.data();
+
+        const editorSnap = await adminDb.collection('users').doc(editorId).get();
+        if (!editorSnap.exists) return { success: false, error: 'Editor not found' };
+        const editor = editorSnap.data();
+
+        const phoneNumber = editor?.whatsappNumber || editor?.phoneNumber;
+        if (!phoneNumber) return { success: false, error: 'No phone number for editor' };
+
+        const editorName = editor?.displayName || 'Editor';
+        const projectName = project?.name || 'Your Project';
+        const price = project?.editorPrice != null ? String(project.editorPrice) : '0';
+        const projectLink = `https://editohub.com/dashboard/projects/${projectId}`;
+
+        // {{1}} editor name, {{2}} project name, {{3}} price, {{4}} project link
+        const params = [editorName, projectName, price, projectLink];
+
+        return await sendWhatsAppNotification(phoneNumber, params, 'editor_assigned', 0, {
+            templateName: 'editor_assigned',
+        });
+    } catch (error: any) {
+        console.error('[WhatsApp] notifyEditorProjectAssigned Error:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 /** Notify editor about new comment from client */
@@ -729,9 +763,42 @@ export async function notifyPMEditorAccepted(projectId: string, pmId: string, ed
     return notifyPM(projectId, pmId, 'pm_editor_accepted', { editor: editorName, details: `Editor: ${editorName}` });
 }
 
-/** Notify PM that editor rejected */
-export async function notifyPMEditorRejected(projectId: string, pmId: string, editorName: string, reason: string) {
-    return notifyPM(projectId, pmId, 'pm_editor_rejected', { editor: editorName, reason, details: `Reason: ${reason}` });
+/** Notify PM that editor rejected or timed out — uses pro_delay AiSensy template.
+ *  Template params: {{1}} PM name, {{2}} project name, {{3}} reason, {{4}} project name
+ */
+export async function notifyPMEditorRejected(
+    projectId: string,
+    pmId: string,
+    _editorName: string,
+    reason: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const settings = await getWhatsAppSettings();
+        if (settings && !settings.enabled) return { success: true };
+
+        const projectSnap = await adminDb.collection('projects').doc(projectId).get();
+        if (!projectSnap.exists) return { success: false, error: 'Project not found' };
+        const project = projectSnap.data();
+
+        const pmSnap = await adminDb.collection('users').doc(pmId).get();
+        if (!pmSnap.exists) return { success: false, error: 'PM not found' };
+        const pm = pmSnap.data();
+
+        const phoneNumber = pm?.whatsappNumber || pm?.phoneNumber;
+        if (!phoneNumber) return { success: false, error: 'No phone number for PM' };
+
+        const pmName = pm?.displayName || 'Manager';
+        const projectName = project?.name || 'Project';
+        // {{1}} PM name, {{2}} project name, {{3}} reason, {{4}} project name (repeated per template)
+        const params = [pmName, projectName, reason, projectName];
+
+        return await sendWhatsAppNotification(phoneNumber, params, 'pro_delay', 0, {
+            templateName: 'pro_delay',
+        });
+    } catch (error: any) {
+        console.error('[WhatsApp] notifyPMEditorRejected Error:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 /** Notify PM about new comment in project */
@@ -759,7 +826,7 @@ export async function notifyClientLegacy(projectId: string, trigger: WhatsAppTri
     const triggerMap: Record<WhatsAppTrigger, ClientNotificationType> = {
         'PROJECT_RECEIVED': 'client_project_created',
         'EDITOR_ASSIGNED': 'client_editor_assigned',
-        'EDITOR_ACCEPTED': 'client_editor_accepted',
+        'EDITOR_ACCEPTED': 'client_editor_assigned',
         'PROPOSAL_UPLOADED': 'client_draft_submitted',
         'PROJECT_COMPLETED': 'client_project_completed'
     };

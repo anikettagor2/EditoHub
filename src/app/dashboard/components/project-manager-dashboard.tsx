@@ -197,6 +197,7 @@ export function ProjectManagerDashboard() {
     const [editorPriceInput, setEditorPriceInput] = useState("");
     const [assignDeadline, setAssignDeadline] = useState("");
     const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+    const [editorSearchQuery, setEditorSearchQuery] = useState("");
     
     // Project Detail Modal
     const [inspectProject, setInspectProject] = useState<Project | null>(null);
@@ -720,6 +721,18 @@ export function ProjectManagerDashboard() {
                                                         <DropdownMenuLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-2 pb-2">
                                                             Select Editor
                                                         </DropdownMenuLabel>
+                                                        {/* Editor Search */}
+                                                        <div className="relative px-1 pb-2">
+                                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search editor..."
+                                                                value={editorSearchQuery}
+                                                                onChange={(e) => setEditorSearchQuery(e.target.value)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="w-full h-8 pl-8 pr-3 rounded-md border border-border bg-muted/50 text-xs focus:outline-none focus:border-primary/50 transition-colors"
+                                                            />
+                                                        </div>
                                                         <DropdownMenuSeparator />
                                                         
                                                         {/* Unassign Option */}
@@ -740,7 +753,9 @@ export function ProjectManagerDashboard() {
                                                         
                                                         {/* Editor List */}
                                                         <div className="max-h-[300px] overflow-y-auto space-y-1">
-                                                            {editors.map(editor => {
+                                                            {editors
+                                                                .filter(e => !editorSearchQuery || e.displayName?.toLowerCase().includes(editorSearchQuery.toLowerCase()))
+                                                                .map(editor => {
                                                                 const isAssigned = project.assignedEditorId === editor.uid;
                                                                 const status = editor.availabilityStatus || 'offline';
                                                                 const completedCount = projects.filter(p => p.assignedEditorId === editor.uid && p.status === 'completed').length;
@@ -1105,14 +1120,30 @@ export function ProjectManagerDashboard() {
                             <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Available Editors</Label>
                             <span className="text-[10px] text-muted-foreground">{editors.length} editor{editors.length !== 1 ? 's' : ''}</span>
                         </div>
+                        {/* Search */}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Search editors by name..."
+                                value={editorSearchQuery}
+                                onChange={(e) => setEditorSearchQuery(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 rounded-lg border border-border bg-muted/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
+                            />
+                        </div>
                         <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                             {editors.length === 0 ? (
                                 <div className="py-12 text-center border border-dashed border-border rounded-xl">
                                     <UserIcon className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
                                     <p className="text-sm text-muted-foreground">No editors available</p>
                                 </div>
+                            ) : editors.filter(e => !editorSearchQuery || e.displayName?.toLowerCase().includes(editorSearchQuery.toLowerCase())).length === 0 ? (
+                                <div className="py-8 text-center border border-dashed border-border rounded-xl">
+                                    <Search className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                                    <p className="text-sm text-muted-foreground">No editors match &ldquo;{editorSearchQuery}&rdquo;</p>
+                                </div>
                             ) : (
-                                editors.map(editor => {
+                                editors.filter(e => !editorSearchQuery || e.displayName?.toLowerCase().includes(editorSearchQuery.toLowerCase())).map(editor => {
                                     const status = editor.availabilityStatus || 'offline';
                                     const isOffline = status === 'offline';
                                     const completedCount = projects.filter(p => p.assignedEditorId === editor.uid && p.status === 'completed').length;

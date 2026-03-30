@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin';
 import { adminAuth, adminDb, adminStorage } from '@/lib/firebase/admin';
 import { UserRole } from '@/types/schema';
 import { revalidatePath } from 'next/cache';
-import { notifyClient, notifyClientProjectCreated, notifyClientPMAssigned, notifyPMProjectAssigned, notifyPMEditorAccepted, notifyPMEditorRejected, notifyClientEditorAssigned, notifyClientEditorAccepted, notifyEditorProjectAssigned } from '@/lib/whatsapp';
+import { notifyClient, notifyClientProjectCreated, notifyClientPMAssigned, notifyPMProjectAssigned, notifyPMEditorAccepted, notifyPMEditorRejected, notifyClientEditorAssigned, notifyEditorProjectAssigned } from '@/lib/whatsapp';
 
 /**
  * Toggles a user's disabled status in Firebase Auth and updates Firestore
@@ -356,17 +356,8 @@ export async function assignEditor(
             `Editor ${editorName} assigned to project.`
         );
 
-        const [clientAssignResult, editorAssignResult] = await Promise.all([
-            notifyClientEditorAccepted(projectId, editorName),
-            notifyEditorProjectAssigned(projectId, editorId, pmName, deadline),
-        ]);
-
-        if (!clientAssignResult.success) {
-            console.error('[WhatsApp] Client editor-assigned notification failed', {
-                projectId,
-                error: clientAssignResult.error,
-            });
-        }
+        // Only notify the EDITOR — client notification is deferred until editor accepts
+        const editorAssignResult = await notifyEditorProjectAssigned(projectId, editorId, pmName, deadline);
 
         if (!editorAssignResult.success) {
             console.error('[WhatsApp] Editor assignment notification failed', {
@@ -408,18 +399,44 @@ export async function respondToAssignment(projectId: string, response: 'accepted
         const expiresAt = projectData?.assignmentExpiresAt;
         
         if (expiresAt && now > expiresAt) {
-            // Assignment has expired - auto-reject and clear assignment
+            // Assignment has expired — auto-reject and clear assignment
             await projectRef.update({
                 assignmentStatus: 'expired',
                 status: 'pending_assignment',
-                editorDeclineReason: 'Assignment expired - no response within 5 minutes',
+                editorDeclineReason: 'Assignment expired - no response within 15 minutes',
                 assignedEditorId: admin.firestore.FieldValue.delete(),
                 editorPrice: admin.firestore.FieldValue.delete(),
                 assignmentAt: admin.firestore.FieldValue.delete(),
                 assignmentExpiresAt: admin.firestore.FieldValue.delete(),
                 updatedAt: now
             });
-            
+
+            // Notify PM about timeout via pro_delay WhatsApp template
+            const expiredPmId = projectData?.assignedPMId;
+            if (expiredPmId) {
+                const expiredEditorSnap = await adminDb.collection('users').doc(projectData?.assignedEditorId || '').get();
+                const expiredEditorName = expiredEditorSnap.exists ? expiredEditorSnap.data()?.displayName || 'Editor' : 'Editor';
+
+                // In-app notification
+                const expiredNotifRef = adminDb.collection('notifications').doc();
+                await expiredNotifRef.set({
+                    id: expiredNotifRef.id,
+                    userId: expiredPmId,
+                    type: 'project_rejected',
+                    title: `${projectData?.name || 'Project'} - Assignment Timed Out`,
+                    message: `${expiredEditorName} did not respond within 15 minutes. Please reassign the project.`,
+                    projectId,
+                    editorName: expiredEditorName,
+                    reason: 'No response within 15 minutes',
+                    read: false,
+                    link: `/dashboard?project=${projectId}`,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                // WhatsApp via pro_delay template
+                void notifyPMEditorRejected(projectId, expiredPmId, expiredEditorName, 'No response within 15 minutes');
+            }
+
             revalidatePath('/dashboard');
             return { success: false, error: 'Assignment has expired. The 15-minute acceptance window has passed.' };
         }
@@ -453,38 +470,25 @@ export async function respondToAssignment(projectId: string, response: 'accepted
 
         // Notify based on response
         if (response === 'accepted') {
-            let acceptedResults = await Promise.all([
-                notifyClientEditorAccepted(projectId, editorName),
-                pmId ? notifyPMEditorAccepted(projectId, pmId, editorName) : Promise.resolve({ success: true, error: undefined as string | undefined }),
-            ]);
+            // 1. Notify PM that editor accepted
+            const pmAcceptedResult = pmId
+                ? await notifyPMEditorAccepted(projectId, pmId, editorName)
+                : { success: true, error: undefined as string | undefined };
 
-            if (!acceptedResults[0].success) {
-                console.error('[WhatsApp] Client editor-accepted notification failed', {
-                    projectId,
-                    error: acceptedResults[0].error,
-                });
-
-                // Retry once explicitly to avoid silent misses in the critical accept flow.
-                const retryResult = await notifyClientEditorAccepted(projectId, editorName);
-                acceptedResults = [retryResult, acceptedResults[1]];
-
-                if (!retryResult.success) {
-                    console.error('[WhatsApp] Client editor-accepted notification retry failed', {
-                        projectId,
-                        error: retryResult.error,
-                    });
-                    return {
-                        success: false,
-                        error: retryResult.error || 'Editor accepted, but WhatsApp notification to client failed.',
-                    };
-                }
-            }
-
-            if (pmId && !acceptedResults[1].success) {
+            if (pmId && !pmAcceptedResult.success) {
                 console.error('[WhatsApp] PM editor-accepted notification failed', {
                     projectId,
                     pmId,
-                    error: acceptedResults[1].error,
+                    error: pmAcceptedResult.error,
+                });
+            }
+
+            // 2. NOW notify client — editor has accepted, it is safe to tell the client
+            const clientAcceptedResult = await notifyClientEditorAssigned(projectId);
+            if (!clientAcceptedResult.success) {
+                console.error('[WhatsApp] Client editor-accepted notification failed', {
+                    projectId,
+                    error: clientAcceptedResult.error,
                 });
             }
         } else if (response === 'rejected') {

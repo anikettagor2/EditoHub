@@ -28,7 +28,8 @@ import {
     CreditCard,
     AlertCircle,
     Mic,
-    Square
+    Square,
+    Archive
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1349,7 +1350,7 @@ export default function NewProjectPage() {
                                     <input 
                                         type="file" 
                                         multiple
-                                        accept="video/*,image/*"
+                                        accept="video/*,image/*,.zip,.rar,.7z"
                                         onChange={(e) => handleFileUpload(e, 'raw')}
                                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                     />
@@ -1359,7 +1360,7 @@ export default function NewProjectPage() {
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-sm font-bold text-foreground">Click or drag files to upload</p>
-                                            <p className="text-xs text-muted-foreground font-medium tracking-tight">Support for mp4, mov, jpg, png</p>
+                                            <p className="text-xs text-muted-foreground font-medium tracking-tight">Support for mp4, mov, jpg, png, zip, rar, 7z</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1370,7 +1371,7 @@ export default function NewProjectPage() {
                                             <div key={i} className="bg-muted/50 border border-border rounded-lg p-3 group">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                        {fileItem.file.type.includes('image') ? <ImageIcon className="w-4 h-4 text-amber-500 shrink-0" /> : <FileVideo className="w-4 h-4 text-blue-500 shrink-0" />}
+                                                        {fileItem.file.type.includes('image') ? <ImageIcon className="w-4 h-4 text-amber-500 shrink-0" /> : fileItem.file.name.match(/\.(zip|rar|7z)$/i) || fileItem.file.type.includes('zip') ? <Archive className="w-4 h-4 text-purple-500 shrink-0" /> : <FileVideo className="w-4 h-4 text-blue-500 shrink-0" />}
                                                         <span className="text-xs text-foreground truncate font-medium">{fileItem.file.name}</span>
                                                         <span className="text-[10px] text-muted-foreground">
                                                             ({(fileItem.file.size / 1024 / 1024).toFixed(1)} MB)
@@ -1418,7 +1419,7 @@ export default function NewProjectPage() {
                                     <input 
                                         type="file" 
                                         multiple
-                                        accept="video/*,image/*,audio/*,.pdf,.doc,.docx,.txt"
+                                        accept="video/*,image/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z"
                                         onChange={(e) => handleFileUpload(e, 'brole')}
                                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                     />
@@ -1439,7 +1440,7 @@ export default function NewProjectPage() {
                                             <div key={i} className="bg-muted/50 border border-border rounded-lg p-3 group">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                        {fileItem.file.type.includes('image') ? <ImageIcon className="w-4 h-4 text-amber-500 shrink-0" /> : fileItem.file.type.includes('video') ? <FileVideo className="w-4 h-4 text-blue-500 shrink-0" /> : <FileText className="w-4 h-4 text-gray-500 shrink-0" />}
+                                                        {fileItem.file.type.includes('image') ? <ImageIcon className="w-4 h-4 text-amber-500 shrink-0" /> : fileItem.file.type.includes('video') ? <FileVideo className="w-4 h-4 text-blue-500 shrink-0" /> : fileItem.file.name.match(/\.(zip|rar|7z)$/i) || fileItem.file.type.includes('zip') ? <Archive className="w-4 h-4 text-purple-500 shrink-0" /> : <FileText className="w-4 h-4 text-gray-500 shrink-0" />}
                                                         <span className="text-xs text-foreground truncate font-medium">{fileItem.file.name}</span>
                                                         <span className="text-[10px] text-muted-foreground">
                                                             ({(fileItem.file.size / 1024 / 1024).toFixed(1)} MB)

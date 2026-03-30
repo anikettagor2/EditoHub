@@ -7,7 +7,8 @@ import {
     notifyEditorNewComment,
     notifyEditorFeedbackReceived,
     notifyPMNewComment,
-    notifyPMProjectCompleted
+    notifyPMProjectCompleted,
+    sendWhatsAppNotification
 } from "@/lib/whatsapp";
 import { adminDb } from "@/lib/firebase/admin";
 import { revalidatePath } from "next/cache";
@@ -239,6 +240,57 @@ export async function handleEditorRatingSubmitted(projectId: string, rating: num
         return { success: true };
     } catch (error: any) {
         console.error("Error handling editor rating notification:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Notify editor when assigned to a project
+ */
+export async function notifyEditorAssigned(projectId: string, editorId: string) {
+    try {
+        // Get project data
+        const projectSnap = await adminDb.collection('projects').doc(projectId).get();
+        if (!projectSnap.exists) return { success: false, error: "Project not found" };
+        const project = projectSnap.data();
+        if (!project) return { success: false, error: "Project data not found" };
+
+        // Get editor data
+        const editorSnap = await adminDb.collection('users').doc(editorId).get();
+        if (!editorSnap.exists) return { success: false, error: "Editor not found" };
+        const editor = editorSnap.data();
+        if (!editor) return { success: false, error: "Editor data not found" };
+
+        const phoneNumber = editor.whatsappNumber || editor.phoneNumber;
+        if (!phoneNumber) return { success: false, error: "No phone number" };
+
+        // Get project price (use totalCost, pricingTierPrice, or budget)
+        const projectPrice = project.totalCost || project.pricingTierPrice || project.budget || 0;
+
+        // Send WhatsApp notification with specific campaign and template
+        const result = await sendWhatsAppNotification(
+            phoneNumber,
+            [
+                editor.displayName || editor.name || "Editor",
+                project.name || "Project", 
+                projectPrice.toString()
+            ],
+            "editor_assigned",
+            0,
+            { templateName: "editor_assigned" }
+        );
+
+        if (!result.success) {
+            console.error('[WhatsApp] Editor assignment notification failed', {
+                projectId,
+                editorId,
+                error: result.error,
+            });
+        }
+
+        return result;
+    } catch (error: any) {
+        console.error("Error notifying editor assignment:", error);
         return { success: false, error: error.message };
     }
 }

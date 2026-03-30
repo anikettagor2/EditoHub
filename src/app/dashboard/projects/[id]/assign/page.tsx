@@ -2,12 +2,13 @@
 
 import { useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Sparkles, Users, Star, CheckCircle2, Zap, ArrowRight, Loader2 } from "lucide-react";
+import { notifyEditorAssigned } from "@/app/actions/notification-actions";
 
 // Mock Editor Data
 const MOCK_EDITORS = [
@@ -77,6 +78,17 @@ export default function AssignEditorPage(props: { params: Promise<{ id: string }
                 status: "in_progress",
                 assignedAt: Date.now()
             });
+
+            // Fetch project and editor data for WhatsApp notification
+            const [projectSnap, editorSnap] = await Promise.all([
+                getDoc(projectRef),
+                getDoc(doc(db, "users", editorId))
+            ]);
+
+            if (projectSnap.exists && editorSnap.exists) {
+                // Send WhatsApp notification using server action
+                await notifyEditorAssigned(params.id, editorId);
+            }
             
             // Redirect to project dashboard
             router.push(`/dashboard/projects/${params.id}`);

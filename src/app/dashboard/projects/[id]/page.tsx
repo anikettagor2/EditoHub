@@ -35,7 +35,8 @@ import {
     FileText,
     Image as ImageIcon,
     Copy,
-    AlertCircle
+    AlertCircle,
+    Archive
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -660,14 +661,16 @@ export default function ProjectDetailsPage() {
                                             {project.rawFiles.map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between p-2.5 bg-black/5 dark:bg-black/40 rounded-lg border border-border group">
                                                     <div className="flex items-center gap-3 min-w-0">
-                                                        {file.type?.includes('image') ? <ImageIcon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" /> : <FileVideo className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />}
+                                                        {file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip') ? <Archive className="h-4 w-4 text-purple-500 group-hover:text-purple-400 transition-colors flex-shrink-0" /> : file.type?.includes('image') ? <ImageIcon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" /> : <FileVideo className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />}
                                                         <div className="flex flex-col min-w-0">
                                                             <span className="text-xs font-bold text-muted-foreground truncate">{file.name}</span>
                                                             <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{(file.size ? (file.size / (1024*1024)).toFixed(2) : '?')} MB</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        {!(file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip')) && (
+                                                            <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        )}
                                                         <button onClick={() => handleDirectDownload(file.url, file.name)} className="h-8 w-8 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-all flex items-center justify-center">
                                                             <Download className="h-3.5 w-3.5" />
                                                         </button>
@@ -689,13 +692,15 @@ export default function ProjectDetailsPage() {
                                             {(project as any).bRoleFiles.map((file: any, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between p-2.5 bg-amber-500/5 rounded-lg border border-amber-500/10 group">
                                                     <div className="flex items-center gap-3 min-w-0">
-                                                        {file.type?.includes('image') ? <ImageIcon className="h-4 w-4 text-amber-500/70 group-hover:text-amber-500 transition-colors" /> : <FileVideo className="h-4 w-4 text-amber-500/70 group-hover:text-amber-500 transition-colors" />}
+                                                        {file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip') ? <Archive className="h-4 w-4 text-purple-500 group-hover:text-purple-400 transition-colors" /> : file.type?.includes('image') ? <ImageIcon className="h-4 w-4 text-amber-500/70 group-hover:text-amber-500 transition-colors" /> : <FileVideo className="h-4 w-4 text-amber-500/70 group-hover:text-amber-500 transition-colors" />}
                                                         <div className="flex flex-col min-w-0">
                                                             <span className="text-xs font-bold text-amber-500/70 truncate">{file.name}</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-500 text-amber-500/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        {!(file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip')) && (
+                                                            <button onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} className="h-8 px-3 rounded bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-500 text-amber-500/70 text-[9px] font-bold uppercase tracking-widest transition-all">Preview</button>
+                                                        )}
                                                         <button onClick={() => handleDirectDownload(file.url, file.name)} className="h-8 w-8 rounded bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-500 text-amber-500/70 transition-all flex items-center justify-center">
                                                             <Download className="h-3.5 w-3.5" />
                                                         </button>
@@ -1384,21 +1389,23 @@ export default function ProjectDetailsPage() {
                                         {project.rawFiles.slice(0, 3).map((file, idx) => (
                                             <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                    <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                                    {file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip') ? <Archive className="h-4 w-4 text-purple-500 flex-shrink-0" /> : <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                         {file.size && <p className="text-[9px] text-muted-foreground">{(file.size / (1024*1024)).toFixed(1)} MB</p>}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                                    <button 
-                                                        onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} 
-                                                        className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        disabled={project.assignmentStatus === 'pending' && !isClient}
-                                                        title={project.assignmentStatus === 'pending' && !isClient ? "Accept project to preview" : ""}
-                                                    >
-                                                        Preview
-                                                    </button>
+                                                    {!(file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip')) && (
+                                                        <button 
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })} 
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            disabled={project.assignmentStatus === 'pending' && !isClient}
+                                                            title={project.assignmentStatus === 'pending' && !isClient ? "Accept project to preview" : ""}
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleDirectDownload(file.url, file.name)}
                                                         className="h-8 w-8 rounded-lg bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1533,7 +1540,7 @@ export default function ProjectDetailsPage() {
                                         {(project as any).bRoleFiles.slice(0, 2).map((file: any, idx: number) => (
                                             <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/30 transition-all group">
                                                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                    {file.type?.includes('image') ? (
+                                                    {file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip') ? <Archive className="h-4 w-4 text-purple-500 flex-shrink-0" /> : file.type?.includes('image') ? (
                                                         <ImageIcon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                                     ) : (
                                                         <FileVideo className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -1541,14 +1548,16 @@ export default function ProjectDetailsPage() {
                                                     <p className="text-xs font-semibold text-foreground truncate">{file.name}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                                    <button 
-                                                        onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })}
-                                                        className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        disabled={project.assignmentStatus === 'pending' && !isClient}
-                                                        title={project.assignmentStatus === 'pending' && !isClient ? "Accept project to preview" : ""}
-                                                    >
-                                                        Preview
-                                                    </button>
+                                                    {!(file.name.match(/\.(zip|rar|7z)$/i) || file.type?.includes('zip')) && (
+                                                        <button 
+                                                            onClick={() => setPreviewFile({ url: file.url, type: file.type || 'video/mp4', name: file.name })}
+                                                            className="h-8 px-2.5 rounded text-xs font-bold uppercase tracking-widest bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            disabled={project.assignmentStatus === 'pending' && !isClient}
+                                                            title={project.assignmentStatus === 'pending' && !isClient ? "Accept project to preview" : ""}
+                                                        >
+                                                            Preview
+                                                        </button>
+                                                    )}
                                                     <button 
                                                         onClick={() => handleDirectDownload(file.url, file.name)}
                                                         className="h-8 w-8 rounded-lg bg-muted/50 hover:bg-primary/20 text-muted-foreground hover:text-primary flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"

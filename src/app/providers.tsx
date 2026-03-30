@@ -54,6 +54,26 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator)) return;
 
+    // Service workers can hold stale app shell/chunk references during local dev.
+    // Keep SW disabled in development to avoid ChunkLoadError after restarts.
+    if (process.env.NODE_ENV !== 'production') {
+      const cleanupDevServiceWorkers = async () => {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(
+            registrations
+              .filter((registration) => registration.active?.scriptURL?.includes('/video-streaming-sw.js'))
+              .map((registration) => registration.unregister())
+          );
+        } catch (error) {
+          console.warn('Service worker cleanup failed in development:', error);
+        }
+      };
+
+      void cleanupDevServiceWorkers();
+      return;
+    }
+
     const registerVideoSw = async () => {
       try {
         await navigator.serviceWorker.register('/video-streaming-sw.js');
