@@ -52,6 +52,14 @@ function formatTime(seconds: number): string {
     return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** Route Firebase Storage URLs through our proxy to avoid CORS + improve caching */
+function videoProxy(url: string): string {
+    if (!url) return url;
+    // Already a proxy URL or a relative URL — don't double-wrap
+    if (url.startsWith("/api/video") || url.startsWith("blob:")) return url;
+    return `/api/video?url=${encodeURIComponent(url)}`;
+}
+
 export default function GuestReviewPage() {
     const params = useParams();
     const router = useRouter();
@@ -186,8 +194,8 @@ export default function GuestReviewPage() {
             cleanupHls();
 
             if (!hlsSource) {
-                // Direct MP4 — set src and let browser range-request handle it
-                videoElement.src = revision.videoUrl || "";
+                // Direct MP4 — route through proxy to avoid CORS and enable proper range requests
+                videoElement.src = videoProxy(revision.videoUrl || "");
                 videoElement.load();
                 setStreamMode("direct");
                 return;
@@ -226,18 +234,20 @@ export default function GuestReviewPage() {
             }
 
             if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-                videoElement.src = hlsSource;
+                // Safari native HLS — proxy the m3u8 URL
+                videoElement.src = videoProxy(hlsSource);
                 setStreamMode("hls");
                 return;
             }
 
-            videoElement.src = revision.videoUrl || "";
+            // Final fallback — proxy the direct MP4
+            videoElement.src = videoProxy(revision.videoUrl || "");
             videoElement.load();
             setStreamMode("direct");
         };
 
         initPlayback().catch(() => {
-            videoElement.src = revision.videoUrl || "";
+            videoElement.src = videoProxy(revision.videoUrl || "");
             setStreamMode("direct");
         });
 
@@ -299,6 +309,11 @@ export default function GuestReviewPage() {
 
     const togglePlayback = async () => {
         if (!videoRef.current) return;
+        // Don't try to play if video hasn't loaded yet
+        if (!videoReady || !duration) {
+            toast.error("Video is still loading, please wait.");
+            return;
+        }
         try {
             if (videoRef.current.paused) {
                 await videoRef.current.play();
@@ -309,7 +324,7 @@ export default function GuestReviewPage() {
             }
         } catch (error) {
             console.error("Playback toggle failed:", error);
-            toast.error("Playback control failed. Please try again.");
+            // Don't show toast — the video controls handle this naturally
         }
     };
 
@@ -434,20 +449,30 @@ export default function GuestReviewPage() {
                                 controls
                                 preload="metadata"
                                 playsInline
-                                crossOrigin="anonymous"
                                 onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                                 onLoadedMetadata={(e) => {
                                     setDuration(e.currentTarget.duration);
                                     setVideoReady(true);
+                                    setIsBuffering(false);
                                 }}
                                 onPlaying={() => {
                                     setIsPlaying(true);
                                     setIsBuffering(false);
                                 }}
                                 onPause={() => setIsPlaying(false)}
-                                onWaiting={() => setIsBuffering(true)}
+                                onWaiting={() => {
+                                    // Only show buffering if video is already loaded (not initial load)
+                                    if (videoReady) setIsBuffering(true);
+                                }}
                                 onCanPlay={() => setIsBuffering(false)}
-                                onStalled={() => setIsBuffering(true)}
+                                onCanPlayThrough={() => setIsBuffering(false)}
+                                onStalled={() => {
+                                    if (videoReady) setIsBuffering(true);
+                                }}
+                                onError={() => {
+                                    setIsBuffering(false);
+                                    setVideoReady(false);
+                                }}
                                 controlsList="nodownload"
                                 onContextMenu={(e) => e.preventDefault()}
                             />
