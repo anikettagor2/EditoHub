@@ -82,9 +82,11 @@ export default function GuestReviewPage() {
     useEffect(() => {
         if (!revisionId) return;
 
-        const loadData = async () => {
-            try {
-                const revSnap = await getDoc(doc(db, "revisions", revisionId));
+        // Use onSnapshot so we auto-upgrade from MP4→HLS the moment
+        // the Cloud Function finishes transcoding and writes `hlsUrl`.
+        const unsub = onSnapshot(
+            doc(db, "revisions", revisionId),
+            async (revSnap) => {
                 if (!revSnap.exists()) {
                     toast.error("Review link is invalid or expired.");
                     setLoading(false);
@@ -93,19 +95,27 @@ export default function GuestReviewPage() {
                 const revData = { id: revSnap.id, ...revSnap.data() } as RevisionDoc;
                 setRevision(revData);
 
-                const projSnap = await getDoc(doc(db, "projects", revData.projectId));
-                if (projSnap.exists()) {
-                    setProject({ id: projSnap.id, ...projSnap.data() });
+                // Load project once (only needed on first snapshot)
+                if (!project) {
+                    try {
+                        const projSnap = await getDoc(doc(db, "projects", revData.projectId));
+                        if (projSnap.exists()) {
+                            setProject({ id: projSnap.id, ...projSnap.data() });
+                        }
+                    } catch { /* non-critical */ }
                 }
-            } catch (error) {
+
+                setLoading(false);
+            },
+            (error) => {
                 console.error("Failed to load review data:", error);
                 toast.error("Error loading review system.");
-            } finally {
                 setLoading(false);
             }
-        };
+        );
 
-        loadData();
+        return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [revisionId]);
 
     useEffect(() => {
@@ -401,6 +411,20 @@ export default function GuestReviewPage() {
                                         <div className="absolute inset-0 border-2 border-primary rounded-full border-t-transparent animate-spin" />
                                     </div>
                                     <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Loading video...</span>
+                                </div>
+                            )}
+                            {/* HLS processing banner — shown when video is playable but HLS is still being generated */}
+                            {videoReady && !revision?.hlsUrl && streamMode === "direct" && (
+                                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/70 border border-yellow-500/30 backdrop-blur-sm">
+                                    <div className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-yellow-400">Optimizing for smooth playback…</span>
+                                </div>
+                            )}
+                            {/* HLS active badge */}
+                            {videoReady && streamMode === "hls" && (
+                                <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/70 border border-emerald-500/30 backdrop-blur-sm">
+                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">HD Stream</span>
                                 </div>
                             )}
                             <video

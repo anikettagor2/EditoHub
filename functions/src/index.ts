@@ -481,7 +481,7 @@ export const composeRawUpload = functions
 // Trigger: When a new revision is created – generate thumbnail + queue HLS
 // ---------------------------------------------------------------------------
 export const onRevisionCreated = functions
-    .runWith({ timeoutSeconds: 300, memory: "1GB" })
+    .runWith({ timeoutSeconds: 540, memory: "2GB" })
     .firestore
     .document("revisions/{revisionId}")
     .onCreate(async (snap: any, context: any) => {
