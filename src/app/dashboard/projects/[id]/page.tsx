@@ -340,38 +340,24 @@ export default function ProjectDetailsPage() {
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    const initiateDownload = async (revisionId: string) => {
-        // Logic check: Must be fully paid. Even payLater users must settle remaining balance first.
-        const isFullyPaid = project?.paymentStatus === 'full_paid';
-        const hasRemainingBalance = (project?.totalCost || 0) > (project?.amountPaid || 0);
-        
-        if (!isFullyPaid || hasRemainingBalance) {
-            setPendingDownloadId(revisionId);
-            setIsPaymentModalOpen(true);
-            return;
-        }
-
-        // Logic check: Must have rating (mandatory). Review/comment is optional.
-        if (!project?.editorRating) {
-            setPendingDownloadId(revisionId);
-            setIsRatingModalOpen(true);
-            return;
-        }
-
+    /**
+     * Directly executes the download — no validation.
+     * Only call this after ALL gates (payment + rating) have been confirmed.
+     */
+    const executeDownload = async (revisionId: string) => {
         setIsDownloadingState(true);
         try {
             const res = await registerDownload(id as string, revisionId);
             if (res.success && res.downloadUrl) {
                 await handleDirectDownload(
                     res.downloadUrl,
-                    `${project?.name || 'video'}_v${revisions.find(r => r.id===revisionId)?.version || 1}.mp4`
+                    `${project?.name || 'video'}_v${revisions.find(r => r.id === revisionId)?.version || 1}.mp4`
                 );
-                toast.success(`Download initiated.`);
-                
-                await updateDoc(doc(db, "projects", id as string), {
+                toast.success('Download initiated.');
+                await updateDoc(doc(db, 'projects', id as string), {
                     clientHasDownloaded: true,
                     downloadUnlockedAt: Date.now(),
-                    status: 'completed'
+                    status: 'completed',
                 });
                 setProject(prev => prev ? ({ ...prev, clientHasDownloaded: true, status: 'completed' }) : null);
             } else {
@@ -384,35 +370,66 @@ export default function ProjectDetailsPage() {
         }
     };
 
+    /**
+     * Gate 1 → Payment (all users, including payLater, must fully pay).
+     * Gate 2 → Rating (mandatory star, comment optional, first-time only).
+     * Gate 3 → executeDownload.
+     */
+    const initiateDownload = async (revisionId: string) => {
+        // GATE 1: Full payment required — no exceptions
+        const isFullyPaid = project?.paymentStatus === 'full_paid';
+        const hasRemainingBalance = (project?.totalCost || 0) > (project?.amountPaid || 0);
+
+        if (!isFullyPaid || hasRemainingBalance) {
+            setPendingDownloadId(revisionId);
+            setIsPaymentModalOpen(true);
+            return;
+        }
+
+        // GATE 2: Editor rating required on first download
+        if (!project?.editorRating) {
+            setPendingDownloadId(revisionId);
+            setIsRatingModalOpen(true);
+            return;
+        }
+
+        // All gates cleared — download
+        await executeDownload(revisionId);
+    };
+
     const handleRatingSubmit = async () => {
         if (editorRating === 0) {
-            toast.error("Please select a rating.");
+            toast.error('Please select a star rating.');
             return;
         }
         setIsSubmittingRating(true);
         try {
             const res = await submitEditorRating(id as string, editorRating, editorReview);
             if (res.success) {
-                toast.success("Thank you for your feedback!");
+                toast.success('Thank you for your feedback!');
                 setProject(prev => prev ? ({ ...prev, editorRating, editorReview }) : null);
                 setIsRatingModalOpen(false);
-                
-                // Notify editor about the feedback (fire-and-forget)
+
+                // Notify editor (fire-and-forget)
                 handleEditorRatingSubmitted(id as string, editorRating).catch(console.error);
-                
+
+                // Call executeDownload DIRECTLY — not initiateDownload — to avoid stale
+                // closure where project.editorRating is still undefined after setProject.
                 if (pendingDownloadId) {
-                    await initiateDownload(pendingDownloadId);
+                    const rid = pendingDownloadId;
                     setPendingDownloadId(null);
+                    await executeDownload(rid);
                 }
             } else {
                 toast.error(res.error);
             }
         } catch (e: any) {
-            toast.error("Failed to submit rating.");
+            toast.error('Failed to submit rating.');
         } finally {
             setIsSubmittingRating(false);
         }
     };
+
 
     const handleFinalPayment = () => {
         if (user?.payLater) return;
@@ -1861,13 +1878,22 @@ export default function ProjectDetailsPage() {
                                 }) : null);
 
                                 setIsPaymentModalOpen(false);
-                                
-                                toast.success("Payment successful! Now provide feedback to start your download.");
-                                
-                                // Automatically open the rating modal after a small delay to allow transition
-                                setTimeout(() => {
-                                    setIsRatingModalOpen(true);
-                                }, 500);
+
+                                // If they've already rated before, go straight to download.
+                                // Otherwise, require rating first.
+                                if (project?.editorRating) {
+                                    toast.success("Payment successful! Starting your download...");
+                                    if (pendingDownloadId) {
+                                        const rid = pendingDownloadId;
+                                        setPendingDownloadId(null);
+                                        setTimeout(() => executeDownload(rid), 300);
+                                    }
+                                } else {
+                                    toast.success("Payment successful! Please rate your editor to unlock the download.");
+                                    setTimeout(() => {
+                                        setIsRatingModalOpen(true);
+                                    }, 500);
+                                }
                             }}
                         />
                         <p className="text-center text-[10px] text-muted-foreground font-bold uppercase tracking-widest opacity-60">
