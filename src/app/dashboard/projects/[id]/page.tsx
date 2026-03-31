@@ -341,17 +341,17 @@ export default function ProjectDetailsPage() {
     };
 
     const initiateDownload = async (revisionId: string) => {
-        // Logic check: Must be fully paid unless it's a payLater user with auth
+        // Logic check: Must be fully paid. Even payLater users must settle remaining balance first.
         const isFullyPaid = project?.paymentStatus === 'full_paid';
-        const isPayLater = user?.payLater || (project as any).isPayLaterRequest;
+        const hasRemainingBalance = (project?.totalCost || 0) > (project?.amountPaid || 0);
         
-        if (!isFullyPaid && !isPayLater) {
+        if (!isFullyPaid || hasRemainingBalance) {
             setPendingDownloadId(revisionId);
             setIsPaymentModalOpen(true);
             return;
         }
 
-        // Logic check: Must have rating and feedback
+        // Logic check: Must have rating (mandatory). Review/comment is optional.
         if (!project?.editorRating) {
             setPendingDownloadId(revisionId);
             setIsRatingModalOpen(true);
@@ -368,19 +368,12 @@ export default function ProjectDetailsPage() {
                 );
                 toast.success(`Download initiated.`);
                 
-                if (isPayLater) {
-                    await updateDoc(doc(db, "projects", id as string), {
-                        clientHasDownloaded: true,
-                        downloadUnlockedAt: Date.now(),
-                        status: 'completed'
-                    });
-                    setProject(prev => prev ? ({ ...prev, clientHasDownloaded: true, status: 'completed' }) : null);
-                } else {
-                    await updateDoc(doc(db, "projects", id as string), {
-                        status: 'completed'
-                    });
-                    setProject(prev => prev ? ({ ...prev, status: 'completed' }) : null);
-                }
+                await updateDoc(doc(db, "projects", id as string), {
+                    clientHasDownloaded: true,
+                    downloadUnlockedAt: Date.now(),
+                    status: 'completed'
+                });
+                setProject(prev => prev ? ({ ...prev, clientHasDownloaded: true, status: 'completed' }) : null);
             } else {
                 toast.error(res.error || 'Download error.');
             }
@@ -997,7 +990,8 @@ export default function ProjectDetailsPage() {
                                     )}
                                     {isClient ? (
                                         (() => {
-                                            const isPayLater = user?.payLater || (project as any).isPayLaterRequest;
+                                            const hasRemainingBalance = (project?.totalCost || 0) > (project?.amountPaid || 0);
+                                            const needsPayment = project?.paymentStatus !== 'full_paid' || hasRemainingBalance;
                                             
                                             return (
                                                 <button
@@ -1008,7 +1002,7 @@ export default function ProjectDetailsPage() {
                                                     }}
                                                     className={cn(
                                                         "h-11 px-6 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all active:scale-[0.98] flex items-center gap-2.5 shadow-md",
-                                                        isPaymentLocked && !isPayLater 
+                                                        needsPayment
                                                             ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/10"
                                                             : !project.editorRating
                                                                 ? "bg-amber-600 text-white hover:bg-amber-700 shadow-amber-500/10"
@@ -1020,7 +1014,7 @@ export default function ProjectDetailsPage() {
                                                     ) : (
                                                         <>
                                                             <Download className="h-4 w-4" /> 
-                                                            {isPaymentLocked && !isPayLater 
+                                                            {needsPayment
                                                                 ? "Pay & Download" 
                                                                 : !project.editorRating 
                                                                     ? "Rate & Download" 
@@ -1798,7 +1792,7 @@ export default function ProjectDetailsPage() {
 
             {/* Payment Authorization Modal */}
             <Modal
-               isOpen={isPaymentModalOpen && !user?.payLater}
+               isOpen={isPaymentModalOpen}
                onClose={() => setIsPaymentModalOpen(false)}
                title="Payment"
             >
@@ -1933,7 +1927,7 @@ export default function ProjectDetailsPage() {
                         ))}
                     </div>
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Leave a Review (Required)</label>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Leave a Review <span className="text-muted-foreground/50 normal-case font-medium">(Optional)</span></label>
                         <textarea
                             value={editorReview}
                             onChange={(e) => setEditorReview(e.target.value)}
@@ -1941,12 +1935,17 @@ export default function ProjectDetailsPage() {
                             className="w-full h-32 bg-black/5 dark:bg-black/40 border border-border rounded-xl p-4 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors resize-none"
                         />
                     </div>
+                    {editorRating === 0 && (
+                        <p className="text-[11px] text-amber-500 font-bold text-center flex items-center justify-center gap-1.5">
+                            <Star className="h-3.5 w-3.5 fill-amber-500" /> A star rating is required to proceed
+                        </p>
+                    )}
                     <button
                         onClick={handleRatingSubmit}
-                        disabled={isSubmittingRating || editorRating === 0 || !editorReview.trim()}
+                        disabled={isSubmittingRating || editorRating === 0}
                         className="w-full h-12 rounded-xl bg-primary  text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-50"
                     >
-                        {isSubmittingRating ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit Feedback"}
+                        {isSubmittingRating ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit & Download"}
                     </button>
                 </div>
             </Modal>

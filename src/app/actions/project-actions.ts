@@ -5,7 +5,7 @@ import { Project, Revision } from "@/types/schema";
 import { revalidatePath } from "next/cache";
 import { FieldValue } from "firebase-admin/firestore";
 
-const DOWNLOAD_LIMIT = 3;
+const DOWNLOAD_LIMIT = 10;
 const ASSET_PURGE_DELAY_MS = 24 * 60 * 60 * 1000;
 
 /**

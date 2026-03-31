@@ -778,9 +778,9 @@ export async function updateGlobalPrices(prices: any) {
 export async function getSystemSettings() {
     try {
         const snap = await adminDb.collection('settings').doc('system').get();
-        if (!snap.exists) return { success: true, data: { allowDuplicatePhone: false, downloadLimit: 3 } };
+        if (!snap.exists) return { success: true, data: { allowDuplicatePhone: false, downloadLimit: 10 } };
         const data = snap.data();
-        return { success: true, data: { ...data, downloadLimit: data?.downloadLimit ?? 3 } };
+        return { success: true, data: { ...data, downloadLimit: data?.downloadLimit ?? 10 } };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
