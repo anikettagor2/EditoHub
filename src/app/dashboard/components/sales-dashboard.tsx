@@ -774,6 +774,7 @@ export function SalesDashboard() {
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Email</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Password</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Project Manager</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Auto Pay / Pay Later</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                                         <th className="px-4 py-3 w-12"></th>
                                     </tr>
@@ -902,6 +903,28 @@ export function SalesDashboard() {
                                                             </div>
                                                         );
                                                     })()}
+                                                </td>
+
+                                                {/* Auto Pay / Pay Later Toggle */}
+                                                <td className="px-4 py-4 text-center">
+                                                    <label className="inline-flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!client.payLater}
+                                                            onChange={async (e) => {
+                                                                try {
+                                                                    await updateDoc(doc(db, "users", client.id), { payLater: e.target.checked });
+                                                                    toast.success(`Pay Later ${e.target.checked ? 'enabled' : 'disabled'} for ${client.displayName}`);
+                                                                } catch (err) {
+                                                                    toast.error('Failed to update Pay Later status');
+                                                                }
+                                                            }}
+                                                            className="form-checkbox h-5 w-5 text-primary rounded focus:ring-primary border-border"
+                                                        />
+                                                        <span className="ml-2 text-xs font-medium text-muted-foreground">
+                                                            {client.payLater ? 'Enabled' : 'Disabled'}
+                                                        </span>
+                                                    </label>
                                                 </td>
 
                                                 {/* Status */}

@@ -927,6 +927,7 @@ export function AdminDashboard() {
                                <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Price</th>
                                <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Editor Share</th>
                                <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Payment</th>
+                               <th className="px-3 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border">Pay Later</th>
                                <th className="px-3 py-3 border-b border-border w-[64px]"></th>
                            </tr>
                        </thead>
@@ -1011,34 +1012,53 @@ export function AdminDashboard() {
                                     </td>
                                     <td className="px-3 py-3 text-xs font-black text-foreground tabular-nums whitespace-nowrap">₹{(project.totalCost || 0).toLocaleString()}</td>
                                     <td className="px-3 py-3 text-xs font-black text-blue-400 tabular-nums whitespace-nowrap">₹{(project.editorPrice || 0).toLocaleString()}</td>
-                                    <td className="px-3 py-3">
-                                        <div className="flex flex-col gap-1 min-w-[140px]">
-                                            <span className={cn(
-                                                "text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-widest w-fit",
-                                                project.paymentStatus === 'full_paid'
-                                                    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                                                    : "bg-red-500/10 text-red-400 border-red-500/20"
-                                            )}>
-                                                Client: {project.paymentStatus === 'full_paid' ? 'Paid' : 'Pending'}
-                                            </span>
-                                            <span className={cn(
-                                                "text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-widest w-fit",
-                                                project.assignedEditorId
-                                                    ? (project.editorPaid ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20")
-                                                    : "bg-zinc-500/10 text-muted-foreground border-zinc-500/20"
-                                            )}>
-                                                Editor: {project.assignedEditorId ? (project.editorPaid ? 'Paid' : 'Pending') : 'N/A'}
-                                            </span>
-                                            <span className={cn(
-                                                "text-[8px] px-1.5 py-0.5 rounded uppercase font-bold tracking-widest border w-fit",
-                                                (project as any).isPayLaterRequest
-                                                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                                    : "bg-zinc-500/10 text-muted-foreground border-zinc-500/20"
-                                            )}>
-                                                Pay Later {(project as any).isPayLaterRequest ? 'Enabled' : 'Disabled'}
-                                            </span>
-                                        </div>
-                                    </td>
+                                       <td className="px-3 py-3">
+                                           <div className="flex flex-col gap-1 min-w-[140px]">
+                                               <span className={cn(
+                                                   "text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-widest w-fit",
+                                                   project.paymentStatus === 'full_paid'
+                                                       ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                       : "bg-red-500/10 text-red-400 border-red-500/20"
+                                               )}>
+                                                   Client: {project.paymentStatus === 'full_paid' ? 'Paid' : 'Pending'}
+                                               </span>
+                                               <span className={cn(
+                                                   "text-[9px] px-2 py-0.5 rounded border uppercase font-bold tracking-widest w-fit",
+                                                   project.assignedEditorId
+                                                       ? (project.editorPaid ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20")
+                                                       : "bg-zinc-500/10 text-muted-foreground border-zinc-500/20"
+                                               )}>
+                                                   Editor: {project.assignedEditorId ? (project.editorPaid ? 'Paid' : 'Pending') : 'N/A'}
+                                               </span>
+                                           </div>
+                                       </td>
+                                       {/* Pay Later Toggle */}
+                                       <td className="px-3 py-3 text-center">
+                                           {(() => {
+                                               const client = users.find(u => u.uid === project.clientId);
+                                               if (!client) return <span className="text-xs text-muted-foreground">N/A</span>;
+                                               return (
+                                                   <label className="inline-flex items-center cursor-pointer">
+                                                       <input
+                                                           type="checkbox"
+                                                           checked={!!client.payLater}
+                                                           onChange={async (e) => {
+                                                               try {
+                                                                   await updateDoc(doc(db, "users", client.uid), { payLater: e.target.checked });
+                                                                   toast.success(`Pay Later ${e.target.checked ? 'enabled' : 'disabled'} for ${client.displayName}`);
+                                                               } catch (err) {
+                                                                   toast.error('Failed to update Pay Later status');
+                                                               }
+                                                           }}
+                                                           className="form-checkbox h-5 w-5 text-primary rounded focus:ring-primary border-border"
+                                                       />
+                                                       <span className="ml-2 text-xs font-medium text-muted-foreground">
+                                                           {client.payLater ? 'Enabled' : 'Disabled'}
+                                                       </span>
+                                                   </label>
+                                               );
+                                           })()}
+                                       </td>
                                    <td className="px-3 py-3 text-right">
                                        <DropdownMenu>
                                             <DropdownMenuTrigger asChild>

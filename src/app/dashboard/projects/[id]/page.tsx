@@ -371,30 +371,48 @@ export default function ProjectDetailsPage() {
     };
 
     /**
-     * Gate 1 → Payment (all users, including payLater, must fully pay).
+     * Gate 1 → Payment (payLater users can download if PM unlocked OR fully paid; regular users must be fully paid).
      * Gate 2 → Rating (mandatory star, comment optional, first-time only).
      * Gate 3 → executeDownload.
      */
     const initiateDownload = async (revisionId: string) => {
-        // GATE 1: Full payment required — no exceptions
+        // GATE 1: If any payment is made for this project, treat as pay now (ignore pay later for this project)
         const isFullyPaid = project?.paymentStatus === 'full_paid';
-        const hasRemainingBalance = (project?.totalCost || 0) > (project?.amountPaid || 0);
+        const hasAnyPayment = (project?.amountPaid || 0) > 0 || !!project?.paymentStatus;
+        const isDownloadUnlockedByPM = project?.downloadsUnlocked;
+        const requireRating = !project?.editorRating;
 
-        if (!isFullyPaid || hasRemainingBalance) {
-            setPendingDownloadId(revisionId);
-            setIsPaymentModalOpen(true);
+        if (hasAnyPayment) {
+            // After any payment, require full payment and rating for download
+            if (!isFullyPaid) {
+                toast.error('Please make the full payment to download the file.');
+                setPendingDownloadId(revisionId);
+                setIsPaymentModalOpen(true);
+                return;
+            }
+            if (requireRating) {
+                setPendingDownloadId(revisionId);
+                setIsRatingModalOpen(true);
+                return;
+            }
+            await executeDownload(revisionId);
             return;
         }
-
-        // GATE 2: Editor rating required on first download
-        if (!project?.editorRating) {
-            setPendingDownloadId(revisionId);
-            setIsRatingModalOpen(true);
-            return;
+        // Only if no payment at all, allow pay later download unlock
+        if (user?.payLater || (project as any)?.isPayLaterRequest) {
+            if (isDownloadUnlockedByPM) {
+                if (requireRating) {
+                    setPendingDownloadId(revisionId);
+                    setIsRatingModalOpen(true);
+                    return;
+                }
+                await executeDownload(revisionId);
+                return;
+            }
         }
-
-        // All gates cleared — download
-        await executeDownload(revisionId);
+        // Not eligible for download
+        toast.error('You are not eligible to download this file yet.');
+        return;
     };
 
     const handleRatingSubmit = async () => {
@@ -882,7 +900,12 @@ export default function ProjectDetailsPage() {
                             <div className="text-xl font-bold text-emerald-400 mt-1 tabular-nums truncate">₹{project.totalCost?.toLocaleString() || 0}</div>
                         </div>
                     </div>
-                    {latestRevision && (project.paymentStatus === 'full_paid' || user?.payLater || (project as any).isPayLaterRequest) && (
+                    {latestRevision && (
+                        // If any payment is made, only allow download if fully paid
+                        ((project.paymentStatus === 'full_paid') ||
+                        // If no payment at all, allow pay later download if PM unlocked
+                        (((!project.paymentStatus && (!project.amountPaid || project.amountPaid === 0)) && (user?.payLater || (project as any).isPayLaterRequest) && project.downloadsUnlocked))
+                    )) && (
                         <div className="enterprise-card border-primary/20 bg-primary/[0.02] p-8 sm:p-12 text-center space-y-6 flex flex-col items-center">
                             <div className="h-16 w-16 bg-primary/20 border border-primary/30 rounded-2xl flex items-center justify-center text-primary shadow-[0_0_30px_rgba(99,102,241,0.2)]">
                                 <FileVideo className="h-8 w-8" />
