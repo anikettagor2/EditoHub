@@ -1,270 +1,304 @@
-/**
- * Adaptive Video Player Component
- * Demonstrates integration with VideoStreamingEngine
- * Shows buffering, quality, and bandwidth information
- */
+"use client";
 
-'use client';
-
-import React, { useRef, useEffect, useState } from 'react';
-import { useVideoStreaming } from '@/hooks/use-video-streaming';
-import { Play, Pause, Volume2, Settings } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { Play, Pause, VolumeX, Volume2, Maximize } from 'lucide-react';
+import HLS from 'hls.js';
 
 interface AdaptiveVideoPlayerProps {
-    videoUrl: string;
-    videoDuration: number;
-    title?: string;
-    showMetrics?: boolean;
+  src?: string;
+  hlsUrl?: string;
+  videoUrl?: string;
+  projectName?: string;
+  onTimeUpdate?: (currentTime: number, duration?: number) => void;
+  onDurationChange?: (duration: number) => void;
+  onPlaying?: () => void;
+  onPause?: () => void;
+  onCanPlay?: () => void;
+  onWaiting?: () => void;
+  onCanPlayThrough?: () => void;
+  onStalled?: () => void;
+  onError?: (error: any) => void;
+  title?: string;
+  className?: string;
 }
 
 export function AdaptiveVideoPlayer({
-    videoUrl,
-    videoDuration,
-    title = 'Video Player',
-    showMetrics = true,
+  src,
+  hlsUrl,
+  videoUrl,
+  projectName,
+  onTimeUpdate,
+  onDurationChange,
+  onPlaying,
+  onPause,
+  onCanPlay,
+  onWaiting,
+  onCanPlayThrough,
+  onStalled,
+  onError,
+  className = '',
 }: AdaptiveVideoPlayerProps) {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const { state, play, pause, togglePlayPause, seek } = useVideoStreaming({
-        videoUrl,
-        videoDuration,
-        chunkDuration: 3,
-        autoInitialize: true,
-    });
+  // Refs
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const [showSettings, setShowSettings] = useState(false);
+  // State
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [showControls, setShowControls] = useState(true);
 
-    /**
-     * Format time in MM:SS
-     */
-    const formatTime = (seconds: number): string => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
+  // Use provided URL - prioritize videoUrl, then src, then hlsUrl
+  const finalUrl = videoUrl || src || hlsUrl;
 
-    /**
-     * Handle progress bar click
-     */
-    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
-        const newTime = percent * state.duration;
-        seek(newTime);
-    };
+  // Debug logging
+  useEffect(() => {
+    console.log('[AdaptiveVideoPlayer] Loading video with URL:', finalUrl);
+  }, [finalUrl]);
 
+  // Handle HLS streams
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (hlsUrl && HLS.isSupported()) {
+      const hls = new HLS({
+        enableWorker: true,
+        lowLatencyMode: true,
+      });
+
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+
+      hls.on(HLS.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          console.error('[AdaptiveVideoPlayer] HLS Error:', {
+            type: data.type,
+            details: data.details,
+            error: data.error,
+          });
+          switch (data.type) {
+            case HLS.ErrorTypes.NETWORK_ERROR:
+              hls.startLoad();
+              break;
+            case HLS.ErrorTypes.MEDIA_ERROR:
+              hls.recoverMediaError();
+              break;
+            default:
+              break;
+          }
+        }
+      });
+
+      return () => {
+        hls.destroy();
+      };
+    }
+  }, [hlsUrl]);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseFloat(e.target.value);
+    setVolume(vol);
+    if (videoRef.current) {
+      videoRef.current.volume = vol;
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    setCurrentTime(time);
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (containerRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        containerRef.current.requestFullscreen().catch(() => {});
+      }
+    }
+  };
+
+  const handleMouseMove = () => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current != null) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    if (isPlaying) {
+      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || !isFinite(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  if (!finalUrl) {
     return (
-        <div className="w-full bg-black rounded-lg overflow-hidden shadow-xl">
-            {/* Video Container */}
-            <div className="relative bg-black aspect-video flex items-center justify-center">
-                {/* Placeholder for video element */}
-                <div className="absolute inset-0 bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="text-white text-sm font-medium mb-2">
-                            {title}
-                        </div>
-                        <div className="text-slate-400 text-xs">
-                            Video Streaming Player
-                        </div>
-                    </div>
-                </div>
-
-                {/* Buffering Indicator */}
-                {state.isBuffering && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                            <span className="text-white text-sm">Buffering...</span>
-                        </div>
-                    </div>
-                )}
-
-                {/* Metrics Overlay */}
-                {showMetrics && (
-                    <div className="absolute top-2 right-2 bg-black/70 backdrop-blur text-white text-xs rounded p-2 max-w-xs z-20">
-                        <div className="space-y-1">
-                            <div>
-                                <span className="text-slate-400">Quality:</span>{' '}
-                                <span className="font-bold">{state.quality}</span>
-                            </div>
-                            <div>
-                                <span className="text-slate-400">Buffer:</span>{' '}
-                                <span
-                                    className={`font-bold ${
-                                        state.bufferHealth === 'critical'
-                                            ? 'text-red-400'
-                                            : state.bufferHealth === 'low'
-                                              ? 'text-yellow-400'
-                                              : state.bufferHealth === 'good'
-                                                ? 'text-green-400'
-                                                : 'text-blue-400'
-                                    }`}
-                                >
-                                    {state.bufferHealth}
-                                </span>{' '}
-                                ({state.bufferedSeconds.toFixed(1)}s)
-                            </div>
-                            <div>
-                                <span className="text-slate-400">Bandwidth:</span>{' '}
-                                <span className="font-bold">{state.bandwidth} Kbps</span>
-                            </div>
-                            <div>
-                                <span className="text-slate-400">Status:</span>{' '}
-                                <span className="font-bold">
-                                    {state.isInitialized ? '✓ Ready' : '⟳ Loading...'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Progress Bar */}
-            <div className="bg-slate-900 px-4 py-2">
-                <div
-                    onClick={handleSeek}
-                    className="relative h-1 bg-slate-700 rounded-full cursor-pointer group hover:h-2 transition-all"
-                >
-                    {/* Buffered portion */}
-                    <div
-                        className="absolute h-full bg-slate-500 rounded-full transition-all duration-200"
-                        style={{
-                            width: `${(state.bufferedSeconds / state.duration) * 100}%`,
-                        }}
-                    ></div>
-
-                    {/* Played portion */}
-                    <div
-                        className="absolute h-full bg-blue-500 rounded-full transition-all duration-200"
-                        style={{
-                            width: `${(state.currentTime / state.duration) * 100}%`,
-                        }}
-                    ></div>
-
-                    {/* Progress indicator */}
-                    <div
-                        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{
-                            left: `${(state.currentTime / state.duration) * 100}%`,
-                            marginLeft: '-6px',
-                        }}
-                    ></div>
-                </div>
-
-                {/* Time display */}
-                <div className="flex justify-between items-center mt-2 text-xs text-slate-400">
-                    <span>{formatTime(state.currentTime)}</span>
-                    <span>{formatTime(state.duration)}</span>
-                </div>
-            </div>
-
-            {/* Controls */}
-            <div className="bg-slate-900 px-4 py-3 flex items-center gap-3">
-                {/* Play/Pause Button */}
-                <button
-                    onClick={togglePlayPause}
-                    disabled={!state.isInitialized}
-                    className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white transition-colors cursor-pointer active:scale-95"
-                    title={state.isPlaying ? 'Pause' : 'Play'}
-                >
-                    {state.isPlaying ? (
-                        <Pause size={20} className="fill-current" />
-                    ) : (
-                        <Play size={20} className="fill-current" />
-                    )}
-                </button>
-
-                {/* Volume Control */}
-                <button
-                    className="p-2 rounded-lg hover:bg-slate-700 text-white transition-colors cursor-pointer active:scale-95"
-                    title="Mute"
-                >
-                    <Volume2 size={20} />
-                </button>
-
-                {/* Spacer */}
-                <div className="flex-1"></div>
-
-                {/* Settings Button */}
-                <button
-                    onClick={() => setShowSettings(!showSettings)}
-                    className="p-2 rounded-lg hover:bg-slate-700 text-white transition-colors cursor-pointer active:scale-95"
-                    title="Settings"
-                >
-                    <Settings size={20} />
-                </button>
-
-                {/* Status Indicator */}
-                <div className="text-xs text-slate-400 flex items-center gap-2">
-                    {state.isBuffering && (
-                        <>
-                            <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
-                            <span>Buffering</span>
-                        </>
-                    )}
-                    {!state.isBuffering && state.isInitialized && (
-                        <>
-                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                            <span>Live</span>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* Settings Panel */}
-            {showSettings && (
-                <div className="bg-slate-800 px-4 py-3 border-t border-slate-700">
-                    <div className="text-sm text-white space-y-3">
-                        <div>
-                            <h4 className="font-bold mb-2 text-slate-300">
-                                Streaming Information
-                            </h4>
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div>
-                                    <span className="text-slate-400">Current Quality:</span>
-                                    <p className="text-white font-bold mt-1">
-                                        {state.quality}
-                                    </p>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400">Bandwidth:</span>
-                                    <p className="text-white font-bold mt-1">
-                                        {state.bandwidth} Kbps
-                                    </p>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400">Buffer Health:</span>
-                                    <p
-                                        className={`font-bold mt-1 ${
-                                            state.bufferHealth === 'critical'
-                                                ? 'text-red-400'
-                                                : state.bufferHealth === 'low'
-                                                  ? 'text-yellow-400'
-                                                  : state.bufferHealth === 'good'
-                                                    ? 'text-green-400'
-                                                    : 'text-blue-400'
-                                        }`}
-                                    >
-                                        {state.bufferHealth}
-                                    </p>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400">Buffered:</span>
-                                    <p className="text-white font-bold mt-1">
-                                        {state.bufferedSeconds.toFixed(1)}s
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Error Display */}
-            {state.error && (
-                <div className="bg-red-900/30 border border-red-600/50 text-red-300 px-4 py-2 text-sm">
-                    <span className="font-bold">Error:</span> {state.error}
-                </div>
-            )}
+      <div className={`relative w-full bg-black aspect-video rounded-xl overflow-hidden flex items-center justify-center ${className}`}>
+        <div className="text-center text-white space-y-2">
+          <p className="text-sm font-semibold">Preparing video...</p>
+          <p className="text-xs text-gray-400">Video is being transcoded for streaming. This may take a few moments.</p>
+          <div className="flex justify-center mt-4">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+          </div>
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative w-full bg-black aspect-video rounded-xl overflow-hidden group ${className}`}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => isPlaying && setShowControls(false)}
+    >
+      {/* Video Element */}
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        crossOrigin="anonymous"
+        preload="metadata"
+        src={hlsUrl && HLS.isSupported() ? undefined : finalUrl}
+        onPlay={() => {
+          setIsPlaying(true);
+          onPlaying?.();
+        }}
+        onPause={() => {
+          setIsPlaying(false);
+          onPause?.();
+        }}
+        onTimeUpdate={() => {
+          const time = videoRef.current?.currentTime || 0;
+          setCurrentTime(time);
+          onTimeUpdate?.(time, duration);
+        }}
+        onDurationChange={() => {
+          const dur = videoRef.current?.duration || 0;
+          setDuration(dur);
+          onDurationChange?.(dur);
+        }}
+        onLoadedMetadata={() => onCanPlay?.()}
+        onCanPlay={() => onCanPlayThrough?.()}
+        onWaiting={() => onWaiting?.()}
+        onStalled={() => onStalled?.()}
+        onError={(e) => {
+          const errorCode = (e.target as HTMLVideoElement).error?.code;
+          const errorMessage = (e.target as HTMLVideoElement).error?.message;
+          console.error('[AdaptiveVideoPlayer] Error:', {
+            code: errorCode,
+            message: errorMessage,
+            videoSrc: finalUrl,
+            eventError: e,
+          });
+          onError?.(e);
+        }}
+      />
+
+      {/* Play Button Overlay */}
+      {!isPlaying && (
+        <button
+          onClick={togglePlay}
+          className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition z-10"
+        >
+          <div className="bg-white/20 hover:bg-white/30 rounded-full p-6 transition">
+            <Play className="h-16 w-16 text-white fill-white" />
+          </div>
+        </button>
+      )}
+
+      {/* Controls Bar */}
+      <div
+        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/70 to-transparent p-4 transition-opacity duration-300 ${
+          showControls ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {/* Progress Bar */}
+        <input
+          type="range"
+          min="0"
+          max={duration || 0}
+          value={currentTime}
+          onChange={handleSeek}
+          className="w-full h-1 bg-gray-600 rounded cursor-pointer mb-3"
+          style={{
+            background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
+              duration ? (currentTime / duration) * 100 : 0
+            }%, rgb(75, 85, 99) ${duration ? (currentTime / duration) * 100 : 0}%, rgb(75, 85, 99) 100%)`,
+          }}
+        />
+
+        {/* Bottom Controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Play/Pause */}
+            <button onClick={togglePlay} className="text-white hover:text-blue-400 transition">
+              {isPlaying ? (
+                <Pause className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5 fill-current" />
+              )}
+            </button>
+
+            {/* Volume */}
+            <div className="flex items-center gap-2">
+              <button onClick={toggleMute} className="text-white hover:text-blue-400 transition">
+                {isMuted || volume === 0 ? (
+                  <VolumeX className="h-5 w-5" />
+                ) : (
+                  <Volume2 className="h-5 w-5" />
+                )}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="w-16 h-1 bg-gray-600 rounded cursor-pointer"
+              />
+            </div>
+
+            {/* Time */}
+            <span className="text-xs text-white/70 font-mono ml-2">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          </div>
+
+          {/* Fullscreen */}
+          <button onClick={toggleFullscreen} className="text-white hover:text-blue-400 transition">
+            <Maximize className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

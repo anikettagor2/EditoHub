@@ -3,11 +3,14 @@
 import { AuthProvider } from "@/lib/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BrandingProvider } from "@/lib/context/branding-context";
+import { setupAbortErrorSuppression } from "@/lib/video/suppressAbortError";
 
 import { useEffect } from "react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
+    // Setup console error suppression for AbortError
+    setupAbortErrorSuppression();
     // Disable right-click
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();

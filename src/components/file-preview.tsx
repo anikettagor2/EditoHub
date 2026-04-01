@@ -1,23 +1,26 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { 
-  FileText, 
-  FileImage, 
-  FileVideo, 
-  FileAudio, 
+import {
+  FileText,
+  FileImage,
+  FileVideo,
+  FileAudio,
   File,
   Eye,
   X
 } from "lucide-react";
 import Image from "next/image";
 import { warmVideoInMemory } from "@/lib/video-preload";
+import { useIntersectionObserver } from "@/hooks/use-intersection-observer";
+import Hls from "hls.js";
 
 interface FilePreviewProps {
   file: {
     url: string;
     name: string;
     size?: number;
+    hlsUrl?: string; // Add HLS URL support
   };
   index: number;
   onDownload?: (url: string, name: string) => void;
@@ -26,6 +29,15 @@ interface FilePreviewProps {
 export function FilePreview({ file, index }: FilePreviewProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewError, setPreviewError] = useState(false);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const hlsRef = React.useRef<Hls | null>(null);
+
+  // Intersection observer for lazy loading
+  const { ref: observerRef, isIntersecting } = useIntersectionObserver({
+    threshold: 0.1,
+    rootMargin: "50px",
+  });
 
   // Extract file type from name or URL
   const getFileExtension = (filename: string): string => {
@@ -56,19 +68,60 @@ export function FilePreview({ file, index }: FilePreviewProps) {
     }
   };
 
+  // Initialize HLS streaming for videos
+  useEffect(() => {
+    if (getFileType(file.name) === 'video' && file.hlsUrl && videoRef.current && isIntersecting) {
+      const video = videoRef.current;
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 90,
+        });
+
+        hlsRef.current = hls;
+        hls.loadSource(file.hlsUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          setIsVideoLoaded(true);
+          // Warm up video in memory for instant playback
+          warmVideoInMemory(file.hlsUrl!);
+        });
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error('HLS Error:', data);
+          setPreviewError(true);
+        });
+
+        return () => {
+          hls.destroy();
+        };
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        video.src = file.hlsUrl!;
+        setIsVideoLoaded(true);
+      }
+    }
+  }, [file.hlsUrl, file.name, isIntersecting]);
+
+  // Cleanup HLS on unmount
+  useEffect(() => {
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+      }
+    };
+  }, []);
+
   const fileType = getFileType(file.name);
   const ext = getFileExtension(file.name);
   const fileSizeMB = file.size ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : null;
 
-  useEffect(() => {
-    if (fileType === 'video') {
-      warmVideoInMemory(file.url);
-    }
-  }, [fileType, file.url]);
-
   return (
     <>
-      <div className="group relative rounded-xl border border-border/50 bg-card overflow-hidden hover:border-primary/50 hover:shadow-lg transition-all duration-300">
+      <div ref={observerRef as any} className="group relative rounded-xl border border-border/50 bg-card overflow-hidden hover:border-primary/50 hover:shadow-lg transition-all duration-300">
         {/* Preview Thumbnail Container */}
         <div className="relative h-44 w-full bg-gradient-to-br from-muted/50 to-muted/20 flex items-center justify-center overflow-hidden">
           {fileType === 'image' && !previewError ? (
@@ -95,22 +148,36 @@ export function FilePreview({ file, index }: FilePreviewProps) {
           ) : fileType === 'video' ? (
             <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-black/20 to-black/40">
               <video
-                src={file.url}
-                controls
+                ref={videoRef}
+                poster={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+                  <svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+                    <rect width="320" height="180" fill="#1a1a1a"/>
+                    <circle cx="160" cy="90" r="25" fill="rgba(255,255,255,0.1)"/>
+                    <polygon points="145,75 145,105 175,90" fill="rgba(255,255,255,0.8)"/>
+                  </svg>
+                `)}`}
                 preload="metadata"
                 playsInline
+                muted
                 className="w-full h-full object-cover"
                 onError={() => setPreviewError(true)}
               />
               <button
                 onClick={() => setShowPreview(true)}
                 className="absolute flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                title="Preview video"
+                title="Play video"
               >
                 <div className="h-12 w-12 rounded-full bg-primary/90 flex items-center justify-center shadow-lg hover:bg-primary">
                   <FileVideo className="h-6 w-6 text-white" />
                 </div>
               </button>
+
+              {/* Quality indicator */}
+              {isVideoLoaded && (
+                <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                  HD
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center text-muted-foreground gap-2">
@@ -132,7 +199,7 @@ export function FilePreview({ file, index }: FilePreviewProps) {
               {fileSizeMB}
             </p>
           )}
-          
+
           {/* Action Buttons */}
           <div className="flex gap-2 mt-3">
             {fileType === 'image' && (

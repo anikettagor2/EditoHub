@@ -5,12 +5,16 @@ import { Modal } from "@/components/ui/modal";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/lib/context/auth-context";
 import { addDoc, collection, doc, getDocs, onSnapshot, query, updateDoc, where, deleteDoc } from "firebase/firestore";
-import { Loader2, MessageSquare, Upload, Play, Share2, Copy, Download, Star, X, Send, Image as ImageIcon, Clock, Users } from "lucide-react";
+import { Loader2, MessageSquare, Upload, Share2, Copy, Download, Star, X, Send, Image as ImageIcon, Clock, Users, Play } from "lucide-react";
 import { toast } from "sonner";
 import { registerDownload, submitEditorRating } from "@/app/actions/project-actions";
 import { handleNewComment } from "@/app/actions/notification-actions";
 import { PaymentButton } from "@/components/payment-button";
 import { uploadCommentImage } from "@/lib/firebase/storage-utils";
+import { DashboardVideo } from "@/components/dashboard-video-optimizer";
+import { OptimizedHLSPlayer } from "@/components/optimized-hls-player";
+import { OptimizedVideoPlayer } from "@/components/optimized-video-player";
+import { useVideoPreload } from "@/lib/streaming/video-preload";
 
 type ReviewProject = {
     id: string;
@@ -29,6 +33,7 @@ type RevisionDoc = {
     version?: number;
     videoUrl?: string;
     hlsUrl?: string;
+    fileSize?: number;
     description?: string;
     createdAt?: number;
 };
@@ -91,10 +96,65 @@ function formatDate(timestamp: number): string {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * Wrapper component for OptimizedHLSPlayer with preloading
+ */
+function OptimizedHLSPlayerView({
+    hlsUrl,
+    videoUrl,
+    projectName,
+    fileSize,
+    onTimeUpdate,
+}: {
+    hlsUrl?: string;
+    videoUrl?: string;
+    projectName: string;
+    fileSize?: number;
+    onTimeUpdate: (currentTime: number, duration: number) => void;
+}) {
+    // Use HLS if available, otherwise use streaming API for MP4
+    const isLargeVideo = fileSize && fileSize > 50 * 1024 * 1024; // 50MB+
+    const shouldUseStreaming = !hlsUrl && videoUrl && isLargeVideo;
+
+    // Preload video for faster startup
+    const { isPreloading } = useVideoPreload(hlsUrl || videoUrl || '', true);
+
+    if (shouldUseStreaming && videoUrl) {
+        // Extract Firebase path from videoUrl
+        const firebasePath = videoUrl.includes('firebasestorage.googleapis.com')
+            ? videoUrl.split('/o/')[1]?.split('?')[0]
+            : videoUrl;
+
+        if (firebasePath) {
+            return (
+                <OptimizedVideoPlayer
+                    videoPath={decodeURIComponent(firebasePath)}
+                    title={projectName}
+                    onTimeUpdate={onTimeUpdate}
+                    className="w-full h-full"
+                />
+            );
+        }
+    }
+
+    return (
+        <OptimizedHLSPlayer
+            hlsUrl={hlsUrl || undefined}
+            videoUrl={videoUrl}
+            projectName={projectName}
+            fileSize={fileSize}
+            autoPlay={false}
+            preload="metadata"
+            onTimeUpdate={onTimeUpdate}
+            className="w-full h-full"
+        />
+    );
+}
+
 export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft = false }: ReviewSystemModalProps) {
     const { user } = useAuth();
-    const videoRef = useRef<HTMLVideoElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const videoSeekRef = useRef<HTMLVideoElement>(null);
     const isClient = user?.role === "client";
 
     // Tab state
@@ -112,6 +172,8 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     const [newReply, setNewReply] = useState<{ [commentId: string]: string }>({});
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [selectedImagePreview, setSelectedImagePreview] = useState<string>("");
+    const [imageOverlayText, setImageOverlayText] = useState<string>("");
+    const [annotatedImagePreview, setAnnotatedImagePreview] = useState<string>("");
     const [pendingComments, setPendingComments] = useState<PendingComment[]>([]);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [savingComment, setSavingComment] = useState(false);
@@ -123,8 +185,6 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     // Video state
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
-    const [networkTier, setNetworkTier] = useState<"low" | "medium" | "high">("high");
-    const hlsInstanceRef = useRef<any>(null);
 
     // Payment & Download state
     const [isDownloading, setIsDownloading] = useState(false);
@@ -151,91 +211,6 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         [revisions, selectedRevisionId]
     );
 
-    useEffect(() => {
-        const connection = (navigator as any)?.connection;
-        if (!connection) return;
-
-        const updateTier = () => {
-            const effectiveType = connection.effectiveType as string | undefined;
-            const downlink = Number(connection.downlink || 0);
-            const saveData = Boolean(connection.saveData);
-
-            if (saveData || effectiveType === "slow-2g" || effectiveType === "2g" || downlink < 1.2) {
-                setNetworkTier("low");
-                return;
-            }
-            if (effectiveType === "3g" || downlink < 3) {
-                setNetworkTier("medium");
-                return;
-            }
-            setNetworkTier("high");
-        };
-
-        updateTier();
-        connection.addEventListener?.("change", updateTier);
-        return () => connection.removeEventListener?.("change", updateTier);
-    }, []);
-
-    useEffect(() => {
-        if (!isOpen || !videoRef.current || !selectedRevision?.videoUrl) return;
-
-        const videoElement = videoRef.current;
-        const hlsSource = selectedRevision.hlsUrl || (selectedRevision.videoUrl.includes(".m3u8") ? selectedRevision.videoUrl : null);
-        let disposed = false;
-
-        const cleanupHls = () => {
-            if (hlsInstanceRef.current) {
-                hlsInstanceRef.current.destroy();
-                hlsInstanceRef.current = null;
-            }
-        };
-
-        const initPlayback = async () => {
-            cleanupHls();
-
-            if (!hlsSource) {
-                videoElement.src = selectedRevision.videoUrl || "";
-                return;
-            }
-
-            const { default: Hls } = await import("hls.js");
-            if (disposed) return;
-
-            if (Hls.isSupported()) {
-                const startLevel = networkTier === "low" ? 0 : networkTier === "medium" ? 1 : -1;
-                const hls = new Hls({
-                    enableWorker: true,
-                    lowLatencyMode: true,
-                    capLevelToPlayerSize: true,
-                    maxBufferLength: networkTier === "low" ? 10 : 20,
-                    maxMaxBufferLength: networkTier === "low" ? 20 : 40,
-                    startLevel,
-                });
-
-                hls.loadSource(hlsSource);
-                hls.attachMedia(videoElement);
-                hlsInstanceRef.current = hls;
-                return;
-            }
-
-            if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-                videoElement.src = hlsSource;
-                return;
-            }
-
-            videoElement.src = selectedRevision.videoUrl || "";
-        };
-
-        initPlayback().catch(() => {
-            videoElement.src = selectedRevision.videoUrl || "";
-        });
-
-        return () => {
-            disposed = true;
-            cleanupHls();
-        };
-    }, [isOpen, selectedRevision?.id, selectedRevision?.videoUrl, selectedRevision?.hlsUrl, networkTier]);
-
     // Image upload handler
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -244,6 +219,8 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         setSelectedImage(file);
         const preview = URL.createObjectURL(file);
         setSelectedImagePreview(preview);
+        setAnnotatedImagePreview("");
+        setImageOverlayText("");
     };
 
     const clearImageSelection = () => {
@@ -252,14 +229,51 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         }
         setSelectedImage(null);
         setSelectedImagePreview("");
+        setAnnotatedImagePreview("");
+        setImageOverlayText("");
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
     };
 
+    const drawTextOnImage = (imageSrc: string, text: string): Promise<string> => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d')!;
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                // Draw the image
+                ctx.drawImage(img, 0, 0);
+
+                // Draw the text overlay
+                if (text.trim()) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+
+                    ctx.fillStyle = 'white';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(text, canvas.width / 2, canvas.height - 25);
+                }
+
+                resolve(canvas.toDataURL('image/jpeg', 0.9));
+            };
+            img.src = imageSrc;
+        });
+    };
+
     useEffect(() => {
-        pendingCommentsRef.current = pendingComments;
-    }, [pendingComments]);
+        if (selectedImagePreview && imageOverlayText.trim()) {
+            drawTextOnImage(selectedImagePreview, imageOverlayText).then((annotatedUrl) => {
+                setAnnotatedImagePreview(annotatedUrl);
+            });
+        } else {
+            setAnnotatedImagePreview("");
+        }
+    }, [selectedImagePreview, imageOverlayText]);
 
     useEffect(() => {
         selectedImagePreviewRef.current = selectedImagePreview;
@@ -377,10 +391,28 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         }
     };
 
-    const buildDraftComment = (): PendingComment | null => {
+    const buildDraftComment = async (): Promise<PendingComment | null> => {
         const content = newComment.trim();
         if (!content && !selectedImage) {
             return null;
+        }
+
+        let finalImageFile = selectedImage;
+        let finalImagePreview = selectedImagePreview;
+
+        // Apply text overlay if there's text and an image
+        if (selectedImage && imageOverlayText.trim() && selectedImagePreview) {
+            try {
+                const annotatedDataUrl = await drawTextOnImage(selectedImagePreview, imageOverlayText);
+                // Convert data URL back to File
+                const response = await fetch(annotatedDataUrl);
+                const blob = await response.blob();
+                finalImageFile = new File([blob], selectedImage.name, { type: 'image/jpeg' });
+                finalImagePreview = annotatedDataUrl;
+            } catch (error) {
+                console.error('Failed to apply text overlay:', error);
+                // Fall back to original image
+            }
         }
 
         return {
@@ -388,8 +420,8 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
             content,
             timestamp: activeTab === 'timeline' ? currentTime : 0,
             isDirectConnection: activeTab === 'direct',
-            imageFile: selectedImage || undefined,
-            imagePreview: selectedImagePreview || undefined,
+            imageFile: finalImageFile || undefined,
+            imagePreview: finalImagePreview || undefined,
         };
     };
 
@@ -403,9 +435,9 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         });
     };
 
-    const handleQueueComment = () => {
+    const handleQueueComment = async () => {
         if (!project?.id || !selectedRevisionId) return;
-        const draft = buildDraftComment();
+        const draft = await buildDraftComment();
         if (!draft) {
             toast.error("Write a comment or upload an image.");
             return;
@@ -415,6 +447,7 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         setNewComment("");
         setSelectedImage(null);
         setSelectedImagePreview("");
+        setImageOverlayText("");
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
@@ -426,7 +459,7 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     const handleSendQueuedComments = async () => {
         if (!project?.id || !selectedRevisionId) return;
 
-        const draft = buildDraftComment();
+        const draft = await buildDraftComment();
         const commentsToSend = [...pendingComments, ...(draft ? [draft] : [])];
 
         if (commentsToSend.length === 0) {
@@ -568,8 +601,10 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                     .map((doc) => ({ id: doc.id, ...(doc.data() as any) } as RevisionDoc))
                     .sort((a, b) => (b.version || 0) - (a.version || 0));
 
+                console.log('[ReviewSystemModal] Fetched revisions:', next);
                 setRevisions(next);
                 if (next.length > 0) {
+                    console.log('[ReviewSystemModal] Setting first revision as selected:', next[0]);
                     setSelectedRevisionId(next[0].id);
                 }
             } catch (error) {
@@ -635,9 +670,8 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     }, [isOpen, selectedRevisionId]);
 
     const seekTo = (time: number) => {
-        if (!videoRef.current) return;
-        videoRef.current.currentTime = time;
         setCurrentTime(time);
+        // Note: Advanced seeking is now handled by the player's built-in timeline controls
     };
 
     return (
@@ -741,16 +775,26 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                                 <Loader2 className="h-4 w-4 animate-spin" />
                                 Loading drafts...
                             </div>
+                        ) : selectedRevision?.hlsUrl || selectedRevision?.videoUrl ? (
+                            <OptimizedHLSPlayerView
+                                hlsUrl={selectedRevision.hlsUrl}
+                                videoUrl={selectedRevision.videoUrl}
+                                projectName={project?.name || "Review"}
+                                fileSize={selectedRevision.fileSize}
+                                onTimeUpdate={(currentTime, duration) => {
+                                    setCurrentTime(currentTime);
+                                    setDuration(duration);
+                                }}
+                            />
                         ) : selectedRevision?.videoUrl ? (
                             <video
-                                ref={videoRef}
                                 src={selectedRevision.videoUrl}
-                                data-watermark-name={project?.clientName || project?.name}
                                 controls
-                                playsInline
-                                className="w-full h-full object-contain"
-                                onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                                onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+                                className="w-full h-full bg-black rounded-xl"
+                                onTimeUpdate={(e) => {
+                                    setCurrentTime(e.currentTarget.currentTime);
+                                    setDuration(e.currentTarget.duration);
+                                }}
                             />
                         ) : (
                             <div className="h-full w-full flex items-center justify-center text-muted-foreground text-sm">
@@ -842,18 +886,28 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
 
                         {/* Image Preview */}
                         {selectedImagePreview && (
-                            <div className="relative w-full h-24 rounded-lg border border-border bg-background/50 overflow-hidden">
-                                <img
-                                    src={selectedImagePreview}
-                                    alt="preview"
-                                    className="w-full h-full object-cover"
+                            <div className="space-y-2">
+                                <div className="relative w-full h-24 rounded-lg border border-border bg-background/50 overflow-hidden">
+                                    <img
+                                        src={annotatedImagePreview || selectedImagePreview}
+                                        alt="preview"
+                                        className="w-full h-full object-cover"
+                                    />
+                                    <button
+                                        onClick={clearImageSelection}
+                                        className="absolute top-1 right-1 p-1 rounded-lg bg-destructive/80 hover:bg-destructive text-destructive-foreground"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                {/* Text Overlay Input */}
+                                <input
+                                    type="text"
+                                    value={imageOverlayText}
+                                    onChange={(e) => setImageOverlayText(e.target.value)}
+                                    placeholder="Add text overlay (like WhatsApp)..."
+                                    className="w-full px-2 py-1 text-sm rounded border border-border bg-background"
                                 />
-                                <button
-                                    onClick={clearImageSelection}
-                                    className="absolute top-1 right-1 p-1 rounded-lg bg-destructive/80 hover:bg-destructive text-destructive-foreground"
-                                >
-                                    <X className="h-3.5 w-3.5" />
-                                </button>
                             </div>
                         )}
 

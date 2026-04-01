@@ -54,6 +54,7 @@ import Image from "next/image";
 import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
 import { uploadRawFileParallel } from "@/lib/services/parallel-raw-upload";
 import { preloadVideosIntoMemory } from "@/lib/video-preload";
+import { VideoPlayer } from "@/components/video-player";
 
 interface ExtendedProject extends Project {
     brand?: string;
@@ -1740,7 +1741,7 @@ export default function ProjectDetailsPage() {
                                         {previewFile.type === 'image' || previewFile.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(previewFile.name) ? (
                                             <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
                                         ) : previewFile.type === 'video' || previewFile.type.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(previewFile.name) ? (
-                                            <video src={previewFile.url} controls preload="auto" playsInline className="w-full h-full" autoPlay />
+                                            <VideoPlayer videoPath={previewFile.url} title={previewFile.name} className="w-full h-full" />
                                         ) : previewFile.type === 'pdf' || previewFile.type === 'application/pdf' || previewFile.name.toLowerCase().endsWith('.pdf') ? (
                                             <iframe src={previewFile.url} className="w-full h-screen border-none" />
                                         ) : (

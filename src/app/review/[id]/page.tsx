@@ -15,8 +15,6 @@ import {
 } from "firebase/firestore";
 import { 
     Loader2, 
-    Play, 
-    Pause,
     MessageSquare, 
     ShieldAlert, 
     User as UserIcon,
@@ -26,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { handleNewComment } from "@/app/actions/notification-actions";
+import { AdaptiveVideoPlayer } from "@/components/adaptive-video-player";
 
 type RevisionDoc = {
     id: string;
@@ -33,6 +32,7 @@ type RevisionDoc = {
     version?: number;
     videoUrl?: string;
     hlsUrl?: string;
+    fileSize?: number;
     description?: string;
     createdAt?: number;
 };
@@ -67,7 +67,6 @@ export default function GuestReviewPage() {
     const [isIdentified, setIsIdentified] = useState(false);
 
     // Review system state
-    const videoRef = useRef<HTMLVideoElement | null>(null);
     const [comments, setComments] = useState<CommentDoc[]>([]);
     const [newComment, setNewComment] = useState("");
     const [savingComment, setSavingComment] = useState(false);
@@ -75,11 +74,8 @@ export default function GuestReviewPage() {
     const [duration, setDuration] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isBuffering, setIsBuffering] = useState(false);
-    const [networkTier] = useState<"low" | "medium" | "high">("high");
-    const [streamMode, setStreamMode] = useState<"hls" | "direct">("direct");
     const [videoReady, setVideoReady] = useState(false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const hlsInstanceRef = useRef<any>(null);
+    const videoSeekRef = useRef<((seconds: number) => void) | null>(null);
 
     useEffect(() => {
         if (!revisionId) return;
@@ -95,7 +91,16 @@ export default function GuestReviewPage() {
                     return;
                 }
                 const revData = { id: revSnap.id, ...revSnap.data() } as RevisionDoc;
-                setRevision(revData);
+                
+                // For guests: only use HLS URL (public), not original video (requires auth)
+                // This ensures fast retrieval and proper access control
+                const guestSafeRevision = {
+                    ...revData,
+                    videoUrl: undefined, // Don't expose original video URL to guests
+                    // hlsUrl is already public in storage rules so guests can access it
+                };
+                
+                setRevision(guestSafeRevision);
 
                 // Load project once (only needed on first snapshot)
                 if (!project) {
@@ -152,82 +157,6 @@ export default function GuestReviewPage() {
         setIsIdentified(true);
     };
 
-    useEffect(() => {
-        if (!isIdentified || !videoRef.current || !revision?.videoUrl) return;
-
-        const videoElement = videoRef.current;
-        const hlsSource = revision.hlsUrl || (revision.videoUrl.includes(".m3u8") ? revision.videoUrl : null);
-        let disposed = false;
-
-        setVideoReady(false);
-        setIsBuffering(false);
-
-        const cleanupHls = () => {
-            if (hlsInstanceRef.current) {
-                hlsInstanceRef.current.destroy();
-                hlsInstanceRef.current = null;
-            }
-        };
-
-        const initPlayback = async () => {
-            cleanupHls();
-
-            if (!hlsSource) {
-                // Direct MP4 — set src directly, same as review-system-modal
-                videoElement.src = revision.videoUrl || "";
-                videoElement.load();
-                setStreamMode("direct");
-                return;
-            }
-
-            const { default: Hls } = await import("hls.js");
-            if (disposed) return;
-
-            if (Hls.isSupported()) {
-                const hls = new Hls({
-                    enableWorker: true,
-                    lowLatencyMode: true,
-                    startFragPrefetch: true,
-                    maxBufferLength: 20,
-                    maxMaxBufferLength: 40,
-                    backBufferLength: 15,
-                    capLevelToPlayerSize: true,
-                    startLevel: -1,
-                    fragLoadingRetryDelay: 500,
-                    manifestLoadingRetryDelay: 500,
-                });
-
-                hls.loadSource(hlsSource);
-                hls.attachMedia(videoElement);
-                hlsInstanceRef.current = hls;
-                setStreamMode("hls");
-                return;
-            }
-
-            // Safari native HLS
-            if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-                videoElement.src = hlsSource;
-                setStreamMode("hls");
-                return;
-            }
-
-            // Final fallback — direct MP4
-            videoElement.src = revision.videoUrl || "";
-            videoElement.load();
-            setStreamMode("direct");
-        };
-
-        initPlayback().catch(() => {
-            videoElement.src = revision.videoUrl || "";
-            setStreamMode("direct");
-        });
-
-        return () => {
-            disposed = true;
-            cleanupHls();
-        };
-    }, [isIdentified, revision?.id, revision?.videoUrl, revision?.hlsUrl]);
-
     const handleAddComment = async () => {
         if (!revision || !guestName) return;
         if (!newComment.trim()) {
@@ -273,30 +202,8 @@ export default function GuestReviewPage() {
     };
 
     const seekTo = (time: number) => {
-        if (!videoRef.current) return;
-        videoRef.current.currentTime = time;
+        videoSeekRef.current?.(time);
         setCurrentTime(time);
-    };
-
-    const togglePlayback = async () => {
-        if (!videoRef.current) return;
-        // Don't try to play if video hasn't loaded yet
-        if (!videoReady || !duration) {
-            toast.error("Video is still loading, please wait.");
-            return;
-        }
-        try {
-            if (videoRef.current.paused) {
-                await videoRef.current.play();
-                setIsPlaying(true);
-            } else {
-                videoRef.current.pause();
-                setIsPlaying(false);
-            }
-        } catch (error) {
-            console.error("Playback toggle failed:", error);
-            // Don't show toast — the video controls handle this naturally
-        }
     };
 
     if (loading) {
@@ -392,120 +299,31 @@ export default function GuestReviewPage() {
                             className="relative rounded-2xl overflow-hidden bg-black aspect-video group shadow-2xl border border-white/5"
                             data-watermark-name={project?.clientName || project?.name || "Client Review"}
                         >
-                            {/* Loading skeleton — shown until video metadata is ready */}
-                            {!videoReady && (
-                                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black gap-3">
-                                    <div className="relative w-12 h-12">
-                                        <div className="absolute inset-0 border-2 border-white/10 rounded-full" />
-                                        <div className="absolute inset-0 border-2 border-primary rounded-full border-t-transparent animate-spin" />
+                            {!revision.hlsUrl && (
+                                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-10">
+                                    <div className="text-center">
+                                        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
+                                        <p className="text-white text-sm font-medium">Transcoding video...</p>
+                                        <p className="text-gray-400 text-xs mt-2">This typically takes a few moments</p>
                                     </div>
-                                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Loading video...</span>
                                 </div>
                             )}
-                            {/* HLS processing banner — shown when video is playable but HLS is still being generated */}
-                            {videoReady && !revision?.hlsUrl && streamMode === "direct" && (
-                                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/70 border border-yellow-500/30 backdrop-blur-sm">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-yellow-400">Optimizing for smooth playback…</span>
-                                </div>
-                            )}
-                            {/* HLS active badge */}
-                            {videoReady && streamMode === "hls" && (
-                                <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/70 border border-emerald-500/30 backdrop-blur-sm">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">HD Stream</span>
-                                </div>
-                            )}
-                            <video
-                                ref={videoRef}
-                                data-watermark-name={project?.clientName || project?.name}
-                                className="h-full w-full outline-none"
-                                controls
-                                preload="metadata"
-                                playsInline
-                                onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                                onLoadedMetadata={(e) => {
-                                    setDuration(e.currentTarget.duration);
-                                    setVideoReady(true);
-                                    setIsBuffering(false);
+                            <AdaptiveVideoPlayer
+                                hlsUrl={revision.hlsUrl}
+                                projectName={project?.name || "Guest Review"}
+                                onTimeUpdate={(time, dur) => {
+                                    setCurrentTime(time);
+                                    if (dur != null && dur > 0) {
+                                        setDuration(dur);
+                                        setVideoReady(true);
+                                    }
                                 }}
-                                onPlaying={() => {
-                                    setIsPlaying(true);
-                                    setIsBuffering(false);
-                                }}
+                                onPlaying={() => setIsPlaying(true)}
                                 onPause={() => setIsPlaying(false)}
-                                onWaiting={() => { if (videoReady) setIsBuffering(true); }}
                                 onCanPlay={() => setIsBuffering(false)}
-                                onCanPlayThrough={() => setIsBuffering(false)}
-                                onStalled={() => { if (videoReady) setIsBuffering(true); }}
-                                onError={() => {
-                                    setIsBuffering(false);
-                                    setVideoReady(false);
-                                }}
-                                controlsList="nodownload"
-                                onContextMenu={(e) => e.preventDefault()}
+                                onWaiting={() => setIsBuffering(true)}
+                                className="h-full w-full"
                             />
-
-                            {/* Custom Overlay for better UI */}
-
-                            <div className="absolute top-4 left-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                                <span className="px-2 py-1 bg-black/60 backdrop-blur-sm rounded text-[10px] font-bold border border-white/10 uppercase tracking-widest">
-                                    Guest Review Mode
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Controls/Timeline */}
-                        <div className="mt-6 space-y-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <button
-                                    onClick={togglePlayback}
-                                    className="h-9 px-4 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2"
-                                >
-                                    {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                                    {isPlaying ? "Pause" : "Play"}
-                                </button>
-                                {isBuffering && (
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
-                                        Buffering...
-                                    </span>
-                                )}
-                            </div>
-
-                            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-muted-foreground px-1">
-                                <div className="flex gap-4">
-                                    <span className="text-primary">{formatTime(currentTime)}</span>
-                                    <span>{formatTime(duration)}</span>
-                                </div>
-                                <span className="opacity-60">{streamMode === "hls" ? `Adaptive ${networkTier}` : "Click on timeline to seek"}</span>
-                            </div>
-
-                            <div
-                                className="relative h-1.5 bg-white/5 rounded-full cursor-pointer overflow-hidden border border-white/5"
-                                onClick={(e) => {
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    const x = e.clientX - rect.left;
-                                    const progress = Math.max(0, Math.min(1, x / rect.width));
-                                    seekTo(progress * (duration || 0));
-                                }}
-                            >
-                                <div
-                                    className="absolute inset-y-0 left-0 bg-primary transition-all duration-100"
-                                    style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                                />
-                                {comments.map((c) => (
-                                    <div
-                                        key={c.id}
-                                        className="absolute top-0 w-1.5 h-full bg-yellow-400/60 blur-[1px] hover:bg-yellow-400 transition-all cursor-help"
-                                        style={{ left: `${(c.timestamp / (duration || 1)) * 100}%` }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            seekTo(c.timestamp);
-                                        }}
-                                        title={`Comment at ${formatTime(c.timestamp)}`}
-                                    />
-                                ))}
-                            </div>
                         </div>
                     </div>
                 </div>

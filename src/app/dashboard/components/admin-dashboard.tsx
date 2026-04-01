@@ -1237,7 +1237,7 @@ export function AdminDashboard() {
                                                             const res = await togglePayLater(u.uid, !u.payLater);
                                                             if(res.success) toast.success(`Pay later status updated`);
                                                         }}>
-                                                            <IndianRupee className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> {u.payLater ? "Revoke Pay Later" : "Allow Pay Later"}
+                                                            <IndianRupee className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Pay Later
                                                         </DropdownMenuItem>
                                                     )}
                                                     <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => handleToggleUserStatus(u.uid, (u as any).status !== 'inactive')}>
@@ -1526,7 +1526,7 @@ export function AdminDashboard() {
                                         className="bg-muted/50 border border-border rounded-2xl p-6 space-y-6 hover:border-primary/30 transition-all relative overflow-hidden group"
                                     >
                                         <div className="flex items-center gap-4">
-                                            <Avatar className="h-12 w-12 border border-border rounded-xl bg-muted">
+                                            <Avatar className="h-12 w-12 border border-border rounded-xl bg-muted/50">
                                                 <AvatarImage src={u.photoURL || undefined} className="object-cover" />
                                                 <AvatarFallback className="text-muted-foreground font-bold text-sm uppercase">{u.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
@@ -1696,7 +1696,7 @@ export function AdminDashboard() {
                                                         </div>
                                                         <div className="text-right">
                                                             <span className={cn("text-lg font-black tabular-nums", c.text)}>{enabledCount}</span>
-                                                            <span className="text-xs text-muted-foreground">/{total}</span>
+                                                            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">/{total}</span>
                                                             <p className="text-[9px] text-muted-foreground uppercase tracking-widest">active</p>
                                                         </div>
                                                     </div>
@@ -2165,9 +2165,7 @@ export function AdminDashboard() {
                                                                     <div className="flex items-center gap-2 mt-1">
                                                                         <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">ID: {project.id.slice(0,8)}</span>
                                                                         <div className="h-1 w-1 rounded-full bg-muted-foreground" />
-                                                                        <span className={cn("text-[9px] font-bold uppercase tracking-widest", project.clientHasDownloaded ? "text-emerald-500" : "text-amber-500")}>
-                                                                            {project.clientHasDownloaded ? "File Downloaded" : "File Not Downloaded"}
-                                                                        </span>
+                                                                        <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-500">File Downloaded</span>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2199,7 +2197,7 @@ export function AdminDashboard() {
                             </div>
 
                             {/* Editor Dues Section */}
-                            <div className="space-y-4">
+                            <div className="mt-8">
                                 <div className="flex items-center gap-2 px-1">
                                     <div className="h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Editor Payables (Pending Payouts)</h3>
@@ -2352,7 +2350,7 @@ export function AdminDashboard() {
                          <div className="flex items-center gap-4 text-left">
                              <Avatar className="h-10 w-10 border border-border rounded-lg bg-muted/50">
                                  <AvatarImage src={ed.photoURL || undefined} className="object-cover" />
-                                 <AvatarFallback className="text-primary font-bold text-xs uppercase">{ed.displayName?.[0]}</AvatarFallback>
+                                 <AvatarFallback className="text-primary font-bold text-sm uppercase">{ed.displayName?.[0]}</AvatarFallback>
                              </Avatar>
                              <div>
                                  <div className="text-sm font-bold text-foreground group-hover/ed:text-primary transition-colors">{ed.displayName}</div>
@@ -2475,7 +2473,7 @@ export function AdminDashboard() {
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
                                     <span className="text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-1.5 text-primary">
-                                        <Shield className="h-3 w-3" /> {selectedUserDetail.role?.replace('_', ' ')} 
+                                        <Shield className="h-3 w-3" /> {selectedUserDetail.role?.replace('_', ' ')}
                                     </span>
                                     <span className="h-1 w-1 rounded-full bg-border" />
                                     <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{selectedUserDetail.email}</span>
@@ -2607,7 +2605,7 @@ export function AdminDashboard() {
                                                                 <p className="text-[10px] font-black text-foreground uppercase tracking-wider mb-2">{formatKey.replace(/_/g, ' ')}</p>
                                                                 <div className="flex flex-wrap gap-1.5">
                                                                     {(tiers || []).map((tier: any, idx: number) => (
-                                                                        <span key={`${formatKey}-${idx}`} className="text-[9px] font-bold px-2 py-1 rounded-md border border-primary/20 bg-primary/10 text-primary">
+                                                                        <span key={`${formatKey}-${idx}`} className="text-[9px] font-bold px-2 py-0.5 rounded-md border border-primary/20 bg-primary/10 text-primary">
                                                                             {(tier?.label || `Tier ${idx + 1}`)}: ₹{(tier?.price || 0).toLocaleString()}
                                                                         </span>
                                                                     ))}
@@ -2831,7 +2829,7 @@ export function AdminDashboard() {
                                     <Monitor className="h-4 w-4" /> Geographic Node
                                 </h5>
                                 <div className="space-y-4 relative z-10">
-                                    <div className="p-4 bg-card border border-border rounded-xl flex items-center gap-4 group/item hover:border-primary/20 transition-colors">
+                                    <div className="p-4 bg-card border border-border rounded-xl flex items-center gap-4 group/item hover:border-primary/20 transition-all">
                                         <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center group-hover/item:text-primary transition-colors">
                                             <MapPin className="h-5 w-5" />
                                         </div>
@@ -2840,7 +2838,7 @@ export function AdminDashboard() {
                                             <span className="text-sm font-black text-foreground">{selectedUserDetail.location || "Remote Link"}</span>
                                         </div>
                                     </div>
-                                    <div className="p-4 bg-card border border-border rounded-xl flex items-center gap-4 group/item hover:border-primary/20 transition-colors">
+                                    <div className="p-4 bg-card border border-border rounded-xl flex items-center gap-4 group/item hover:border-primary/20 transition-all">
                                         <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center group-hover/item:text-primary transition-colors">
                                             <Activity className="h-5 w-5" />
                                         </div>
@@ -2973,7 +2971,7 @@ export function AdminDashboard() {
                                         <HardDrive className="h-3.5 w-3.5" /> Source Infrastructure
                                     </h5>
                                     <div className="space-y-3">
-                                        <div className="p-3 bg-card border border-border rounded-xl flex items-center justify-between group/link hover:border-primary/20 transition-all">
+                                        <div className="p-3 bg-card border border-border rounded-xl flex items-center gap-3 hover:border-primary/20 transition-all">
                                             <div className="flex flex-col min-w-0">
                                                 <span className="text-[8px] font-black text-muted-foreground uppercase tracking-tight">Main Footage</span>
                                                 <span className="text-xs font-bold text-foreground truncate max-w-[200px]">{inspectProject.footageLink || 'N/A'}</span>

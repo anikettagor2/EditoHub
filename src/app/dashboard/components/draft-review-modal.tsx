@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/context/auth-context";
 import { Modal } from "@/components/ui/modal";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
+import { VideoPlayer } from "@/components/video-player";
 
 interface DraftReviewModalProps {
     isOpen: boolean;
@@ -73,11 +74,9 @@ export function DraftReviewModal({
                             Version {revision.version}
                         </p>
                         <div className="relative rounded-xl overflow-hidden bg-black border border-border shadow-lg">
-                            <video
-                                src={revision.videoUrl}
-                                data-watermark-name={project?.clientName || project?.name}
-                                controls
-                                className="w-full max-h-[400px] object-contain"
+                            <VideoPlayer
+                                videoPath={revision.videoUrl}
+                                title={project?.clientName || project?.name || "Draft Video"}
                             />
                         </div>
                         

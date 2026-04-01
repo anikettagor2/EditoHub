@@ -74,6 +74,7 @@ import { Label } from "@/components/ui/label";
 import { FilePreview } from "@/components/file-preview";
 import { ReviewSystemModal } from "./review-system-modal";
 import { preloadVideosIntoMemory } from "@/lib/video-preload";
+import { VideoPlayer } from "@/components/video-player";
 
 function isVideoFile(file: any) {
     const type = file?.type || "";
@@ -2048,7 +2049,7 @@ export function ProjectManagerDashboard() {
                                 {previewFile.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewFile.name) ? (
                                     <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
                                 ) : previewFile.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(previewFile.name) ? (
-                                    <video src={previewFile.url} controls preload="auto" playsInline className="w-full h-full" autoPlay />
+                                    <VideoPlayer videoPath={previewFile.url} title={previewFile.name} className="w-full h-full" />
                                 ) : (
                                     <div className="text-center text-white">
                                         <FileVideo className="h-12 w-12 mx-auto mb-4 opacity-50" />

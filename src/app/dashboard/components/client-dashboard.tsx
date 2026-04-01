@@ -49,6 +49,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { ReviewSystemModal } from "./review-system-modal";
 import { preloadVideosIntoMemory } from "@/lib/video-preload";
+import { VideoPlayer } from "@/components/video-player";
 
 
 const CLIENT_VIDEO_TYPE_ALIASES: Record<string, string[]> = {
@@ -1045,7 +1046,7 @@ export function ClientDashboard() {
                                 {previewFile.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewFile.name) ? (
                                     <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
                                 ) : previewFile.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(previewFile.name) ? (
-                                    <video src={previewFile.url} controls preload="auto" playsInline className="w-full h-full" autoPlay />
+                                    <VideoPlayer videoPath={previewFile.url} title={previewFile.name} className="w-full h-full" />
                                 ) : (
                                     <div className="text-center text-white">
                                         <FileVideo className="h-12 w-12 mx-auto mb-4 opacity-50" />
