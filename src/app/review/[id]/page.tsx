@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { handleNewComment } from "@/app/actions/notification-actions";
 import { OptimizedHLSPlayer } from "@/components/optimized-hls-player";
+import { OptimizedVideoPlayer } from "@/components/optimized-video-player";
+import { VideoManagerProvider } from "@/components/video-manager";
 
 type RevisionDoc = {
     id: string;
@@ -274,58 +276,78 @@ export default function GuestReviewPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white flex flex-col">
-            {/* Header */}
-            <header className="h-16 border-b border-white/5 px-6 flex items-center justify-between backdrop-blur-md bg-black/40 sticky top-0 z-50">
-                <div className="flex items-center gap-4">
-                    <div className="flex flex-col">
-                        <h1 className="text-sm font-bold tracking-tight">{project?.name || "Project Review"}</h1>
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-[0.2em]">Revision v{revision.version || 1}</span>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-                        <UserIcon className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-[11px] font-semibold text-muted-foreground">{guestName}</span>
-                    </div>
-                </div>
-            </header>
-
-            <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden h-[calc(100vh-64px)]">
-                {/* Video Player Section */}
-                <div className="lg:col-span-8 flex flex-col p-6 bg-black/20">
-                    <div className="flex-1 flex flex-col min-h-0">
-                        <div 
-                            className="relative rounded-2xl overflow-hidden bg-black aspect-video group shadow-2xl border border-white/5"
-                            data-watermark-name={project?.clientName || project?.name || "Client Review"}
-                        >
-                            {!revision.hlsUrl && (
-                                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-10">
-                                    <div className="text-center">
-                                        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
-                                        <p className="text-white text-sm font-medium">Transcoding video...</p>
-                                        <p className="text-gray-400 text-xs mt-2">This typically takes a few moments</p>
-                                    </div>
-                                </div>
-                            )}
-                            <OptimizedHLSPlayer
-                                hlsUrl={revision.hlsUrl}
-                                projectName={project?.name || "Guest Review"}
-                                fileSize={revision.fileSize}
-                                onTimeUpdate={(time, dur) => {
-                                    setCurrentTime(time);
-                                    if (dur != null && dur > 0) {
-                                        setDuration(dur);
-                                        setVideoReady(true);
-                                    }
-                                }}
-                                onPlaying={() => setIsPlaying(true)}
-                                onPause={() => setIsPlaying(false)}
-                                className="h-full w-full"
-                            />
+        <VideoManagerProvider>
+            <div className="min-h-screen bg-[#050505] text-white flex flex-col">
+                {/* Header */}
+                <header className="h-16 border-b border-white/5 px-6 flex items-center justify-between backdrop-blur-md bg-black/40 sticky top-0 z-50">
+                    <div className="flex items-center gap-4">
+                        <div className="flex flex-col">
+                            <h1 className="text-sm font-bold tracking-tight">{project?.name || "Project Review"}</h1>
+                            <span className="text-[10px] font-bold text-primary uppercase tracking-[0.2em]">Revision v{revision.version || 1}</span>
                         </div>
                     </div>
-                </div>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+                            <UserIcon className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[11px] font-semibold text-muted-foreground">{guestName}</span>
+                        </div>
+                    </div>
+                </header>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden h-[calc(100vh-64px)]">
+                    {/* Video Player Section */}
+                    <div className="lg:col-span-8 flex flex-col p-6 bg-black/20">
+                        <div className="flex-1 flex flex-col min-h-0">
+                            <div 
+                                className="relative rounded-2xl overflow-hidden bg-black aspect-video group shadow-2xl border border-white/5"
+                                data-watermark-name={project?.clientName || project?.name || "Client Review"}
+                            >
+                                {!revision.hlsUrl && !revision.videoUrl && (
+                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-10">
+                                        <div className="text-center">
+                                            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
+                                            <p className="text-white text-sm font-medium">Transcoding video...</p>
+                                            <p className="text-gray-400 text-xs mt-2">This typically takes a few moments</p>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* Use HLS if available, otherwise fallback to MP4 */}
+                                {revision.hlsUrl ? (
+                                    <OptimizedHLSPlayer
+                                        hlsUrl={revision.hlsUrl}
+                                        projectName={project?.name || "Guest Review"}
+                                        fileSize={revision.fileSize}
+                                        onTimeUpdate={(time, dur) => {
+                                            setCurrentTime(time);
+                                            if (dur != null && dur > 0) {
+                                                setDuration(dur);
+                                                setVideoReady(true);
+                                            }
+                                        }}
+                                        onPlaying={() => setIsPlaying(true)}
+                                        onPause={() => setIsPlaying(false)}
+                                        className="h-full w-full"
+                                    />
+                                ) : revision.videoUrl ? (
+                                    <OptimizedVideoPlayer
+                                        videoPath={revision.videoUrl}
+                                        title={project?.name || "Guest Review"}
+                                        onTimeUpdate={(time, dur) => {
+                                            setCurrentTime(time);
+                                            if (dur != null && dur > 0) {
+                                                setDuration(dur);
+                                                setVideoReady(true);
+                                            }
+                                        }}
+                                        onPlaying={() => setIsPlaying(true)}
+                                        onPause={() => setIsPlaying(false)}
+                                        className="h-full w-full"
+                                    />
+                                ) : null}
+                            </div>
+                        </div>
+                    </div>
 
                 {/* Sidebar - Comments */}
                 <div className="lg:col-span-4 border-l border-white/5 flex flex-col bg-black/40 backdrop-blur-sm min-h-0">
@@ -395,5 +417,6 @@ export default function GuestReviewPage() {
                 </div>
             </main>
         </div>
+        </VideoManagerProvider>
     );
 }
