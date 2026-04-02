@@ -209,7 +209,8 @@ export default function ProjectDetailsPage() {
             }
         } catch (error) {
             setIsDownloading(false);
-            alert("Download failed: " + (error?.message || error));
+            const message = error instanceof Error ? error.message : String(error);
+            alert("Download failed: " + message);
         }
     };
 
