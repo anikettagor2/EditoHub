@@ -96,8 +96,15 @@ service cloud.firestore {
     // 5. Comments Collection
     match /comments/{commentId} {
       allow read: if true;
-      allow create: if true; 
+      allow create: if true;
       allow update: if isAuthenticated(); // Only registered users can update (resolve) for now
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || // Creator of the comment
+        isAdmin() || isStaff() || isEditor() || // Admin/staff/editor roles
+        resource.data.projectId != null &&
+          (get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.assignedEditorId == request.auth.uid ||
+           get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.assignedPMId == request.auth.uid)
+      );
     }
 
     // 6. Settings Collection (Agency Branding, etc)
