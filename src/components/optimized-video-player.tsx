@@ -155,7 +155,7 @@ export function OptimizedVideoPlayer({
       ref={observerRef}
       className={`relative w-full aspect-video bg-black rounded-lg overflow-hidden ${className}`}
       onMouseEnter={() => setShowControls(true)}
-      onMouseLeave={() => setShowControls(false)}
+      onMouseLeave={() => !isPlaying && setShowControls(false)}
     >
       {/* Thumbnail / Poster */}
       {!hasStarted && thumbnailUrl && (
@@ -208,17 +208,18 @@ export function OptimizedVideoPlayer({
       )}
 
       {/* Controls */}
-      {showControls && hasStarted && (
-        <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-4">
-          <div className="flex items-center space-x-2">
+      {(showControls || isBuffering) && hasStarted && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 transition-opacity duration-200">
+          <div className="flex items-center space-x-3 mb-3">
             <button
               onClick={isPlaying ? handlePause : handlePlay}
-              className="text-white hover:text-gray-300"
+              className="text-white hover:text-blue-400 transition-colors p-1"
+              title={isPlaying ? "Pause" : "Play"}
             >
-              {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+              {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 fill-current" />}
             </button>
 
-            <div className="flex-1 text-white text-sm">
+            <div className="flex-1 text-white text-xs font-medium">
               {formatTime(currentTime)} / {formatTime(duration)}
             </div>
 
@@ -229,20 +230,34 @@ export function OptimizedVideoPlayer({
                   setIsMuted(videoRef.current.muted);
                 }
               }}
-              className="text-white hover:text-gray-300"
+              className="text-white hover:text-blue-400 transition-colors p-1"
+              title={isMuted ? "Unmute" : "Mute"}
             >
               {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
             </button>
           </div>
 
           {/* Progress Bar */}
-          <div className="mt-2">
-            <div className="w-full bg-gray-600 rounded-full h-1">
-              <div
-                className="bg-white h-1 rounded-full"
-                style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
-              />
-            </div>
+          <div className="mt-3 space-y-2">
+            <input
+              type="range"
+              min="0"
+              max={Math.floor(duration) || 0}
+              value={Math.floor(currentTime)}
+              onChange={(e) => {
+                const newTime = parseFloat(e.target.value);
+                if (videoRef.current) {
+                  videoRef.current.currentTime = newTime;
+                  setCurrentTime(newTime);
+                }
+              }}
+              className="w-full h-1.5 bg-gray-600 rounded-full cursor-pointer accent-blue-500 hover:h-2 transition-all"
+              style={{
+                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${
+                  duration ? (currentTime / duration) * 100 : 0
+                }%, rgb(75, 85, 99) ${duration ? (currentTime / duration) * 100 : 0}%, rgb(75, 85, 99) 100%)`,
+              }}
+            />
           </div>
         </div>
       )}
