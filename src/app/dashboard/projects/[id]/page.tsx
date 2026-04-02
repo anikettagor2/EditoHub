@@ -172,13 +172,16 @@ export default function ProjectDetailsPage() {
     const handleDirectDownload = async (url: string, fileName?: string) => {
         try {
             setIsDownloading(true);
-            // Get signed URL that forces download via Content-Disposition attachment
-            const res = await getSignedDownloadUrl(url, fileName);
+            // Always POST to /api/download to get a signed URL with forced attachment headers
+            const res = await fetch("/api/download", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url, fileName }),
+            }).then(r => r.json());
             if (res.success && res.url) {
                 const link = document.createElement("a");
                 link.href = res.url;
                 link.download = fileName || "download";
-                link.target = "_blank"; // Add target to ensure it opens in new tab if needed
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
@@ -186,8 +189,7 @@ export default function ProjectDetailsPage() {
             }
             throw new Error(res.error || "Failed to get signed URL");
         } catch (error) {
-            console.error("Direct download failed, falling back to window.open", error);
-            // Fallback: try to open in new tab with download intent
+            // fallback
             const link = document.createElement("a");
             link.href = url;
             link.download = fileName || "download";
