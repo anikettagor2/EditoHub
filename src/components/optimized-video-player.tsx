@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useVideoManager } from '@/components/video-manager';
+import { useVideoManager } from './video-manager';
 import { Play, Pause, Volume2, VolumeX, Loader2, AlertCircle } from 'lucide-react';
 
 interface OptimizedVideoPlayerProps {

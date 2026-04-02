@@ -151,7 +151,7 @@ function OptimizedHLSPlayerView({
     );
 }
 
-import { VideoManagerProvider } from "@/components/video-manager";
+import { VideoManagerProvider } from "../../../components/video-manager";
 
 export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft = false }: ReviewSystemModalProps) {
     const { user } = useAuth();

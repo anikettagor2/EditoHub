@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { VideoPlayer } from "@/components/video-player";
-import { VideoManagerProvider } from "@/components/video-manager";
+import { VideoManagerProvider } from "../../../components/video-manager";
 
 interface DraftReviewModalProps {
     isOpen: boolean;
