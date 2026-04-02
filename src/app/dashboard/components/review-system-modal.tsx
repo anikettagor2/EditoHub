@@ -324,27 +324,9 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         if (!project?.id || !selectedRevisionId) return;
 
         if (isClient) {
-            // For pay-later clients, skip payment and feedback - download immediately
-            const isPayLaterClient = (user as any)?.payLater === true;
-            
-            if (isPayLaterClient) {
-                // Pay-later clients download instantly without payment or feedback
-                await startDownload();
-                return;
-            }
-
-            // Regular clients must complete payment and feedback
-            if (!isPaymentComplete) {
-                setPendingDownloadAfterFlow(true);
-                setIsPaymentModalOpen(true);
-                return;
-            }
-
-            if (!hasFeedback) {
-                setPendingDownloadAfterFlow(true);
-                setIsFeedbackModalOpen(true);
-                return;
-            }
+            // Clients can download immediately without payment or feedback
+            await startDownload();
+            return;
         }
 
         await startDownload();
