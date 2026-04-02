@@ -408,6 +408,18 @@ export function EditorDashboardV2() {
             return;
         }
         try {
+            // Check if it's a firebase storage URL
+            if (url.includes("firebasestorage.googleapis.com")) {
+                const downloadApiUrl = `/api/downloadProxy?url=${encodeURIComponent(url)}&fileName=${encodeURIComponent(fileName || 'download')}`;
+                const anchor = document.createElement("a");
+                anchor.href = downloadApiUrl;
+                anchor.download = fileName || "download";
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                return;
+            }
+
             const response = await fetch(url);
             if (!response.ok) throw new Error("Failed to fetch file");
 
@@ -424,7 +436,6 @@ export function EditorDashboardV2() {
             const anchor = document.createElement("a");
             anchor.href = url;
             anchor.download = fileName || "download";
-            anchor.target = "_blank";
             document.body.appendChild(anchor);
             anchor.click();
             anchor.remove();
@@ -433,6 +444,17 @@ export function EditorDashboardV2() {
 
     const triggerAudioDownload = async (url: string, fileName?: string) => {
         try {
+            if (url.includes("firebasestorage.googleapis.com")) {
+                const downloadApiUrl = `/api/downloadProxy?url=${encodeURIComponent(url)}&fileName=${encodeURIComponent(fileName || 'audio')}`;
+                const anchor = document.createElement("a");
+                anchor.href = downloadApiUrl;
+                anchor.download = fileName || "audio";
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                return;
+            }
+
             const response = await fetch(url);
             if (!response.ok) throw new Error("Failed to fetch file");
 
@@ -449,7 +471,6 @@ export function EditorDashboardV2() {
             const anchor = document.createElement("a");
             anchor.href = url;
             anchor.download = fileName || "audio";
-            anchor.target = "_blank";
             document.body.appendChild(anchor);
             anchor.click();
             anchor.remove();

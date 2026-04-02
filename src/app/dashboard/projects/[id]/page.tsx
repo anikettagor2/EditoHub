@@ -170,35 +170,46 @@ export default function ProjectDetailsPage() {
     };
 
     const handleDirectDownload = async (url: string, fileName?: string) => {
+        setIsDownloading(true);
         try {
-            setIsDownloading(true);
-            // Always POST to /api/download to get a signed URL with forced attachment headers
-            const res = await fetch("/api/download", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url, fileName }),
-            }).then(r => r.json());
-            if (res.success && res.url) {
+            // Always use the API for Firebase Storage files
+            if (url.includes("firebasestorage.googleapis.com")) {
+                const response = await fetch("/api/download", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url, fileName }),
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = blobUrl;
+                    link.download = fileName || "download";
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    URL.revokeObjectURL(blobUrl);
+                    setIsDownloading(false);
+                    return;
+                } else {
+                    // Show error if API fails
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+            } else {
+                // For non-Firebase files, fallback to direct download
                 const link = document.createElement("a");
-                link.href = res.url;
+                link.href = url;
                 link.download = fileName || "download";
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
+                setIsDownloading(false);
                 return;
             }
-            throw new Error(res.error || "Failed to get signed URL");
         } catch (error) {
-            // fallback
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = fileName || "download";
-            link.target = "_blank";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        } finally {
             setIsDownloading(false);
+            alert("Download failed: " + (error?.message || error));
         }
     };
 

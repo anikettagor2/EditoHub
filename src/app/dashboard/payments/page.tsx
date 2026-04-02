@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase/config";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { useAuth } from "@/lib/context/auth-context";
 import { Project } from "@/types/schema";
+import { PaymentButton } from "@/components/payment-button";
 
 export default function PaymentsPage() {
     const { user } = useAuth();
@@ -113,11 +114,35 @@ export default function PaymentsPage() {
                                             {p.amountPaid === p.totalCost ? "Paid" : "Partial"}
                                         </span>
                                     </td>
-                                    <td className="p-6 font-mono text-foreground">₹{p.amountPaid?.toLocaleString() || 0}</td>
+                                    <td className="p-6 font-mono text-foreground">
+                                        <div className="flex flex-col">
+                                            <span>₹{p.totalCost?.toLocaleString() || 0} Total</span>
+                                            {p.amountPaid! < p.totalCost! && (
+                                                <span className="text-xs text-amber-500">
+                                                    Dues: ₹{((p.totalCost! - p.amountPaid!) * 1.18).toLocaleString(undefined, {minimumFractionDigits: 0})} (inc. GST)
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="p-6">
-                                        <button className="p-2 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-all">
-                                            <Download className="h-4 w-4" />
-                                        </button>
+                                        {p.amountPaid! < p.totalCost! ? (
+                                            <PaymentButton 
+                                                projectId={p.id!}
+                                                user={user as any}
+                                                amount={Math.round((p.totalCost! - p.amountPaid!) * 1.18)}
+                                                accountingAmount={p.totalCost! - p.amountPaid!}
+                                                taxRate={18}
+                                                description={`Pending Dues: ${p.name}`}
+                                                allowPayLaterBypass={false}
+                                                className="px-3 py-1.5 text-xs h-auto w-full flex-1"
+                                                onSuccess={() => window.location.reload()}
+                                            />
+                                        ) : (
+                                            <button className="p-2 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-all w-full flex items-center justify-center gap-2">
+                                                <Download className="h-4 w-4" />
+                                                <span className="text-xs font-semibold">Invoice</span>
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
