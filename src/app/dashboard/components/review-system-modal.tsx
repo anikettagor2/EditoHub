@@ -151,6 +151,8 @@ function OptimizedHLSPlayerView({
     );
 }
 
+import { VideoManagerProvider } from "@/components/video-manager";
+
 export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft = false }: ReviewSystemModalProps) {
     const { user } = useAuth();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -675,29 +677,29 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     };
 
     return (
-        <>
-        <Modal
-            isOpen={isOpen}
-            onClose={onClose}
-            title={`Review System${project?.name ? ` // ${project.name}` : ""}`}
-            maxWidth="max-w-6xl"
-        >
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4 max-h-[80vh] overflow-hidden">
-                <div className="lg:col-span-8 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Draft Versions</div>
-                        {allowUploadDraft && project?.id && (
-                            <a
-                                href={`/dashboard/projects/${project.id}/upload`}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-widest hover:bg-amber-500/20"
-                            >
-                                <Upload className="h-3.5 w-3.5" />
-                                Upload New Draft
-                            </a>
-                        )}
-                    </div>
+        <VideoManagerProvider>
+            <Modal
+                isOpen={isOpen}
+                onClose={onClose}
+                title={`Review System${project?.name ? ` // ${project.name}` : ""}`}
+                maxWidth="max-w-6xl"
+            >
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4 max-h-[80vh] overflow-hidden">
+                    <div className="lg:col-span-8 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Draft Versions</div>
+                            {allowUploadDraft && project?.id && (
+                                <a
+                                    href={`/dashboard/projects/${project.id}/upload`}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-widest hover:bg-amber-500/20"
+                                >
+                                    <Upload className="h-3.5 w-3.5" />
+                                    Upload New Draft
+                                </a>
+                            )}
+                        </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap gap-2">
                             {revisions.map((rev) => (
                                 <button
@@ -844,7 +846,7 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                     )}
                 </div>
 
-                <div className="lg:col-span-4 border border-border rounded-xl p-3 bg-muted/20 flex flex-col min-h-[420px] max-h-[70vh]">
+                <div className="lg:col-span-4 border border-border rounded-xl p-3 bg-muted/20 flex flex-col min-h-105 max-h-[70vh]">
                     {/* Tab Navigation */}
                     <div className="flex gap-2 mb-3">
                         <button
@@ -974,7 +976,7 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                                                 <p className="text-[10px] font-bold text-primary">
                                                     {queued.isDirectConnection ? 'Direct' : `@${formatTime(queued.timestamp)}`}
                                                 </p>
-                                                <p className="text-[11px] text-foreground whitespace-pre-wrap break-words">
+                                                <p className="text-[11px] text-foreground whitespace-pre-wrap wrap-break-word">
                                                     {queued.content || 'Image comment'}
                                                 </p>
                                             </div>
@@ -1294,6 +1296,6 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                 </button>
             </div>
         </Modal>
-        </>
+        </VideoManagerProvider>
     );
 }

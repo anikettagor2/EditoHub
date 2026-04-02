@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useVideoManager } from './video-manager';
 import { Play, Pause, Volume2, VolumeX, Loader2, AlertCircle } from 'lucide-react';
 
 interface OptimizedVideoPlayerProps {
@@ -25,6 +26,17 @@ export function OptimizedVideoPlayer({
   onError,
 }: OptimizedVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const observerRef = useRef<HTMLDivElement>(null);
+  const { register, unregister, pauseAndUnloadAllExcept } = useVideoManager?.() || {};
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  // Quality selection (prefer 360p for review)
+  function selectQualityUrl(path: string): string {
+    if (navigator?.connection?.downlink && path.includes('/720p/')) {
+      return path.replace('/720p/', '/360p/');
+    }
+    return path;
+  }
+  const streamUrl = selectQualityUrl(videoPath);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -35,25 +47,24 @@ export function OptimizedVideoPlayer({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-  // Use direct URL — the /api/stream proxy is only used when video paths are explicitly routed through it (e.g. by the player selector)
-  const streamUrl = videoPath;
+  // (removed duplicate streamUrl declaration)
   const handlePlay = async () => {
     if (!hasStarted) {
       setIsLoading(true);
       setHasStarted(true);
     }
-
+    if (pauseAndUnloadAllExcept && videoRef.current) {
+      pauseAndUnloadAllExcept(videoRef.current);
+    }
     try {
       await videoRef.current?.play();
       setIsPlaying(true);
       onPlaying?.();
     } catch (err: any) {
-      // Suppress AbortError - expected when play is interrupted
       if (err?.name === 'AbortError') {
         setIsLoading(false);
         return;
       }
-      
       console.error('Play failed:', err?.message || err);
       setError('Failed to play video');
       onError?.(err as Error);
@@ -61,6 +72,44 @@ export function OptimizedVideoPlayer({
       setIsLoading(false);
     }
   };
+  // Intersection Observer for lazy loading/unloading
+  useEffect(() => {
+    const node = observerRef.current;
+    if (!node) return;
+    const observer = new window.IntersectionObserver(([entry]) => {
+      setIsIntersecting(entry.isIntersecting);
+      if (!entry.isIntersecting && videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.preload = 'none';
+        videoRef.current.load();
+      }
+    }, { threshold: 0.25 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Register/unregister with VideoManager
+  useEffect(() => {
+    if (register && unregister && videoRef.current) {
+      register(videoRef.current);
+      return () => unregister(videoRef.current!);
+    }
+  }, [register, unregister]);
+
+  // Lazy load video src
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isIntersecting) {
+        videoRef.current.src = streamUrl;
+        videoRef.current.preload = 'metadata';
+      } else {
+        videoRef.current.removeAttribute('src');
+        videoRef.current.preload = 'none';
+        videoRef.current.load();
+      }
+    }
+  }, [isIntersecting, streamUrl]);
 
   const handlePause = () => {
     videoRef.current?.pause();
@@ -102,6 +151,7 @@ export function OptimizedVideoPlayer({
 
   return (
     <div
+      ref={observerRef}
       className={`relative w-full aspect-video bg-black rounded-lg overflow-hidden ${className}`}
       onMouseEnter={() => setShowControls(true)}
       onMouseLeave={() => setShowControls(false)}
@@ -128,9 +178,8 @@ export function OptimizedVideoPlayer({
       {/* Video Element */}
       <video
         ref={videoRef}
-        src={streamUrl}
         poster={thumbnailUrl}
-        preload="metadata"
+        preload="none"
         className="w-full h-full"
         onTimeUpdate={handleTimeUpdate}
         onWaiting={handleWaiting}
@@ -159,7 +208,7 @@ export function OptimizedVideoPlayer({
 
       {/* Controls */}
       {showControls && hasStarted && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+        <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-4">
           <div className="flex items-center space-x-2">
             <button
               onClick={isPlaying ? handlePause : handlePlay}

@@ -207,6 +207,84 @@ function ProjectStatusBadges({ project }: { project: any }) {
 }
 
 export function AdminDashboard() {
+        // State for editing a team member
+        const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
+        const [editUser, setEditUser] = useState<User | null>(null);
+
+    // Handler for editing a user (team member)
+    const handleEditUser = (uid: string) => {
+        const user = users.find(u => u.uid === uid);
+        if (user) {
+            setEditUser(user);
+            setIsEditUserModalOpen(true);
+        }
+    };
+
+    // Save edited user details
+    const handleSaveEditUser = async () => {
+        if (!editUser) return;
+        try {
+            // Update user in Firestore (or your backend)
+            await updateUserDetails(editUser.uid, {
+                displayName: editUser.displayName,
+                email: editUser.email,
+                phoneNumber: editUser.phoneNumber,
+                role: editUser.role,
+            });
+            toast.success("User updated successfully");
+            setIsEditUserModalOpen(false);
+            setEditUser(null);
+        } catch (err) {
+            toast.error("Failed to update user");
+        }
+    };
+
+    // Helper for input changes
+    const handleEditUserChange = (field: keyof User, value: string) => {
+        if (!editUser) return;
+        setEditUser({ ...editUser, [field]: value });
+    };
+    // ...existing code...
+
+    {/* Edit Team Member Modal */}
+    {isEditUserModalOpen && editUser && (
+        <Modal isOpen={isEditUserModalOpen} onClose={() => { setIsEditUserModalOpen(false); setEditUser(null); }} title="Edit Team Member" maxWidth="max-w-lg">
+            <div className="space-y-4">
+                <div>
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Full Name</Label>
+                    <Input value={editUser.displayName || ""} onChange={e => handleEditUserChange("displayName", e.target.value)} className="w-full" />
+                </div>
+                <div>
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Email Address</Label>
+                    <Input value={editUser.email || ""} onChange={e => handleEditUserChange("email", e.target.value)} className="w-full" />
+                </div>
+                <div>
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">WhatsApp Number</Label>
+                    <Input value={editUser.phoneNumber || ""} onChange={e => handleEditUserChange("phoneNumber", e.target.value.replace(/\D/g, '').slice(0, 10))} className="w-full" maxLength={10} />
+                </div>
+                <div>
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Department</Label>
+                    <select className="w-full h-11 px-4 rounded-lg border border-border bg-muted/50 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-all appearance-none cursor-pointer font-medium" value={editUser.role} onChange={e => handleEditUserChange("role", e.target.value)}>
+                        <option value="sales_executive">Sales Executive</option>
+                        <option value="project_manager">Project Manager</option>
+                    </select>
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <Button className="flex-1" variant="outline" onClick={() => { setIsEditUserModalOpen(false); setEditUser(null); }}>Cancel</Button>
+                    <Button className="flex-1" onClick={handleSaveEditUser}>Save Changes</Button>
+                </div>
+            </div>
+        </Modal>
+    )}
+// Utility to update user details in Firestore (or your backend)
+async function updateUserDetails(uid: string, data: Partial<User>) {
+    // Example for Firestore:
+    // import { db } from "@/lib/firebase/config";
+    // import { doc, updateDoc } from "firebase/firestore";
+    // await updateDoc(doc(db, "users", uid), data);
+    // Replace with your actual update logic
+    return Promise.resolve();
+}
   const { user: currentUser } = useAuth();
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get('tab') as 'overview' | 'projects' | 'users' | 'team' | 'terminations' | 'requests' | 'whatsapp' | 'finance' | 'performance') || 'overview';
@@ -1367,9 +1445,16 @@ export function AdminDashboard() {
                                                  </div>
                                                  <div className="flex items-center gap-3">
                                                      {u.initialPassword && <span className="text-xs font-mono font-bold bg-card text-foreground px-2.5 py-1 rounded border border-border shadow-md">KEY: {u.initialPassword}</span>}
-                                                     <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUser(u.uid)}>
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </button>
+                                                                      <button
+                                                                          className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-blue-500/10 text-muted-foreground hover:text-blue-500 transition-all opacity-0 group-hover:opacity-100"
+                                                                          title="Edit team member"
+                                                                          onClick={() => handleEditUser(u.uid)}
+                                                                      >
+                                                                          <Edit className="h-3.5 w-3.5" />
+                                                                      </button>
+                                                                      <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUser(u.uid)}>
+                                                                          <Trash2 className="h-3.5 w-3.5" />
+                                                                     </button>
                                                  </div>
                                             </div>
                                         ))}
@@ -1395,9 +1480,18 @@ export function AdminDashboard() {
                                                  </div>
                                                  <div className="flex items-center gap-3">
                                                      {u.initialPassword && <span className="text-xs font-mono font-bold bg-card text-foreground px-2.5 py-1 rounded border border-border shadow-md">KEY: {u.initialPassword}</span>}
-                                                     <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUser(u.uid)}>
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </button>
+                                                                      <button
+                                                                          className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-blue-500/10 text-muted-foreground hover:text-blue-500 transition-all opacity-0 group-hover:opacity-100"
+                                                                          title="Edit team member"
+                                                                          onClick={() => handleEditUser(u.uid)}
+                                                                      >
+                                                                          <Edit className="h-3.5 w-3.5" />
+                                                                      </button>
+                                                                      <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUser(u.uid)}>
+                                                                          <Trash2 className="h-3.5 w-3.5" />
+                                                                     </button>
+
+
                                                  </div>
                                             </div>
                                         ))}

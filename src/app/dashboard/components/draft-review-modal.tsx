@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { VideoPlayer } from "@/components/video-player";
+import { VideoManagerProvider } from "@/components/video-manager";
 
 interface DraftReviewModalProps {
     isOpen: boolean;
@@ -53,63 +54,65 @@ export function DraftReviewModal({
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            onClose={onClose}
-            title="Download Video"
-            maxWidth="max-w-2xl"
-        >
-            {!revision || !project ? (
-                <div className="mt-4 py-12 text-center">
-                    <div className="inline-flex items-center gap-3 text-muted-foreground mb-4">
-                        <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                        <span className="text-sm">Loading draft video...</span>
-                    </div>
-                </div>
-            ) : (
-                <div className="mt-4 space-y-5">
-                    {/* Video Player */}
-                    <div className="space-y-3">
-                        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
-                            Version {revision.version}
-                        </p>
-                        <div className="relative rounded-xl overflow-hidden bg-black border border-border shadow-lg">
-                            <VideoPlayer
-                                videoPath={revision.videoUrl}
-                                title={project?.clientName || project?.name || "Draft Video"}
-                            />
+        <VideoManagerProvider>
+            <Modal
+                isOpen={isOpen}
+                onClose={onClose}
+                title="Download Video"
+                maxWidth="max-w-2xl"
+            >
+                {!revision || !project ? (
+                    <div className="mt-4 py-12 text-center">
+                        <div className="inline-flex items-center gap-3 text-muted-foreground mb-4">
+                            <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            <span className="text-sm">Loading draft video...</span>
                         </div>
-                        
-                        {revision.description && (
-                            <div className="p-4 rounded-lg bg-muted/30 border border-border">
-                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-2">
-                                    Notes from Editor
-                                </p>
-                                <p className="text-sm text-foreground">{revision.description}</p>
+                    </div>
+                ) : (
+                    <div className="mt-4 space-y-5">
+                        {/* Video Player */}
+                        <div className="space-y-3">
+                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
+                                Version {revision.version}
+                            </p>
+                            <div className="relative rounded-xl overflow-hidden bg-black border border-border shadow-lg">
+                                <VideoPlayer
+                                    videoPath={revision.videoUrl}
+                                    title={project?.clientName || project?.name || "Draft Video"}
+                                />
                             </div>
-                        )}
-                    </div>
+                            
+                            {revision.description && (
+                                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-2">
+                                        Notes from Editor
+                                    </p>
+                                    <p className="text-sm text-foreground">{revision.description}</p>
+                                </div>
+                            )}
+                        </div>
 
-                    {/* Download Button */}
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            onClick={onClose}
-                            className="flex-1 px-6 py-3 rounded-lg border border-border bg-muted/30 text-foreground text-sm font-bold uppercase tracking-widest hover:bg-muted/50 transition-colors disabled:opacity-50"
-                            disabled={isDownloading}
-                        >
-                            Close
-                        </button>
-                        <button
-                            onClick={handleDownloadClick}
-                            disabled={isDownloading}
-                            className="flex-1 px-6 py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold uppercase tracking-widest hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
-                        >
-                            <Download className="h-4 w-4" />
-                            {isDownloading ? "Downloading..." : "Download"}
-                        </button>
+                        {/* Download Button */}
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={onClose}
+                                className="flex-1 px-6 py-3 rounded-lg border border-border bg-muted/30 text-foreground text-sm font-bold uppercase tracking-widest hover:bg-muted/50 transition-colors disabled:opacity-50"
+                                disabled={isDownloading}
+                            >
+                                Close
+                            </button>
+                            <button
+                                onClick={handleDownloadClick}
+                                disabled={isDownloading}
+                                className="flex-1 px-6 py-3 rounded-lg bg-primary text-primary-foreground text-sm font-bold uppercase tracking-widest hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
+                            >
+                                <Download className="h-4 w-4" />
+                                {isDownloading ? "Downloading..." : "Download"}
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
-        </Modal>
+                )}
+            </Modal>
+        </VideoManagerProvider>
     );
 }
