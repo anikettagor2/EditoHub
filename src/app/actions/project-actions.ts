@@ -332,3 +332,38 @@ export async function submitEditorRating(projectId: string, rating: number, revi
         return { success: false, error: e.message };
     }
 }
+
+export async function getSignedDownloadUrl(downloadUrl: string, fileName?: string) {
+    try {
+        if (!downloadUrl) return { success: false, error: "No URL provided" };
+        if (!downloadUrl.includes('firebasestorage.googleapis.com')) {
+           return { success: true, url: downloadUrl };
+        }
+
+        const pathParts = downloadUrl.split('/o/');
+        if (pathParts.length > 1) {
+            const encodedPath = pathParts[1].split('?')[0];
+            const fullPath = decodeURIComponent(encodedPath);
+
+            const bucket = adminStorage.bucket();
+            const file = bucket.file(fullPath);
+            const safeFileName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : 'download';
+
+            const signedUrlResponse = await file.getSignedUrl({
+                version: 'v4',
+                action: 'read',
+                expires: Date.now() + 60 * 60 * 1000, // 1 hour
+                promptSaveAs: safeFileName,
+                responseDisposition: `attachment; filename="${safeFileName}"`
+            });
+
+            if (Array.isArray(signedUrlResponse) && signedUrlResponse.length > 0) {
+                return { success: true, url: signedUrlResponse[0] };
+            }
+        }
+        return { success: false, error: "Failed to generate signed URL from path" };
+    } catch (err: any) {
+        console.error("Failed to generate signed URL:", err);
+        return { success: false, error: err.message };
+    }
+}

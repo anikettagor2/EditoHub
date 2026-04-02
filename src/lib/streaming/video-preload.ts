@@ -361,23 +361,10 @@ export async function preloadVideoOptimally(
 
     // Check if this is a direct video file or HLS manifest
     if (isDirectVideoFile(hlsUrl)) {
-      console.log('[Preload] Direct video file detected - using simple preload strategy');
-      // For direct videos, just warm up the browser cache
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for HEAD request
-        
-        await fetch(hlsUrl, {
-          method: 'HEAD',
-          mode: 'cors',
-          cache: 'force-cache',
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        console.log('[Preload] Direct video file cache warmed');
-      } catch (err) {
-        console.warn('[Preload] Could not warm cache for direct video file');
-      }
+      console.log('[Preload] Direct video file detected - skipping preload to avoid cache poisoning range requests');
+      // Do NOT pre-fetch direct MP4 files with Range headers.
+      // Caching a partial range response interferes with the video element's own range request management.
+      // The browser handles MP4 buffering natively and efficiently without intervention.
       return;
     }
 

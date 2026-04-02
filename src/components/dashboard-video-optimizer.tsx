@@ -264,12 +264,12 @@ export function DashboardVideo({
         // Safari native HLS
         if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
           videoElement.src = streamingUrl;
-          videoElement.preload = 'auto';
+          videoElement.preload = 'metadata';
           setIsLoading(false);
         } else {
           // Absolute fallback
           videoElement.src = src;
-          videoElement.preload = 'auto';
+          videoElement.preload = 'metadata';
           setIsLoading(false);
         }
         return;
@@ -332,7 +332,7 @@ export function DashboardVideo({
               hlsRef.current = null;
               if (videoRef.current) {
                 videoRef.current.src = src;
-                videoRef.current.preload = 'auto';
+                videoRef.current.preload = 'metadata';
               }
               setIsLoading(false);
               break;
@@ -351,9 +351,12 @@ export function DashboardVideo({
 
     // ------------------------------------------------------------------
     // PATH 3 — Plain MP4 (no HLS)
+    // Let the browser handle range requests natively to Firebase CDN.
+    // preload='metadata' only fetches the moov atom (~few KB) initially,
+    // then the browser pulls video data on-demand as the user plays.
     // ------------------------------------------------------------------
     videoElement.src = src;
-    videoElement.preload = 'auto';
+    videoElement.preload = 'metadata';
     setIsLoading(false);
     if (autoPlay) safePlay(videoElement);
 

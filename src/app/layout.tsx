@@ -33,6 +33,7 @@ import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import { GlobalVideoWatermark } from "@/components/global-video-watermark";
 import { GlobalVideoOptimizer } from "@/components/global-video-optimizer";
+import { CacheConsentPopup } from "@/components/cache-consent";
 
 export default function RootLayout({
   children,
@@ -57,6 +58,7 @@ export default function RootLayout({
              <SmoothScroll />
              <ContactModal />
              <Toaster position="top-center" richColors />
+             <CacheConsentPopup />
              {children}
           </ContactProvider>
         </Providers>

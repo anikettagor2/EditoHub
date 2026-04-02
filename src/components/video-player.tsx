@@ -38,13 +38,8 @@ export function VideoPlayer({
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // If the videoPath is a direct http URL, use it directly. Otherwise, stream it through the API.
-  const isDirectUrl = videoPath.startsWith("http");
-  // Encode the path to ensure it's safely passed as a query parameter
-  const streamUrl = isDirectUrl 
-    ? videoPath 
-    : `/api/stream?path=${encodeURIComponent(videoPath)}`;
-
+  // Use videoPath directly — Firebase CDN URLs support 206 range requests natively
+  const streamUrl = videoPath;
   const handlePlayClick = async () => {
     if (!hasStarted) {
       setHasStarted(true);
@@ -162,7 +157,7 @@ export function VideoPlayer({
       )}
 
       {/* Actual Video Element */}
-      {hasStarted && (
+      <div className={hasStarted ? "w-full h-full" : "w-0 h-0 opacity-0 overflow-hidden"}>
         <video
           ref={videoRef}
           src={streamUrl}
@@ -185,10 +180,9 @@ export function VideoPlayer({
             setError("Failed to load video stream");
             setIsLoading(false);
           }}
-          autoPlay
           onClick={isPlaying ? handlePause : handlePlayClick}
         />
-      )}
+      </div>
 
       {/* Loading & Buffering State */}
       {(isLoading || isBuffering) && hasStarted && !error && (

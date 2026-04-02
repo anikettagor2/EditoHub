@@ -35,10 +35,8 @@ export function OptimizedVideoPlayer({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-
-  // Generate streaming URL
-  const streamUrl = `/api/stream?path=${encodeURIComponent(videoPath)}`;
-
+  // Use direct URL — the /api/stream proxy is only used when video paths are explicitly routed through it (e.g. by the player selector)
+  const streamUrl = videoPath;
   const handlePlay = async () => {
     if (!hasStarted) {
       setIsLoading(true);
@@ -130,7 +128,7 @@ export function OptimizedVideoPlayer({
       {/* Video Element */}
       <video
         ref={videoRef}
-        src={hasStarted ? streamUrl : undefined}
+        src={streamUrl}
         poster={thumbnailUrl}
         preload="metadata"
         className="w-full h-full"
