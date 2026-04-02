@@ -324,9 +324,28 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         if (!project?.id || !selectedRevisionId) return;
 
         if (isClient) {
-            // Clients can download immediately without payment or feedback
-            await startDownload();
-            return;
+            // Check if client has crossed pay-later limit
+            const isPayLaterClient = (user as any)?.payLater === true;
+            const hasCrossedLimit = (user as any)?.payLaterLimitCrossed === true; // Assuming this field exists
+
+            if (isPayLaterClient && hasCrossedLimit) {
+                // Show pop-up but don't block
+                toast.warning("You have crossed the pay-later limit. Please consider settling payments.");
+            }
+
+            // Always require feedback for downloads
+            if (!hasFeedback) {
+                setPendingDownloadAfterFlow(true);
+                setIsFeedbackModalOpen(true);
+                return;
+            }
+
+            // For pay-later clients, skip payment even if limit crossed
+            if (!isPayLaterClient && !isPaymentComplete) {
+                setPendingDownloadAfterFlow(true);
+                setIsPaymentModalOpen(true);
+                return;
+            }
         }
 
         await startDownload();
