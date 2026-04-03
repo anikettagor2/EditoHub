@@ -1,30 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { db } from "@/lib/firebase/config";
-import { 
-    doc, 
-    getDoc, 
-    collection, 
-    query, 
-    where, 
-    onSnapshot, 
-    addDoc, 
-    getDocs 
-} from "firebase/firestore";
-import { 
-    Loader2, 
-    MessageSquare, 
-    ShieldAlert, 
-    User as UserIcon,
-    Clock,
-    Lock
-} from "lucide-react";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { Loader2, ShieldAlert, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
-import { handleNewComment } from "@/app/actions/notification-actions";
-import { useVideoPreload } from "@/lib/streaming/video-preload";
+import { motion } from "framer-motion";
 import { ReviewSystemModal } from "@/app/dashboard/components/review-system-modal";
 
 type RevisionDoc = {
@@ -38,24 +20,8 @@ type RevisionDoc = {
     createdAt?: number;
 };
 
-type CommentDoc = {
-    id: string;
-    timestamp: number;
-    content: string;
-    userName?: string;
-    userRole?: string;
-    createdAt?: number;
-};
-
-function formatTime(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${String(s).padStart(2, "0")}`;
-}
-
 export default function GuestReviewPage() {
     const params = useParams();
-    const router = useRouter();
     const revisionId = params.id as string;
 
     const [revision, setRevision] = useState<RevisionDoc | null>(null);
@@ -67,27 +33,9 @@ export default function GuestReviewPage() {
     const [guestName, setGuestName] = useState("");
     const [isIdentified, setIsIdentified] = useState(false);
 
-    // Review system state
-    const [comments, setComments] = useState<CommentDoc[]>([]);
-    const [newComment, setNewComment] = useState("");
-    const [savingComment, setSavingComment] = useState(false);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [duration, setDuration] = useState(0);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isBuffering, setIsBuffering] = useState(false);
-    const [videoReady, setVideoReady] = useState(false);
-    const [forceVideoFallback, setForceVideoFallback] = useState(false);
-    const videoSeekRef = useRef<((seconds: number) => void) | null>(null);
-
-    const hlsUrl = revision?.hlsUrl;
-    const mp4Url = revision?.videoUrl;
-    const { isPreloading } = useVideoPreload(hlsUrl || mp4Url || '', true);
-
     useEffect(() => {
         if (!revisionId) return;
 
-        // Use onSnapshot so we auto-upgrade from MP4→HLS the moment
-        // the Cloud Function finishes transcoding and writes `hlsUrl`.
         const unsub = onSnapshot(
             doc(db, "revisions", revisionId),
             async (revSnap) => {
@@ -98,17 +46,8 @@ export default function GuestReviewPage() {
                 }
                 const revData = { id: revSnap.id, ...revSnap.data() } as RevisionDoc;
                 
-                // For guests: prefer HLS URL (public), but keep raw download URL as fallback.
-                // This ensures the preview plays when HLS is still updating or broken, and avoids stuck state.
-                const guestSafeRevision = {
-                    ...revData,
-                    videoUrl: revData.videoUrl,
-                    hlsUrl: revData.hlsUrl,
-                };
+                setRevision(revData);
 
-                setRevision(guestSafeRevision);
-
-                // Load project once (only needed on first snapshot)
                 if (!project) {
                     try {
                         const projSnap = await getDoc(doc(db, "projects", revData.projectId));
@@ -128,31 +67,15 @@ export default function GuestReviewPage() {
         );
 
         return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [revisionId]);
 
-    // ── Watermark: push client name to <body> the moment project loads ──
+    // Watermark
     useEffect(() => {
         const name = project?.clientName || project?.name;
         if (!name) return;
         document.body.dataset.watermarkName = name;
         return () => { delete document.body.dataset.watermarkName; };
     }, [project]);
-
-    useEffect(() => {
-        if (!revisionId || !isIdentified) return;
-
-        const q = query(collection(db, "comments"), where("revisionId", "==", revisionId));
-        const unsub = onSnapshot(q, (snap) => {
-            const next = snap.docs
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .map((doc) => ({ id: doc.id, ...(doc.data() as any) } as CommentDoc))
-                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-            setComments(next);
-        });
-
-        return () => unsub();
-    }, [revisionId, isIdentified]);
 
     const handleIdentify = (e: React.FormEvent) => {
         e.preventDefault();
@@ -161,55 +84,6 @@ export default function GuestReviewPage() {
             return;
         }
         setIsIdentified(true);
-    };
-
-    const handleAddComment = async () => {
-        if (!revision || !guestName) return;
-        if (!newComment.trim()) {
-            toast.error("Write a comment first.");
-            return;
-        }
-
-        setSavingComment(true);
-        try {
-            await addDoc(collection(db, "comments"), {
-                projectId: revision.projectId,
-                revisionId: revision.id,
-                userId: "guest",
-                userName: `${guestName} (Guest)`,
-                userRole: "guest",
-                content: newComment.trim(),
-                timestamp: currentTime,
-                createdAt: Date.now(),
-                status: "open",
-            });
-
-            const notifyResult = await handleNewComment(
-                revision.projectId,
-                "guest",
-                `${guestName} (Guest)`,
-                "client",
-                newComment.trim(),
-                revision.id
-            );
-
-            if (!notifyResult.success) {
-                console.error("[WhatsApp] Guest comment notification failed:", notifyResult.error);
-            }
-
-            setNewComment("");
-            toast.success(`Comment added at ${formatTime(currentTime)}`);
-        } catch (error) {
-            console.error("Add comment failed:", error);
-            toast.error("Failed to add comment.");
-        } finally {
-            setSavingComment(false);
-        }
-    };
-
-    const seekTo = (time: number) => {
-        videoSeekRef.current?.(time);
-        setCurrentTime(time);
     };
 
     if (loading) {
@@ -248,7 +122,7 @@ export default function GuestReviewPage() {
                     className="w-full max-w-sm"
                 >
                     <div className="text-center space-y-2 mb-8">
-                        <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto border border-primary/20 mb-4">
+                        <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto">
                             <Lock className="h-6 w-6 text-primary" />
                         </div>
                         <h2 className="text-xl font-bold text-white tracking-tight">Access Shared Review</h2>
