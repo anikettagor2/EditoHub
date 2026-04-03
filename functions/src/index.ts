@@ -688,3 +688,161 @@ export const onRevisionCreated = functions
     });
 
 export * from "./mov-to-mp4";
+
+// ---------------------------------------------------------------------------
+// Trigger: When a raw footage file is finished (composed) – generate thumbnail + HLS
+// ---------------------------------------------------------------------------
+export const onRawFootageUploaded = functions
+    .runWith({ timeoutSeconds: 540, memory: "2GB" })
+    .storage
+    .object()
+    .onFinalize(async (object) => {
+        const filePath = object.name;
+        if (!filePath || !filePath.startsWith("raw_footage/")) return;
+        
+        // Skip HLS segments themselves, playlists, and thumbnails to avoid infinite loops
+        if (filePath.includes("/hls/") || filePath.includes("/thumbnails/") || 
+            filePath.endsWith(".m3u8") || filePath.endsWith(".ts") || filePath.endsWith(".jpg")) return;
+
+        const metadata = object.metadata || {};
+        const projectId = metadata.projectId;
+        const uploadId = metadata.uploadId;
+
+        if (!projectId) {
+            console.log("[RawHLS] Skipping raw footage upload with no projectId metadata:", filePath);
+            return;
+        }
+
+        console.log(`[RawHLS] Starting transcoding for: ${filePath} (Project: ${projectId}, UploadID: ${uploadId})`);
+
+        const bucket = admin.storage().bucket(object.bucket);
+        const fileName = path.basename(filePath);
+        const localVideo = path.join(os.tmpdir(), fileName);
+        const identifier = uploadId || fileName.replace(/[^a-zA-Z0-9]/g, "_");
+        const thumbGcsPath = `projects/${projectId}/thumbnails/raw_${identifier}.jpg`;
+        const hlsGcsBase = `projects/${projectId}/hls/raw_${identifier}`;
+        
+        try {
+            // Download the source video
+            await bucket.file(filePath).download({ destination: localVideo });
+
+            // 1. Generate Thumbnail
+            const localThumb = path.join(os.tmpdir(), `raw_${identifier}_thumb.jpg`);
+            try {
+                await runFfmpeg(
+                    ffmpeg(localVideo)
+                        .seekInput(2) // capture at 2 seconds
+                        .frames(1)
+                        .output(localThumb)
+                );
+                await bucket.upload(localThumb, { 
+                    destination: thumbGcsPath, 
+                    metadata: { contentType: "image/jpeg" } 
+                });
+            } catch (thumbErr) {
+                console.error("[RawHLS] Thumbnail generation failed:", thumbErr);
+            }
+
+            const [thumbUrl] = await bucket.file(thumbGcsPath).getSignedUrl({ action: "read", expires: "03-01-2500" });
+            if (fs.existsSync(localThumb)) fs.unlinkSync(localThumb);
+
+            // 2. Generate HLS (Multi-bitrate)
+            const hlsOutDir = path.join(os.tmpdir(), `hlsraw_${identifier}`);
+            if (fs.existsSync(hlsOutDir)) fs.rmSync(hlsOutDir, { recursive: true, force: true });
+            fs.mkdirSync(hlsOutDir, { recursive: true });
+
+            const renditions: Array<[string, number, number, string]> = [
+                ["1080p", 1920, 1080, "4000k"],
+                ["720p",  1280, 720,  "2000k"],
+                ["480p",  854,  480,  "1000k"],
+            ];
+
+            for (const [label, w, h, vbr] of renditions) {
+                const renditionDir = path.join(hlsOutDir, label);
+                fs.mkdirSync(renditionDir, { recursive: true });
+                const m3u8Path = path.join(renditionDir, "index.m3u8");
+
+                await runFfmpeg(
+                    ffmpeg(localVideo)
+                        .outputOptions(
+                            "-vf",          `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2`,
+                            "-c:v",         "libx264",
+                            "-b:v",         vbr,
+                            "-c:a",         "aac",
+                            "-b:a",         "128k",
+                            "-hls_time",    "6",
+                            "-hls_list_size", "0",
+                            "-hls_segment_filename", path.join(renditionDir, "seg_%03d.ts"),
+                            "-f",           "hls"
+                        )
+                        .output(m3u8Path)
+                );
+
+                // Upload segments and rendition playlist
+                const files = fs.readdirSync(renditionDir);
+                for (const f of files) {
+                    await bucket.upload(path.join(renditionDir, f), {
+                        destination: `${hlsGcsBase}/${label}/${f}`,
+                        metadata: { 
+                            contentType: f.endsWith(".m3u8") ? "application/vnd.apple.mpegurl" : "video/MP2T",
+                            cacheControl: "public, max-age=31536000"
+                        }
+                    });
+                }
+            }
+
+            // Build and upload Master Playlist
+            const masterContent = [
+                "#EXTM3U",
+                "#EXT-X-VERSION:3",
+                "",
+                `#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080`,
+                `1080p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720`,
+                `720p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=854x480`,
+                `480p/index.m3u8`,
+            ].join("\n");
+            
+            const masterLocal = path.join(hlsOutDir, "master.m3u8");
+            fs.writeFileSync(masterLocal, masterContent);
+            await bucket.upload(masterLocal, { 
+                destination: `${hlsGcsBase}/master.m3u8`, 
+                metadata: { contentType: "application/vnd.apple.mpegurl" } 
+            });
+            const [masterUrl] = await bucket.file(`${hlsGcsBase}/master.m3u8`).getSignedUrl({ action: "read", expires: "03-01-2500" });
+
+            // 3. Update Project in Firestore
+            const projectRef = admin.firestore().collection("projects").doc(projectId);
+            await admin.firestore().runTransaction(async (transaction) => {
+                const projectSnap = await transaction.get(projectRef);
+                if (!projectSnap.exists) return;
+                
+                const data = projectSnap.data();
+                const rawFiles = data?.rawFiles || [];
+                
+                let updated = false;
+                const newRawFiles = rawFiles.map((f: any) => {
+                    // Match by uploadId or by checking if the URL contains the filename
+                    const isMatch = (uploadId && f.id === uploadId) || (f.url && f.url.includes(fileName));
+                    if (isMatch) {
+                        updated = true;
+                        return { ...f, hlsUrl: masterUrl, thumbnailUrl: thumbUrl };
+                    }
+                    return f;
+                });
+
+                if (updated) {
+                    transaction.update(projectRef, { rawFiles: newRawFiles, updatedAt: Date.now() });
+                }
+            });
+
+            console.log(`[RawHLS] Finished transcoding for: ${filePath}`);
+            // Cleanup temp directory
+            fs.rmSync(hlsOutDir, { recursive: true, force: true });
+        } catch (err) {
+            console.error("[RawHLS] Critical Error during processing:", err);
+        } finally {
+            if (fs.existsSync(localVideo)) fs.unlinkSync(localVideo);
+        }
+    });

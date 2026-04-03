@@ -23,13 +23,25 @@ export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfi
 export const auth = getAuth(app);
 
 // Initialize Firestore with specialized settings for better connectivity and offline support
-export const db = getApps().length > 0
-    ? getFirestore(app)
-    : initializeFirestore(app, {
+let dbInstance;
+try {
+    // If it's already initialized, just get it
+    dbInstance = getFirestore(app);
+} catch (e) {
+    // Determine persistence type based on environment
+    // Multiple tabs in development can sometimes trigger 'Unexpected state (ID: ca9)' due to HMR
+    const isDev = process.env.NODE_ENV === 'development';
+    
+    dbInstance = initializeFirestore(app, {
         localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager()
+            tabManager: isDev 
+                ? undefined // Default to single tab in dev to avoid 'ca9' race conditions
+                : persistentMultipleTabManager()
         })
     });
+}
+
+export const db = dbInstance;
 
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
