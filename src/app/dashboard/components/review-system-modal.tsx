@@ -12,7 +12,7 @@ import { handleNewComment } from "@/app/actions/notification-actions";
 import { PaymentButton } from "@/components/payment-button";
 import { uploadCommentImage } from "@/lib/firebase/storage-utils";
 import { DashboardVideo } from "@/components/dashboard-video-optimizer";
-import { OptimizedHLSPlayerView } from "@/components/optimized-hls-player-view";
+
 
 type ReviewProject = {
     id: string;
@@ -99,7 +99,8 @@ function formatDate(timestamp: number): string {
 }
 
 
-import { VideoManagerProvider } from "../../../components/video-manager";
+import { VideoManagerProvider } from "@/components/video-manager";
+import { OptimizedHLSPlayerView } from "@/components/optimized-hls-player-view";
 
 export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft = false }: ReviewSystemModalProps) {
     const { user } = useAuth();
