@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { handleNewComment } from "@/app/actions/notification-actions";
 import { useVideoPreload } from "@/lib/streaming/video-preload";
-import { OptimizedHLSPlayer } from "@/components/optimized-hls-player";
+import { OptimizedHLSPlayerView } from "@/components/optimized-hls-player-view";
 import { OptimizedVideoPlayer } from "@/components/optimized-video-player";
 import { VideoManagerProvider } from "@/components/video-manager";
 
@@ -327,44 +327,23 @@ export default function GuestReviewPage() {
                                     </div>
                                 )}
                                 
-                                {/* Prefer HLS (adaptive), fallback to MP4 direct download */}
-                                {hlsUrl && !forceVideoFallback ? (
-                                    <OptimizedHLSPlayer
-                                        hlsUrl={hlsUrl}
-                                        videoUrl={mp4Url}
-                                        projectName={project?.name || "Guest Review"}
-                                        fileSize={revision.fileSize}
-                                        onTimeUpdate={(time, dur) => {
-                                            setCurrentTime(time);
-                                            if (dur != null && dur > 0) {
-                                                setDuration(dur);
-                                                setVideoReady(true);
-                                            }
-                                        }}
-                                        onPlaying={() => setIsPlaying(true)}
-                                        onPause={() => setIsPlaying(false)}
-                                        onError={(err) => {
-                                            console.warn('[Guest Review] HLS playback failed, falling back to MP4:', err);
-                                            setForceVideoFallback(true);
-                                        }}
-                                        className="h-full w-full"
-                                    />
-                                ) : mp4Url ? (
-                                    <OptimizedVideoPlayer
-                                        videoPath={mp4Url}
-                                        title={project?.name || "Guest Review"}
-                                        onTimeUpdate={(time, dur) => {
-                                            setCurrentTime(time);
-                                            if (dur != null && dur > 0) {
-                                                setDuration(dur);
-                                                setVideoReady(true);
-                                            }
-                                        }}
-                                        onPlaying={() => setIsPlaying(true)}
-                                        onPause={() => setIsPlaying(false)}
-                                        className="h-full w-full"
-                                    />
-                                ) : null}
+                                <OptimizedHLSPlayerView
+                                    hlsUrl={hlsUrl}
+                                    videoUrl={mp4Url}
+                                    projectName={project?.name || "Guest Review"}
+                                    fileSize={revision.fileSize}
+                                    onTimeUpdate={(time, dur) => {
+                                        setCurrentTime(time);
+                                        if (dur != null && dur > 0) {
+                                            setDuration(dur);
+                                            setVideoReady(true);
+                                        }
+                                    }}
+                                    onError={(err) => {
+                                        console.warn('[Guest Review] Player error (HLS/MP4):', err);
+                                        setForceVideoFallback(true);
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>
