@@ -12,6 +12,7 @@ import { handleNewComment } from "@/app/actions/notification-actions";
 import { PaymentButton } from "@/components/payment-button";
 import { uploadCommentImage } from "@/lib/firebase/storage-utils";
 import { DashboardVideo } from "@/components/dashboard-video-optimizer";
+import { warmVideoInMemory } from "@/lib/video-preload";
 
 
 type ReviewProject = {
@@ -578,6 +579,13 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
 
                 console.log('[ReviewSystemModal] Fetched revisions:', next);
                 setRevisions(next);
+                
+                // Preheat all parsed videos for instant playback with blob caching
+                next.forEach(r => {
+                    const videoSrc = r.hlsUrl || r.videoUrl;
+                    if (videoSrc) warmVideoInMemory(videoSrc);
+                });
+
                 if (next.length > 0) {
                     const defaultRev = defaultRevisionId && next.find(r => r.id === defaultRevisionId) ? defaultRevisionId : next[0].id;
                     console.log('[ReviewSystemModal] Setting revision as selected:', defaultRev);
