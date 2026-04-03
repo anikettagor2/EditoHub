@@ -530,8 +530,22 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
 
     const handleDeleteComment = async (commentId: string) => {
         if (!window.confirm("Delete this comment?")) return;
+
         try {
-            await deleteDoc(doc(db, "comments", commentId));
+            const res = await fetch("/api/comments/delete", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ commentId }),
+            });
+
+            const payload = await res.json();
+            if (!res.ok || !payload?.success) {
+                const errorMessage = payload?.message || "Failed to delete comment.";
+                throw new Error(errorMessage);
+            }
+
             setComments((prev) => prev.filter((comment) => comment.id !== commentId));
             setDirectConnections((prev) => prev.filter((comment) => comment.id !== commentId));
             toast.success("Comment deleted.");
