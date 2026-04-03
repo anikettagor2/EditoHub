@@ -13,7 +13,10 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import HLS from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize2, Loader2, AlertCircle, Zap } from 'lucide-react';
+import { 
+  Play, Pause, Volume2, VolumeX, Maximize2, 
+  Loader2, AlertCircle, Zap, Settings, FastForward 
+} from 'lucide-react';
 import {
   getOptimizedHLSConfig,
   detectNetworkSpeed,
@@ -27,6 +30,7 @@ import {
   getCachedSegment,
   clearSegmentCache,
   getSegmentCacheStats,
+  SegmentCacheLoader,
 } from '@/lib/streaming/segment-cache';
 
 interface OptimizedHLSPlayerProps {
@@ -41,6 +45,7 @@ interface OptimizedHLSPlayerProps {
   onPlaying?: () => void;
   onPause?: () => void;
   onError?: (error: Error) => void;
+  speedFirst?: boolean; // If true, prioritize speed (low buffer start)
   className?: string;
 }
 
@@ -56,6 +61,7 @@ export function OptimizedHLSPlayer({
   onPlaying,
   onPause,
   onError,
+  speedFirst = true, // Default to true for fastest experience
   className = '',
 }: OptimizedHLSPlayerProps) {
   // Use HLS if available, otherwise use direct video URL
@@ -75,10 +81,12 @@ export function OptimizedHLSPlayer({
   const [isBuffering, setIsBuffering] = useState(false);
   const [showControls, setShowControls] = useState(!autoPlay);
   const [error, setError] = useState<string | null>(null);
-  const [currentQuality, setCurrentQuality] = useState<string>('auto');
+  const [currentQualityIndex, setCurrentQualityIndex] = useState<number>(-1); // -1 for auto
+  const [availableLevels, setAvailableLevels] = useState<any[]>([]);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [cacheSize, setCacheSize] = useState<string>('0MB');
-  const [qualityProgression, setQualityProgression] = useState<string>('480p (startup)');
+  const [qualityProgression, setQualityProgression] = useState<string>('Initializing...');
   const [isLargeVideo, setIsLargeVideo] = useState(isLargeVideoFile(fileSize));
 
   // ─────────────────────────────────────────────────────────────────────
@@ -107,11 +115,12 @@ export function OptimizedHLSPlayer({
 
       // Detect network speed and select appropriate preset
       const networkProfile = detectNetworkSpeed();
-      const hlsPreset = selectHLSPreset(networkProfile, largeVideo);
+      const hlsPreset = selectHLSPreset(networkProfile, largeVideo, speedFirst);
 
       // Get optimized HLS configuration
       let config = getOptimizedHLSConfig({
         enableLogging: process.env.NODE_ENV === 'development',
+        speedFirst,
         ...hlsPreset,
       }) as any;
 
@@ -121,9 +130,12 @@ export function OptimizedHLSPlayer({
         config = { ...config, ...largeVideoConfig };
       }
 
-    // Add segment caching to XHR setup
+    // Add segment caching to XHR setup and use custom loader for fragment caching
     const defaultXhrSetup = config.xhrSetup;
     config.xhrSetup = createCachingXhrSetup(defaultXhrSetup);
+    
+    // Set custom loader for fragment (segment) requests
+    config.fLoader = SegmentCacheLoader;
 
     // Create HLS instance with optimized config
     const hls = new HLS(config);
@@ -139,12 +151,23 @@ export function OptimizedHLSPlayer({
     // Event Handlers
     // ─────────────────────────────────────────────────────────────────────
 
-    const handleManifestParsed = () => {
-      console.log('[OptimizedHLSPlayer] Manifest parsed, levels available:', hls.levels.length);
+    const handleManifestParsed = (_event: any, data: { levels: any[] }) => {
+      console.log('[OptimizedHLSPlayer] Manifest parsed, levels available:', data.levels.length);
+      setAvailableLevels(data.levels);
       
       if (largeVideo) {
         console.log('[OptimizedHLSPlayer] 🎬 Large video - Starting quality: 360p (extra-low for stability)');
         setQualityProgression('360p (large video mode)');
+        // Level 1 is 360p in current manifest
+        const safeLevel = Math.min(1, hls.levels.length - 1);
+        hls.startLevel = safeLevel;
+        hls.nextLevel = safeLevel;
+      } else if (speedFirst) {
+        console.log('[OptimizedHLSPlayer] ⚡ SPEED FIRST mode active - forcing start at Level 0 (240p) for instant playback');
+        setQualityProgression('240p (Instant Start)');
+        const safeLevel = 0; // Absolute lowest for speed
+        hls.startLevel = safeLevel;
+        hls.nextLevel = safeLevel;
       } else {
         console.log('[OptimizedHLSPlayer] Starting quality: 480p (progressive upgrade enabled)');
       }
@@ -162,9 +185,8 @@ export function OptimizedHLSPlayer({
     const handleLevelSwitched = (_event: any, data: { level: number }) => {
       const level = hls.levels[data.level];
       if (level) {
-        const qualityLabel = `${level.width}x${level.height} (${Math.round(level.bitrate / 1000)}kbps)`;
-        console.log(`[OptimizedHLSPlayer] Quality upgraded to: ${qualityLabel}`);
-        setCurrentQuality(qualityLabel);
+        const qualityLabel = `${level.height}p`;
+        console.log(`[OptimizedHLSPlayer] Quality level active: ${qualityLabel}`);
         
         // Update quality progression display
         if (level.width >= 1920) {
@@ -539,10 +561,54 @@ export function OptimizedHLSPlayer({
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
 
-            {/* Quality Display */}
-            <span className="text-xs text-white/50 font-mono">
-              {currentQuality}
-            </span>
+            {/* Quality Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowQualityMenu(!showQualityMenu)}
+                className="flex items-center gap-1 text-[10px] text-white/70 hover:text-white bg-white/10 px-2 py-0.5 rounded transition-colors"
+                title="Change quality"
+              >
+                <Settings className="h-3 w-3" />
+                <span>{currentQualityIndex === -1 ? 'Auto' : `${availableLevels[currentQualityIndex]?.height}p`}</span>
+              </button>
+
+              {showQualityMenu && (
+                <div className="absolute bottom-full left-0 mb-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl py-1 min-w-[100px] z-50">
+                  <div className="px-3 py-1 border-b border-white/5 mb-1">
+                    <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Quality</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (hlsRef.current) hlsRef.current.currentLevel = -1;
+                      setCurrentQualityIndex(-1);
+                      setShowQualityMenu(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-white/5 flex items-center justify-between ${
+                      currentQualityIndex === -1 ? 'text-blue-400 font-medium bg-blue-500/5' : 'text-white/70'
+                    }`}
+                  >
+                    <span>Auto</span>
+                    {currentQualityIndex === -1 && < Zap className="h-3 w-3 fill-current" />}
+                  </button>
+                  {availableLevels.map((level, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        if (hlsRef.current) hlsRef.current.currentLevel = idx;
+                        setCurrentQualityIndex(idx);
+                        setShowQualityMenu(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-white/5 flex items-center justify-between ${
+                        currentQualityIndex === idx ? 'text-blue-400 font-medium bg-blue-500/5' : 'text-white/70'
+                      }`}
+                    >
+                      <span>{level.height}p</span>
+                      {currentQualityIndex === idx && <div className="h-1.5 w-1.5 rounded-full bg-blue-400" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right Controls */}

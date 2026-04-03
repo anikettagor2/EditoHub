@@ -587,9 +587,11 @@ export const onRevisionCreated = functions
 
         // Define renditions: [label, width, height, videoBitrate]
         const renditions: Array<[string, number, number, string]> = [
-            ["1080p", 1920, 1080, "4000k"],
-            ["720p",  1280, 720,  "2000k"],
-            ["480p",  854,  480,  "1000k"],
+            ["240p",  426,  240,  "400k"],
+            ["360p",  640,  360,  "800k"],
+            ["480p",  854,  480,  "1200k"],
+            ["720p",  1280, 720,  "2500k"],
+            ["1080p", 1920, 1080, "5000k"],
         ];
 
         const variantPaths: string[] = [];
@@ -608,7 +610,7 @@ export const onRevisionCreated = functions
                             "-b:v",         vbr,
                             "-c:a",         "aac",
                             "-b:a",         "128k",
-                            "-hls_time",    "6",
+                            "-hls_time",    "4",
                             "-hls_list_size", "0",
                             "-hls_segment_filename", path.join(renditionDir, "seg_%03d.ts"),
                             "-f",           "hls"
@@ -627,6 +629,7 @@ export const onRevisionCreated = functions
                             contentType: seg.endsWith(".m3u8")
                                 ? "application/vnd.apple.mpegurl"
                                 : "video/MP2T",
+                            cacheControl: "public, max-age=31536000",
                         },
                     });
                 }
@@ -635,16 +638,21 @@ export const onRevisionCreated = functions
             }
 
             // Build master playlist locally and upload
+            // We list the lowest quality first for "Speed First" startup
             const masterContent = [
                 "#EXTM3U",
                 "#EXT-X-VERSION:3",
                 "",
-                `#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080`,
-                `1080p/index.m3u8`,
-                `#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720`,
-                `720p/index.m3u8`,
-                `#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=854x480`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=400000,RESOLUTION=426x240`,
+                `240p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360`,
+                `360p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=854x480`,
                 `480p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720`,
+                `720p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080`,
+                `1080p/index.m3u8`,
             ].join("\n");
 
             const masterLocalPath = path.join(hlsOutDir, "master.m3u8");
@@ -752,9 +760,11 @@ export const onRawFootageUploaded = functions
             fs.mkdirSync(hlsOutDir, { recursive: true });
 
             const renditions: Array<[string, number, number, string]> = [
-                ["1080p", 1920, 1080, "4000k"],
-                ["720p",  1280, 720,  "2000k"],
-                ["480p",  854,  480,  "1000k"],
+                ["240p",  426,  240,  "400k"],
+                ["360p",  640,  360,  "800k"],
+                ["480p",  854,  480,  "1200k"],
+                ["720p",  1280, 720,  "2500k"],
+                ["1080p", 1920, 1080, "5000k"],
             ];
 
             for (const [label, w, h, vbr] of renditions) {
@@ -770,7 +780,7 @@ export const onRawFootageUploaded = functions
                             "-b:v",         vbr,
                             "-c:a",         "aac",
                             "-b:a",         "128k",
-                            "-hls_time",    "6",
+                            "-hls_time",    "4",
                             "-hls_list_size", "0",
                             "-hls_segment_filename", path.join(renditionDir, "seg_%03d.ts"),
                             "-f",           "hls"
@@ -792,16 +802,21 @@ export const onRawFootageUploaded = functions
             }
 
             // Build and upload Master Playlist
+            // Prioritize speed: lower quality (240p) comes first
             const masterContent = [
                 "#EXTM3U",
                 "#EXT-X-VERSION:3",
                 "",
-                `#EXT-X-STREAM-INF:BANDWIDTH=4000000,RESOLUTION=1920x1080`,
-                `1080p/index.m3u8`,
-                `#EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720`,
-                `720p/index.m3u8`,
-                `#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=854x480`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=400000,RESOLUTION=426x240`,
+                `240p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360`,
+                `360p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=854x480`,
                 `480p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720`,
+                `720p/index.m3u8`,
+                `#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080`,
+                `1080p/index.m3u8`,
             ].join("\n");
             
             const masterLocal = path.join(hlsOutDir, "master.m3u8");

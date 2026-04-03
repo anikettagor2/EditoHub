@@ -29,11 +29,14 @@ export function OptimizedVideoPlayer({
   const observerRef = useRef<HTMLDivElement>(null);
   const { register, unregister, pauseAndUnloadAllExcept } = useVideoManager?.() || {};
   const [isIntersecting, setIsIntersecting] = useState(false);
-  // Quality selection (prefer 360p for review)
+  // Quality selection (Always prefer 360p for review speed)
   function selectQualityUrl(path: string): string {
-    const connection = (navigator as any).connection;
-    if (connection?.downlink && path.includes('/720p/')) {
+    // If it's a versioned path (e.g. including /720p/), replace with /360p/ to ensure zero buffering
+    if (path.includes('/720p/')) {
       return path.replace('/720p/', '/360p/');
+    }
+    if (path.includes('/1080p/')) {
+       return path.replace('/1080p/', '/360p/');
     }
     return path;
   }

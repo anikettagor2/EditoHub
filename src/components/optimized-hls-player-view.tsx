@@ -50,7 +50,8 @@ export function OptimizedHLSPlayerView({
       projectName={projectName}
       fileSize={fileSize}
       autoPlay={false}
-      preload="metadata"
+      speedFirst={true} // Prioritize speed above all else
+      preload="auto" // More aggressive preloading
       onTimeUpdate={onTimeUpdate}
       onError={onError}
       className="w-full h-full"

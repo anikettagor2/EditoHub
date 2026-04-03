@@ -29,6 +29,10 @@ export interface HLSOptimizationConfig {
    * Increases buffer, reduces quality aggressiveness
    */
   isLargeVideo?: boolean;
+  /**
+   * Prioritize speed over quality (starts with ultra-low bitrate)
+   */
+  speedFirst?: boolean;
 }
 
 /**
@@ -44,38 +48,52 @@ export function getOptimizedHLSConfig(
     // Buffering Configuration - Fast Streaming
     // ─────────────────────────────────────────────────────────────────────
     
-    // Target buffer: 8 seconds (faster playback start)
-    targetDurations: [userConfig?.targetBufferTime ?? 8],
+    // Target buffer: default to 12 seconds for stability, or 6 for speedFirst (fast start)
+    targetDurations: [userConfig?.speedFirst ? 6 : (userConfig?.targetBufferTime ?? 8)],
     
-    // Max buffer: 30 seconds (allows smooth playback during brief drops)
-    maxBufferLength: userConfig?.maxBufferLength ?? 30,
+    // Max buffer lengths: Increase significantly for speedFirst
+    maxBufferLength: userConfig?.speedFirst ? 120 : (userConfig?.maxBufferLength ?? 30),
+    maxMaxBufferLength: userConfig?.speedFirst ? 600 : (userConfig?.maxBufferLength ? userConfig.maxBufferLength * 2 : 60),
     
-    // Max buffer size in bytes: 100MB (prevent excessive memory usage)
-    maxBufferSize: userConfig?.maxBufferSize ?? 100 * 1024 * 1024,
+    // Keep previously played content in memory for instant replay (up to 30 mins)
+    backBufferLength: userConfig?.speedFirst ? 1800 : 90,
     
-    // Max loading delay: 4 seconds (switch quality if stalling)
-    maxLoadingDelay: userConfig?.maxLoadingDelay ?? 4,
+    // Max buffer size in bytes: 250MB for speedFirst (prevent excessive memory usage but allow large cache)
+    maxBufferSize: userConfig?.speedFirst ? 250 * 1024 * 1024 : (userConfig?.maxBufferSize ?? 100 * 1024 * 1024),
+    
+    // Max loading delay: 2 seconds for speedFirst (switch quality faster if stalling)
+    maxLoadingDelay: userConfig?.speedFirst ? 2 : (userConfig?.maxLoadingDelay ?? 4),
     
     // ─────────────────────────────────────────────────────────────────────
     // Segment Loading - Parallel Downloads
     // ─────────────────────────────────────────────────────────────────────
     
-    // Load segments in parallel
-    maxNumUnsyncedSegments: 6,
+    // Load segments in parallel - increase for faster filling of the large buffer
+    maxNumUnsyncedSegments: userConfig?.speedFirst ? 12 : 6,
     
     // ─────────────────────────────────────────────────────────────────────
     // Quality and Caching Configuration
     // ─────────────────────────────────────────────────────────────────────
     
     // Start with lower quality for faster startup if enabled
-    // -1 = auto (default), 0 = 1080p, 1 = 720p, 2 = 480p, etc.
-    startLevel: userConfig?.startWithLowerQuality ? 2 : -1, // 2 = 480p (lower quality)
+    // 0 = 240p (lowest), 1 = 360p, 2 = 480p, 3 = 720p, 4 = 1080p
+    startLevel: userConfig?.speedFirst ? 0 : (userConfig?.startWithLowerQuality ? 1 : -1),
+    
+    // ─────────────────────────────────────────────────────────────────────
+    // Quality Caps and Bandwidth
+    // ─────────────────────────────────────────────────────────────────────
+    
+    // Cap quality to player size to save bandwidth
+    capLevelToPlayerSize: true,
+    
+    // Ultra-conservative initial bandwidth estimate (200kbps) to guarantee instant start
+    abrEwmaDefaultEstimate: 200000,
     
     // ─────────────────────────────────────────────────────────────────────
     // Low Latency Mode - Faster Startup
     // ─────────────────────────────────────────────────────────────────────
     
-    lowLatencyMode: userConfig?.lowLatencyMode ?? true,
+    lowLatencyMode: userConfig?.speedFirst ? false : (userConfig?.lowLatencyMode ?? true),
     
     // Start loading automatically
     autoStartLoad: userConfig?.autoStartLoad ?? true,
@@ -89,20 +107,20 @@ export function getOptimizedHLSConfig(
     
     // Re-fetch manifest every 3 seconds for live updates
     manifestLoadingTimeOut: 10000,
-    manifestLoadingMaxRetry: 3,
+    manifestLoadingMaxRetry: 6,
     manifestLoadingRetryDelay: 1000,
     
     // ─────────────────────────────────────────────────────────────────────
     // Reliability Configuration
     // ─────────────────────────────────────────────────────────────────────
     
-    // Retry failed segments up to 6 times
-    fragLoadingMaxRetry: 6,
+    // Retry failed segments up to 10 times for speedFirst
+    fragLoadingMaxRetry: userConfig?.speedFirst ? 10 : 6,
     fragLoadingRetryDelay: 1000,
-    fragLoadingLoopThreshold: 3,
+    fragLoadingLoopThreshold: 5,
     
     // Retry on network errors
-    levelLoadingMaxRetry: 4,
+    levelLoadingMaxRetry: 6,
     levelLoadingRetryDelay: 1000,
     
     // ─────────────────────────────────────────────────────────────────────
@@ -119,7 +137,7 @@ export function getOptimizedHLSConfig(
     xhrSetup: (xhr: XMLHttpRequest, url: string) => {
       // Add cache headers for better CDN interaction
       xhr.withCredentials = false;
-      xhr.timeout = 20000; // 20 second timeout
+      xhr.timeout = 25000; // 25 second timeout
     },
     
     // ─────────────────────────────────────────────────────────────────────
@@ -138,6 +156,9 @@ export function getOptimizedHLSConfig(
  * Get HLS.js event listeners for monitoring playback
  */
 export function getHLSEventListeners() {
+  if (typeof window === 'undefined' || !HLS?.Events) {
+    return {};
+  }
   return {
     [HLS.Events.MANIFEST_PARSED]: 'Manifest loaded and parsed',
     [HLS.Events.LEVEL_SWITCHED]: 'Quality level switched',
@@ -255,14 +276,30 @@ export const HLS_PRESETS = {
    * More robust retry logic
    */
   largeFileOptimized: {
-    targetBufferTime: 30,        // 30 second target buffer (vs 6s)
-    maxBufferLength: 90,          // 90 second max (vs 25s)
-    lowLatencyMode: false,        // Disable low latency, need stability
+    targetBufferTime: 30,        // 30 second target buffer
+    maxBufferLength: 90,          // 90 second max
+    lowLatencyMode: false,        // Disable low latency for stability
     startFragPrefetch: true,      // Prefetch more aggressively
     startWithLowerQuality: true,  // Start at 480p minimum
     enableSegmentCaching: true,   // Aggressive caching
-    maxBufferSize: 300 * 1024 * 1024, // 300MB buffer in memory
+    maxBufferSize: 300 * 1024 * 1024, // 300MB buffer
     maxLoadingDelay: 8,           // Only upgrade if very stable
+  },
+
+  /**
+   * Ultra Fast Startup (SPEED FIRST)
+   * Prioritizes instant playback above all else
+   * Starts at 360p/240p, very large buffer to prevent any stalling
+   */
+  ultraFastStartup: {
+    targetBufferTime: 4,          // Keep 4s ready (low for fast start)
+    maxBufferLength: 120,         // Buffer up to 2 minutes
+    lowLatencyMode: true,         // Enable low latency for speed
+    startFragPrefetch: true,      // Prefetch immediately
+    startWithLowerQuality: true,  // Lowest quality first
+    enableSegmentCaching: true,   // Full segment caching
+    speedFirst: true,
+    maxBufferSize: 250 * 1024 * 1024,
   },
 } as const;
 
@@ -272,15 +309,20 @@ export const HLS_PRESETS = {
  */
 export function selectHLSPreset(
   profile: NetSpeedProfile,
-  isLargeVideo?: boolean
+  isLargeVideo?: boolean,
+  speedFirst: boolean = true // Default to true for fastest experience
 ): HLSOptimizationConfig {
+  // If explicitly requested speed first, use ultra fast preset
+  if (speedFirst) {
+    return HLS_PRESETS.ultraFastStartup;
+  }
+
   // If explicitly marked as large video, use optimized preset
   if (isLargeVideo) {
     return HLS_PRESETS.largeFileOptimized;
   }
   
-  // Always use progressive upgrade for optimal UX
-  // Starts at 480p, upgrades as bandwidth allows
+  // Default to progressive upgrade
   return HLS_PRESETS.progressiveUpgrade;
 }
 
