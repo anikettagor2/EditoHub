@@ -81,7 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
 }
 
-export default function GuestReviewPage({ params }: Props) {
-    const revisionId = (params as any).id;
+export default async function GuestReviewPage({ params }: Props) {
+    const { id: revisionId } = await params;
     return <GuestReviewPageClient revisionId={revisionId} />;
 }
