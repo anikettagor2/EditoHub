@@ -211,7 +211,7 @@ export function OptimizedVideoPlayer({
       )}
 
       {/* Controls */}
-      {(showControls || isBuffering) && hasStarted && (
+      {(showControls || isBuffering || !hasStarted) && (
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 transition-opacity duration-200">
           <div className="flex items-center space-x-3 mb-3">
             <button
@@ -222,9 +222,10 @@ export function OptimizedVideoPlayer({
               {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 fill-current" />}
             </button>
 
-            <div className="flex-1 text-white text-xs font-medium">
+            {/* Time Display - Removed */}
+            {/* <div className="flex-1 text-white text-xs font-medium">
               {formatTime(currentTime)} / {formatTime(duration)}
-            </div>
+            </div> */}
 
             <button
               onClick={() => {

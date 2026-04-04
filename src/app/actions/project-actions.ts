@@ -105,6 +105,10 @@ async function purgeProjectRevisionVideos(projectId: string): Promise<void> {
 
 /**
  * Registers a download attempt for a revision, enforcing a download limit.
+ *
+ * IMPORTANT: Always uses the original high-quality videoUrl for downloads.
+ * The optimizedUrl (360p MP4) is only for display in review systems.
+ * This ensures clients always download the highest quality version available.
  */
 export async function registerDownload(projectId: string, revisionId: string) {
     console.log(`[registerDownload] Initiating for Project: ${projectId}, Revision: ${revisionId}`);

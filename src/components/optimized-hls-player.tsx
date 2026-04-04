@@ -13,7 +13,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import HLS from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize2, Loader2, AlertCircle, Zap } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize2, Loader2, AlertCircle } from 'lucide-react';
 import {
   getOptimizedHLSConfig,
   detectNetworkSpeed,
@@ -79,9 +79,9 @@ export function OptimizedHLSPlayer({
   const [error, setError] = useState<string | null>(null);
   const [currentQuality, setCurrentQuality] = useState<string>('auto');
   const [isLoading, setIsLoading] = useState(true);
-  const [cacheSize, setCacheSize] = useState<string>('0MB');
-  const [qualityProgression, setQualityProgression] = useState<string>('480p (startup)');
   const [isLargeVideo, setIsLargeVideo] = useState(isLargeVideoFile(fileSize));
+  const [availableLevels, setAvailableLevels] = useState<Array<{id: number; label: string; width: number; height: number; bitrate: number}>>([]);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────
   // HLS Initialization and Optimization
@@ -121,13 +121,16 @@ export function OptimizedHLSPlayer({
       if (speedFirst) {
         config = {
           ...config,
-          targetBufferTime: 3,
-          maxBufferLength: 10,
-          maxBufferSize: 30 * 1024 * 1024,
+          targetBufferTime: 5,           // Small target buffer
+          maxBufferLength: 15,           // Small max buffer
+          maxBufferSize: 30 * 1024 * 1024, // 30MB max
           lowLatencyMode: true,
           startFragPrefetch: true,
-          capLevelToPlayerSize: true,
-          maxLoadingDelay: 1.5,
+          capLevelToPlayerSize: true,   // Progressive quality upgrade based on buffer
+          maxLoadingDelay: 2,
+          autoLevelCapping: -1,          // Unlimited auto level capping (allow progressive upgrades)
+          abrEwmaFastLive: 3,            // Faster quality response
+          abrEwmaSlowLive: 9,            // Slower quality decay
         };
       }
 
@@ -145,53 +148,56 @@ export function OptimizedHLSPlayer({
     const hls = new HLS(config);
     hlsRef.current = hls;
 
-    // Update cache size display
-    getSegmentCacheStats().then(stats => {
-      setCacheSize(stats.cacheSizeMB);
-      console.log(`[OptimizedHLSPlayer] Segment cache: ${stats.cacheSizeMB}MB (${stats.cacheCount} segments)`);
-    });
-
     // ─────────────────────────────────────────────────────────────────────
     // Event Handlers
     // ─────────────────────────────────────────────────────────────────────
 
-    const handleManifestParsed = () => {
+    const handleManifestParsed = (_event: any) => {
       console.log('[OptimizedHLSPlayer] Manifest parsed, levels available:', hls.levels.length);
+      console.log('[OptimizedHLSPlayer] HLS instance:', hls);
+      console.log('[OptimizedHLSPlayer] HLS levels raw:', hls.levels);
       
-      if (largeVideo) {
-        console.log('[OptimizedHLSPlayer] 🎬 Large video - Starting quality: 360p (extra-low for stability)');
-        setQualityProgression('360p (large video mode)');
-      } else {
-        console.log('[OptimizedHLSPlayer] Starting quality: 480p (progressive upgrade enabled)');
+      if (!hls.levels || hls.levels.length === 0) {
+        console.warn('[OptimizedHLSPlayer] No HLS levels found!');
+        setIsLoading(false);
+        return;
       }
-      
-      // Log available qualities
-      hls.levels.forEach((level, idx) => {
-        console.log(
-          `  Level ${idx}: ${level.width}x${level.height} @ ${level.bitrate / 1000}kbps`
-        );
-      });
 
+      // Build quality levels list - sort from lowest to highest
+      const levels = hls.levels
+        .map((level, idx) => ({
+          id: idx,
+          label: level.width >= 1920 ? '4K' : level.width >= 1280 ? '720p' : level.width >= 854 ? '480p' : level.width >= 640 ? '360p' : '240p',
+          width: level.width,
+          height: level.height,
+          bitrate: level.bitrate,
+        }))
+        .sort((a, b) => a.bitrate - b.bitrate); // Sort lowest to highest bitrate
+
+      console.log('[OptimizedHLSPlayer] Available quality levels:', levels.map(l => `${l.label} (${l.width}x${l.height})`).join(', '));
+      setAvailableLevels(levels);
+
+      // START WITH LOWEST QUALITY FOR FASTEST PLAYBACK
+      const lowestQuality = hls.levels.reduce((lowest, current, idx) => {
+        if (current.bitrate < hls.levels[lowest].bitrate) return idx;
+        return lowest;
+      }, 0);
+
+      hls.currentLevel = lowestQuality;
+      const startLevel = hls.levels[lowestQuality];
+      console.log(`[OptimizedHLSPlayer] 🚀 STARTING WITH LOWEST QUALITY: ${startLevel.width}x${startLevel.height} @ ${Math.round(startLevel.bitrate / 1000)}kbps (fastest streaming)`);
+      setCurrentQuality(`${startLevel.width}x${startLevel.height}`);
+      
       setIsLoading(false);
     };
 
     const handleLevelSwitched = (_event: any, data: { level: number }) => {
       const level = hls.levels[data.level];
       if (level) {
-        const qualityLabel = `${level.width}x${level.height} (${Math.round(level.bitrate / 1000)}kbps)`;
-        console.log(`[OptimizedHLSPlayer] Quality upgraded to: ${qualityLabel}`);
+        const qualityLabel = `${level.width}x${level.height}`;
+        const bitrate = Math.round(level.bitrate / 1000);
+        console.log(`[OptimizedHLSPlayer] ⬆️ QUALITY UPGRADED: ${qualityLabel} @ ${bitrate}kbps`);
         setCurrentQuality(qualityLabel);
-        
-        // Update quality progression display
-        if (level.width >= 1920) {
-          setQualityProgression('4K (maximum)');
-        } else if (level.width >= 1280) {
-          setQualityProgression('720p (upgraded)');
-        } else if (level.width >= 854) {
-          setQualityProgression('480p (stable)');
-        } else {
-          setQualityProgression('360p (low bandwidth)');
-        }
       }
     };
 
@@ -392,6 +398,25 @@ export function OptimizedHLSPlayer({
     }
   }, []);
 
+  const handleQualityChange = useCallback((levelId: number | string) => {
+    if (!hlsRef.current) return;
+    
+    if (levelId === 'auto') {
+      hlsRef.current.currentLevel = -1; // Auto mode
+      setCurrentQuality('auto');
+      console.log('[OptimizedHLSPlayer] Quality set to: AUTO');
+    } else {
+      const level = hlsRef.current.levels[levelId as number];
+      if (level) {
+        hlsRef.current.currentLevel = levelId as number;
+        const qualityLabel = `${level.width}x${level.height}`;
+        setCurrentQuality(qualityLabel);
+        console.log(`[OptimizedHLSPlayer] Quality manually set to: ${qualityLabel}`);
+      }
+    }
+    setShowQualityMenu(false);
+  }, []);
+
   const handleMouseMove = useCallback(() => {
     setShowControls(true);
     clearTimeout(controlsTimeoutRef.current!);
@@ -430,9 +455,21 @@ export function OptimizedHLSPlayer({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full bg-black aspect-video rounded-lg overflow-hidden group shadow-lg ${className}`}
+      className={`relative w-full bg-black aspect-video rounded-lg overflow-visible group shadow-lg ${className}`}
       onMouseMove={handleMouseMove}
-      onMouseLeave={() => isPlaying && setShowControls(false)}
+      onMouseLeave={() => {
+        isPlaying && setShowControls(false);
+        setShowQualityMenu(false);
+      }}
+      onClick={() => {
+        // Don't close menu when clicking on quality selector itself
+        if (showQualityMenu) {
+          const target = event?.target as HTMLElement;
+          if (!target?.closest('[data-quality-menu]')) {
+            setShowQualityMenu(false);
+          }
+        }
+      }}
     >
       {/* Video Element */}
       <video
@@ -495,19 +532,10 @@ export function OptimizedHLSPlayer({
 
       {/* Controls Bar */}
       <div
-        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/70 to-transparent p-4 transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0'
+        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/70 to-transparent p-4 transition-opacity duration-300 overflow-visible ${
+          showControls || !isPlaying ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        {/* Quality Progression and Cache Status */}
-        <div className="flex items-center justify-between mb-3 text-xs text-white/60 px-2">
-          <div className="flex items-center gap-2">
-            <Zap className="h-3 w-3 text-amber-400" />
-            <span>{qualityProgression}</span>
-          </div>
-          <span>Cache: {cacheSize}</span>
-        </div>
-
         {/* Progress Bar */}
         <input
           type="range"
@@ -566,14 +594,93 @@ export function OptimizedHLSPlayer({
             </div>
 
             {/* Time Display */}
-            <span className="text-xs text-white/70 font-mono min-w-[60px]">
+            {/* <span className="text-xs text-white/70 font-mono min-w-[60px]">
               {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
+            </span> */}
 
-            {/* Quality Display */}
-            <span className="text-xs text-white/50 font-mono">
+            {/* Quality Display - Removed */}
+            {/* <span className="text-xs text-white/50 font-mono">
               {currentQuality}
-            </span>
+            </span> */}
+
+            {/* Quality Selector - Only show if levels are available */}
+            {availableLevels && availableLevels.length > 0 && (
+            <div className="relative z-[9999] overflow-visible" data-quality-menu>
+              <button
+                onClick={() => {
+                  const newState = !showQualityMenu;
+                  setShowQualityMenu(newState);
+                  if (newState) {
+                    console.log('[OptimizedHLSPlayer] Quality menu opened. Levels:', availableLevels);
+                    console.log('[OptimizedHLSPlayer] HLS levels:', hlsRef.current?.levels?.length || 0);
+                  }
+                }}
+                className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-white font-mono transition-colors"
+                title="Change video quality"
+              >
+                {currentQuality === 'auto' ? '⚙️ auto' : `📺 ${currentQuality}`}
+              </button>
+              
+              {/* Quality Menu - Positioned ABOVE button, visible in controls area */}
+              {showQualityMenu && (
+                <div 
+                  className="absolute left-0 bg-black/98 rounded-lg shadow-2xl py-3 z-[9999] border border-white/30 backdrop-blur-sm min-w-[220px]"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ 
+                    bottom: 'calc(100% + 12px)',
+                    top: 'auto',
+                    maxHeight: '400px', 
+                    overflowY: 'auto', 
+                    width: '100%'
+                  }}
+                >
+                  {/* Auto Option */}
+                  <button
+                    onClick={() => {
+                      handleQualityChange('auto');
+                      setShowQualityMenu(false);
+                    }}
+                    className={`block w-full text-left px-4 py-3 text-xs font-semibold transition-colors border-b border-white/20 ${
+                      currentQuality === 'auto'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-white/90 hover:text-white hover:bg-white/20'
+                    }`}
+                  >
+                    ⚙️ Auto (Adaptive)
+                  </button>
+                  
+                  {/* Individual Quality Options */}
+                  {availableLevels && availableLevels.length > 0 ? (
+                    availableLevels.map((level, idx) => (
+                      <button
+                        key={`quality-${level.id}`}
+                        onClick={() => {
+                          handleQualityChange(level.id);
+                          setShowQualityMenu(false);
+                        }}
+                        className={`block w-full text-left px-4 py-3 text-xs font-medium transition-all ${
+                          idx !== availableLevels.length - 1 ? 'border-b border-white/20' : ''
+                        } ${
+                          currentQuality === `${level.width}x${level.height}`
+                            ? 'bg-blue-600 text-white'
+                            : 'text-white/90 hover:text-white hover:bg-white/20'
+                        }`}
+                      >
+                        <div className="font-semibold">📺 {level.label}</div>
+                        <div className="text-white/70 text-[11px] mt-0.5">
+                          {level.width}×{level.height} • {Math.round(level.bitrate / 1000)}kbps
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-4 text-xs text-white/60 text-center font-medium">
+                      ⏳ Loading quality options...
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            )}
           </div>
 
           {/* Right Controls */}
