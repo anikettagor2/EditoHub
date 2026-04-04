@@ -163,8 +163,8 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
     const remainingAmount = Math.max(0, (liveTotalCost - liveAmountPaid) * 1.18);
     const remainingBaseAmount = Math.max(0, liveTotalCost - liveAmountPaid);
     const paidSoFarInclusive = liveAmountPaid * 1.18;
-    const isPaymentComplete = livePaymentStatus === "full_paid";
-    const hasFeedback = liveEditorRating > 0 && !!liveEditorReview?.trim();
+    const isPaymentComplete = livePaymentStatus === "full_paid" || liveAmountPaid >= liveTotalCost;
+    const hasFeedback = liveEditorRating > 0;
 
     const selectedRevision = useMemo(
         () => revisions.find((r) => r.id === selectedRevisionId) || null,
@@ -282,26 +282,17 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
         if (!project?.id || !selectedRevisionId) return;
 
         if (isClient) {
-            // Check if client has crossed pay-later limit
-            const isPayLaterClient = (user as any)?.payLater === true;
-            const hasCrossedLimit = (user as any)?.payLaterLimitCrossed === true; // Assuming this field exists
-
-            if (isPayLaterClient && hasCrossedLimit) {
-                // Show pop-up but don't block
-                toast.warning("You have crossed the pay-later limit. Please consider settling payments.");
-            }
-
-            // Always require feedback for downloads
-            if (!hasFeedback) {
+            // 1. Payment Check (MANDATORY for download, even for Pay Later clients)
+            if (!isPaymentComplete) {
                 setPendingDownloadAfterFlow(true);
-                setIsFeedbackModalOpen(true);
+                setIsPaymentModalOpen(true);
                 return;
             }
 
-            // For pay-later clients, skip payment even if limit crossed
-            if (!isPayLaterClient && !isPaymentComplete) {
+            // 2. Feedback Check
+            if (!hasFeedback) {
                 setPendingDownloadAfterFlow(true);
-                setIsPaymentModalOpen(true);
+                setIsFeedbackModalOpen(true);
                 return;
             }
         }
@@ -315,14 +306,10 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
             toast.error("Please select a rating.");
             return;
         }
-        if (!editorReview.trim()) {
-            toast.error("Please add feedback for the editor.");
-            return;
-        }
 
         setIsSubmittingFeedback(true);
         try {
-            const res = await submitEditorRating(project.id, editorRating, editorReview.trim());
+            const res = await submitEditorRating(project.id, editorRating, editorReview.trim() || "No review provided.");
             if (!res.success) {
                 toast.error(res.error || "Failed to submit feedback.");
                 return;
@@ -1201,16 +1188,21 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
                                 const isPayLaterClient = (user as any)?.payLater === true;
                                 return (
                                     <div className="flex flex-col items-end gap-1.5">
-                                        {isPayLaterClient && (
+                                        {isPayLaterClient && !isPaymentComplete && (
+                                            <div className="text-[10px] px-2 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold">
+                                                ✓ Pay Later - Payment Required for Download
+                                            </div>
+                                        )}
+                                        {isPaymentComplete && (
                                             <div className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 font-bold">
-                                                ✓ Pay Later - Download Anytime
+                                                ✓ Payment Completed
                                             </div>
                                         )}
                                         <button
                                             onClick={handleDownloadClick}
                                             disabled={isDownloading}
                                             className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all active:scale-[0.98] flex items-center gap-2 shadow-md shadow-primary/10 disabled:opacity-50"
-                                            title={isPayLaterClient ? "Download immediately - pay later" : "Complete payment and feedback to download"}
+                                            title={isPaymentComplete ? "Download version" : "Complete payment and feedback to download"}
                                         >
                                             {isDownloading ? (
                                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1772,7 +1764,7 @@ export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft =
 
                     <button
                         onClick={handleSubmitFeedback}
-                        disabled={isSubmittingFeedback || editorRating === 0 || !editorReview.trim()}
+                        disabled={isSubmittingFeedback || editorRating === 0}
                         className="w-full h-11 rounded-lg bg-primary text-primary-foreground text-[11px] font-bold uppercase tracking-widest hover:bg-primary/90 disabled:opacity-50"
                     >
                         {isSubmittingFeedback ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Submit Feedback & Download"}
