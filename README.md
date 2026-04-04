@@ -2,7 +2,7 @@
 
 ## Overview
 
-EditoHub is a premium video editing agency platform built with **Next.js 16.1.3**, **React 19.2.3**, **TypeScript**, **Tailwind CSS v4**, and **Framer Motion**. The app is designed to provide an agency-grade workflow for uploading raw footage, creating review links, and delivering fast preview playback using a custom video engineering stack.
+EditoHub is a premium video editing agency platform built with **Next.js 16.1.3**, **React 19.2.3**, **TypeScript**, **Tailwind CSS v4**, and **Framer Motion**. The app is designed to provide an agency-grade workflow for uploading raw footage, generating review-ready preview assets, and delivering fast browser playback using a modern video engineering stack.
 
 The main goal of this repository is to support professional video review workflows with:
 
@@ -12,7 +12,81 @@ The main goal of this repository is to support professional video review workflo
 - secure review sharing and timestamped comments
 - original video download delivery separate from review playback
 
+## Tech Stack
+
+- **Frontend**: Next.js 16.1.3, React 19.2.3, TypeScript, Tailwind CSS v4, Framer Motion
+- **Video playback**: `hls.js`, custom `OptimizedHLSPlayer`, `OptimizedVideoPlayer`, `OptimizedHLSPlayerView`
+- **Backend**: Firebase Cloud Functions, Firestore, Firebase Storage
+- **Transcoding**: Google Cloud Transcoder, HLS segment generation, proxy MP4 creation
+- **Hosting / deployment**: Vercel or Firebase Hosting for frontend, Firebase Functions for backend
+
+## How the Technologies Work Together
+
+1. **User uploads raw footage** from the browser into **Firebase Storage**.
+2. The upload is recorded in **Firestore** and triggers a **Firebase Cloud Function**.
+3. The Cloud Function sends the raw source to **Google Cloud Transcoder** to generate:
+   - low-bitrate **proxy MP4** review assets
+   - **HLS segmented streams** for adaptive playback
+4. When transcoding completes, another Cloud Function updates Firestore with generated preview URLs.
+5. The frontend review pages load the preview source from Firestore and render it using:
+   - `OptimizedHLSPlayerView` to choose `proxyUrl` or `hlsUrl`
+   - `OptimizedHLSPlayer` for adaptive streaming with `hls.js`
+   - `OptimizedVideoPlayer` for direct MP4 playback when needed
+6. Reviewers play back the proxy/HLS assets in the browser, while the high-quality original remains available only for download.
+
+## Workflow Diagrams
+
+### Video Processing Flow Diagram
+
+```mermaid
+flowchart TD
+    A[User Uploads Raw Footage] --> B[Firebase Storage]
+    B --> C[Firestore Record Created]
+    C --> D[Firebase Cloud Function Triggered]
+    D --> E[Google Cloud Transcoder Job]
+    E --> F[Generate Proxy MP4 & HLS Segments]
+    F --> G[Transcoder Job Complete]
+    G --> H[Update Firestore with Preview URLs]
+    H --> I[Frontend Loads Preview Assets]
+    I --> J[OptimizedHLSPlayerView Selects Source]
+    J --> K[Play Proxy MP4 or HLS Stream]
+    K --> L[Review Playback in Browser]
+    L --> M[Download Original Video Separately]
+```
+
+### Video Engineering Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph Frontend
+        A[Next.js App]
+        B[OptimizedHLSPlayerView]
+        C[OptimizedHLSPlayer]
+        D[OptimizedVideoPlayer]
+    end
+    subgraph Backend
+        E[Firebase Cloud Functions]
+        F[Firestore]
+        G[Firebase Storage]
+    end
+    subgraph Transcoding
+        H[Google Cloud Transcoder]
+    end
+    A --> B
+    B --> C
+    B --> D
+    C --> H
+    D --> H
+    E --> F
+    E --> G
+    E --> H
+    H --> F
+    F --> A
+    G --> A
+```
+
 ## Video Engineering Architecture
+
 
 ### 1. Raw footage upload and ingestion
 
