@@ -2,14 +2,21 @@
 
 import { useAuth } from "@/lib/context/auth-context";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, User, Mail, Shield } from "lucide-react";
-import { useState } from "react";
+import { Loader2, Trash2, User, Mail, Shield, Edit2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { db } from "@/lib/firebase/config";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { Modal } from "@/components/ui/modal";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function ProfilePage() {
     const { user, requestAccountDeletion } = useAuth();
     const [isDeleting, setIsDeleting] = useState(false);
+    const [assignedManager, setAssignedManager] = useState<any>(null);
+    const [loadingManager, setLoadingManager] = useState(false);
 
     const handleDelete = async () => {
         if (user?.deletionRequested) return;
@@ -25,6 +32,39 @@ export default function ProfilePage() {
             setIsDeleting(false);
         }
     };
+
+    // Load assigned manager for clients
+    useEffect(() => {
+        if (!user || user.role !== 'client') return;
+        
+        setLoadingManager(true);
+        
+        const unsubscribe = onSnapshot(doc(db, "users", user.uid), async (docSnap) => {
+            if (docSnap.exists()) {
+                const userData = docSnap.data();
+                const assignedManagerId = userData?.assignedManagerId;
+                
+                if (assignedManagerId) {
+                    try {
+                        const managerSnap = await getDoc(doc(db, "users", assignedManagerId));
+                        if (managerSnap.exists()) {
+                            setAssignedManager({ 
+                                uid: managerSnap.id, 
+                                ...managerSnap.data() 
+                            });
+                        }
+                    } catch (error) {
+                        console.error("Failed to load manager:", error);
+                    }
+                } else {
+                    setAssignedManager(null);
+                }
+            }
+            setLoadingManager(false);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
 
     if (!user) return null;
 
@@ -90,6 +130,32 @@ export default function ProfilePage() {
                             <p className="text-muted-foreground font-mono text-xs">{user.uid}</p>
                         </div>
                     </div>
+
+                    {/* Show assigned manager for clients */}
+                    {user.role === 'client' && (
+                        <div className="flex items-center gap-4 text-sm">
+                            <div className="w-8 h-8 rounded-lg bg-card flex items-center justify-center flex-shrink-0">
+                                <User className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-muted-foreground text-xs uppercase tracking-wider font-bold mb-0.5">Assigned Manager</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-foreground/90">
+                                        {loadingManager ? (
+                                            <span className="text-muted-foreground">Loading...</span>
+                                        ) : assignedManager ? (
+                                            assignedManager.displayName || 'Unknown Manager'
+                                        ) : (
+                                            <span className="text-amber-400">Not assigned</span>
+                                        )}
+                                    </p>
+                                    {assignedManager && (
+                                        <span className="text-[10px] text-muted-foreground">({assignedManager.email})</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {user.role !== 'admin' && (

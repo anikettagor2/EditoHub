@@ -1050,6 +1050,152 @@ export async function autoAssignEditor(projectId: string, editorPrice: number, d
 }
 
 /**
+ * Assign or change a manager (sales executive) for a client
+ */
+export async function assignManagerToClient(clientId: string, managerId: string, updatedBy: { uid: string, displayName: string }) {
+    try {
+        const clientRef = adminDb.collection('users').doc(clientId);
+        const clientSnap = await clientRef.get();
+        if (!clientSnap.exists) {
+            return { success: false, error: "Client not found" };
+        }
+
+        const managerRef = adminDb.collection('users').doc(managerId);
+        const managerSnap = await managerRef.get();
+        if (!managerSnap.exists) {
+            return { success: false, error: "Manager not found" };
+        }
+
+        const managerData = managerSnap.data();
+
+        // Update client with manager assignment
+        await clientRef.update({
+            assignedManagerId: managerId,
+            updatedAt: Date.now()
+        });
+
+        revalidatePath('/dashboard');
+        return { 
+            success: true, 
+            message: `Manager ${managerData?.displayName || 'Unknown'} assigned to client successfully`
+        };
+    } catch (error: any) {
+        console.error('Manager assignment error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Update user details (name, email, phone, role) with real-time synchronization
+ * Used by admin to edit team members and sales executives
+ */
+export async function updateUserDetails(uid: string, updates: Partial<any>, updatedBy: { uid: string, displayName: string }) {
+    try {
+        const userRef = adminDb.collection('users').doc(uid);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) {
+            return { success: false, error: "User not found" };
+        }
+
+        const userData = userSnap.data();
+
+        // Prepare update object - only allow specific fields
+        const allowedFields = ['displayName', 'email', 'phoneNumber', 'whatsappNumber', 'role', 'location', 'portfolio', 'skills', 'skillPrices'];
+        const safeUpdates: any = {
+            updatedAt: Date.now(),
+            updatedBy: updatedBy.uid
+        };
+
+        for (const field of allowedFields) {
+            if (field in updates && updates[field] !== undefined) {
+                safeUpdates[field] = updates[field];
+            }
+        }
+
+        // Update user document
+        await userRef.update(safeUpdates);
+
+        // If email changed, update Firebase Auth email as well
+        if (updates.email && userData && updates.email !== userData.email) {
+            try {
+                await adminAuth.updateUser(uid, { email: updates.email });
+            } catch (authError: any) {
+                console.warn('Warning: Could not update Firebase Auth email:', authError.message);
+                // Don't fail the request, just warn
+            }
+        }
+
+        revalidatePath('/dashboard');
+        return { 
+            success: true, 
+            message: `${userData?.displayName || 'User'} details updated successfully`,
+            updatedFields: Object.keys(safeUpdates).filter(k => k !== 'updatedAt' && k !== 'updatedBy')
+        };
+    } catch (error: any) {
+        console.error('User details update error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Update client project details (name, description, budget, etc)
+ * Clients can edit their project details after creation
+ */
+export async function updateClientProjectDetails(projectId: string, clientId: string, updates: Partial<any>) {
+    try {
+        const projectRef = adminDb.collection('projects').doc(projectId);
+        const projectSnap = await projectRef.get();
+        if (!projectSnap.exists) {
+            return { success: false, error: "Project not found" };
+        }
+
+        const project = projectSnap.data();
+        
+        // Verify that the requesting user is the client who owns this project
+        if (project?.clientId !== clientId) {
+            return { success: false, error: "Unauthorized: You can only edit your own projects" };
+        }
+
+        // Only allow editing specific fields for clients
+        const editableFields = ['name', 'description', 'baseLanguage', 'subtitles', 'deliveryResolution', 'turnaroundDaysEstimate', 'budget'];
+        const safeUpdates: any = {
+            updatedAt: Date.now()
+        };
+
+        for (const field of editableFields) {
+            if (field in updates && updates[field] !== undefined) {
+                safeUpdates[field] = updates[field];
+            }
+        }
+
+        // Do not allow editing status, assignedEditorId, pricing tier, etc
+        if (Object.keys(safeUpdates).length === 1) { // Only updatedAt
+            return { success: false, error: "No valid fields to update" };
+        }
+
+        // Update project
+        await projectRef.update(safeUpdates);
+
+        // Add log entry
+        await addProjectLog(
+            projectId,
+            'PROJECT_DETAILS_UPDATED',
+            { uid: clientId, displayName: project?.clientName || 'Client', designation: 'Client' },
+            `Project details updated: ${Object.keys(safeUpdates).filter(k => k !== 'updatedAt').join(', ')}`
+        );
+
+        revalidatePath(`/dashboard/projects/${projectId}`);
+        return { 
+            success: true, 
+            message: 'Project details updated successfully'
+        };
+    } catch (error: any) {
+        console.error('Project update error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Gets invoice template settings
  */
 export async function getInvoiceSettings() {

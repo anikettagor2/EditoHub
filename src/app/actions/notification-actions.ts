@@ -115,6 +115,7 @@ export async function handleProjectCompleted(projectId: string) {
 
 /**
  * Triggered when a new comment is added to the review tool.
+ * Editor notification is sent only on the FIRST comment (not for every comment).
  */
 export async function handleNewComment(
     projectId: string, 
@@ -140,17 +141,28 @@ export async function handleNewComment(
 
         // Determine who to notify based on commenter role
         if (commenterRole === 'client') {
-            // Client commented -> notify editor and PM
+            // Client commented -> notify editor (FIRST TIME ONLY) and PM
             if (project?.assignedEditorId) {
-                const clientSnap = await adminDb.collection('users').doc(commenterId).get();
-                const clientName = clientSnap.exists ? clientSnap.data()?.displayName || 'Client' : 'Client';
-                const editorCommentResult = await notifyEditorNewComment(projectId, project.assignedEditorId, clientName, commentSnippet, reviewLink);
-                if (!editorCommentResult.success) {
-                    console.error('[WhatsApp] Editor new-comment notification failed', {
-                        projectId,
-                        editorId: project.assignedEditorId,
-                        error: editorCommentResult.error,
-                    });
+                // Check if editor has already been notified about first comment
+                const hasEditorBeenNotified = project?.editorFirstCommentNotified === true;
+                
+                if (!hasEditorBeenNotified) {
+                    // Send notification only on first comment
+                    const clientSnap = await adminDb.collection('users').doc(commenterId).get();
+                    const clientName = clientSnap.exists ? clientSnap.data()?.displayName || 'Client' : 'Client';
+                    const editorCommentResult = await notifyEditorNewComment(projectId, project.assignedEditorId, clientName, commentSnippet, reviewLink);
+                    if (!editorCommentResult.success) {
+                        console.error('[WhatsApp] Editor first-comment notification failed', {
+                            projectId,
+                            editorId: project.assignedEditorId,
+                            error: editorCommentResult.error,
+                        });
+                    } else {
+                        // Mark that editor has been notified about first comment
+                        await adminDb.collection('projects').doc(projectId).update({
+                            editorFirstCommentNotified: true
+                        });
+                    }
                 }
             }
             if (project?.assignedPMId) {
