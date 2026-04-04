@@ -87,7 +87,6 @@ graph TD
 
 ## Video Engineering Architecture
 
-
 ### 1. Raw footage upload and ingestion
 
 Raw video uploads are handled through Firebase Storage and Firestore. The platform stores the original video file as a high-quality source while also creating a processed review version that is optimized for playback.
