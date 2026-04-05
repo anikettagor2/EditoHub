@@ -581,7 +581,8 @@ export async function settleProjectPayment(projectId: string, uid: string, displ
 export async function togglePayLater(uid: string, payLater: boolean) {
     try {
         await adminDb.collection('users').doc(uid).update({
-            payLater: payLater
+            payLater: payLater,
+            updatedAt: Date.now()
         });
         revalidatePath('/dashboard');
         return { success: true };

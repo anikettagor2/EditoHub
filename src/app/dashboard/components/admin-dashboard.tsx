@@ -1302,25 +1302,31 @@ export function AdminDashboard() {
                                                const client = users.find(u => u.uid === project.clientId);
                                                if (!client) return <span className="text-xs text-muted-foreground">N/A</span>;
                                                return (
-                                                   <label className="inline-flex items-center cursor-pointer">
-                                                       <input
-                                                           type="checkbox"
-                                                           checked={!!client.payLater}
-                                                           onChange={async (e) => {
-                                                               try {
-                                                                   await updateDoc(doc(db, "users", client.uid), { payLater: e.target.checked });
-                                                                   toast.success(`Pay Later ${e.target.checked ? 'enabled' : 'disabled'} for ${client.displayName}`);
-                                                               } catch (err) {
-                                                                   toast.error('Failed to update Pay Later status');
-                                                               }
-                                                           }}
-                                                           className="form-checkbox h-5 w-5 text-primary rounded focus:ring-primary border-border"
-                                                       />
-                                                       <span className="ml-2 text-xs font-medium text-muted-foreground">
-                                                           {client.payLater ? 'Enabled' : 'Disabled'}
-                                                       </span>
-                                                   </label>
-                                               );
+                                                    <label className="inline-flex items-center cursor-pointer group/toggle">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!client.payLater}
+                                                            onChange={async (e) => {
+                                                                const newVal = e.target.checked;
+                                                                try {
+                                                                    const res = await togglePayLater(client.uid, newVal);
+                                                                    if (res.success) {
+                                                                        toast.success(`Pay Later ${newVal ? 'Enabled' : 'Disabled'} for ${client.displayName}`);
+                                                                    } else {
+                                                                        toast.error(res.error || 'Failed to update Pay Later status');
+                                                                    }
+                                                                } catch (err) {
+                                                                    toast.error('Failed to update Pay Later status');
+                                                                }
+                                                            }}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className="relative w-10 h-5 bg-muted rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary/80 group-hover/toggle:ring-4 group-hover/toggle:ring-primary/10"></div>
+                                                        <span className="ml-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground group-hover/toggle:text-foreground transition-colors">
+                                                            {client.payLater ? 'Enabled' : 'Disabled'}
+                                                        </span>
+                                                    </label>
+                                                );
                                            })()}
                                        </td>
                                    <td className="px-3 py-3 text-right">
@@ -1501,7 +1507,7 @@ export function AdminDashboard() {
                                                             const res = await togglePayLater(u.uid, !u.payLater);
                                                             if(res.success) toast.success(`Pay later status updated`);
                                                         }}>
-                                                            <IndianRupee className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Pay Later
+                                                            <IndianRupee className="mr-2.5 h-3.5 w-3.5 text-muted-foreground" /> Pay Later ({u.payLater ? 'Enabled' : 'Disabled'})
                                                         </DropdownMenuItem>
                                                     )}
                                                     <DropdownMenuItem className="p-2.5 text-xs text-popover-foreground hover:bg-muted transition-colors cursor-pointer rounded-lg" onClick={() => handleToggleUserStatus(u.uid, (u as any).status !== 'inactive')}>
@@ -2957,11 +2963,22 @@ export function AdminDashboard() {
                                                 <button 
                                                     onClick={async () => {
                                                         const newVal = !selectedUserDetail.payLater;
+                                                        // Optimistically update local state for the modal
                                                         setSelectedUserDetail({ ...selectedUserDetail, payLater: newVal });
+                                                        
                                                         try {
-                                                            await updateDoc(doc(db, "users", selectedUserDetail.uid), { payLater: newVal, updatedAt: Date.now() });
-                                                            toast.success(`Pay Later ${newVal ? 'Enabled' : 'Disabled'}`);
-                                                        } catch (err) { toast.error("Update Failed"); }
+                                                            const res = await togglePayLater(selectedUserDetail.uid, newVal);
+                                                            if (res.success) {
+                                                                toast.success(`Pay Later ${newVal ? 'Enabled' : 'Disabled'}`);
+                                                            } else {
+                                                                // Revert local state if failed
+                                                                setSelectedUserDetail({ ...selectedUserDetail, payLater: !newVal });
+                                                                toast.error(res.error || "Update Failed");
+                                                            }
+                                                        } catch (err) { 
+                                                            setSelectedUserDetail({ ...selectedUserDetail, payLater: !newVal });
+                                                            toast.error("Update Failed"); 
+                                                        }
                                                     }}
                                                     className={cn("h-6 w-12 rounded-full border transition-all relative p-1", selectedUserDetail.payLater ? "bg-primary border-primary/50" : "bg-muted border-border")}
                                                 >
