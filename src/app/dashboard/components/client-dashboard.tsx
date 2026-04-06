@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
 import { Project, User, Invoice } from "@/types/schema";
 import { cn } from "@/lib/utils";
 import {
@@ -146,13 +146,117 @@ export function ClientDashboard() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [userData, setUserData] = useState<User | null>(null);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+    const displayedProject = projects.find(p => p.id === selectedProject?.id) || selectedProject;
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [previewFile, setPreviewFile] = useState<{ url: string; type: string; name: string } | null>(null);
     const [draftProjectIds, setDraftProjectIds] = useState<string[]>([]);
     const [activeTab, setActiveTab] = useState<"projects" | "finance">("projects");
+
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+    // Initial Payment Logic Helper
+    const loadRazorpay = () => {
+        return new Promise((resolve) => {
+            if (window.hasOwnProperty("Razorpay")) { resolve(true); return; }
+            const script = document.createElement("script");
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        });
+    };
+
+    const handleInitiatePayment = async (project: Project) => {
+        const baseAmount = Math.max(0, (project.totalCost || 0) - (project.amountPaid || 0));
+        if (baseAmount <= 0) { toast.success("Project is already fully paid."); return; }
+        const totalWithGst = withGst(baseAmount);
+        
+        setIsProcessingPayment(true);
+        const loadingToast = toast.loading("Initiating payment...");
+
+        try {
+            // 1. Load SDK
+            const loaded = await loadRazorpay();
+            if (!loaded) throw new Error("Failed to load payment gateway. Check your connection.");
+
+            // 2. Create Order
+            const orderRes = await fetch("/api/create-order", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    amount: totalWithGst,
+                    projectId: project.id
+                })
+            });
+
+            if (!orderRes.ok) {
+                const errData = await orderRes.json();
+                throw new Error(errData.error || "Failed to create payment order.");
+            }
+
+            const order = await orderRes.json();
+
+            // 3. Open Checkout
+            const options = {
+                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "",
+                amount: order.amount,
+                currency: order.currency,
+                name: "EditoHub",
+                description: `Final Settlement for ${project.name}`,
+                order_id: order.id,
+                prefill: {
+                    name: user?.displayName || "",
+                    email: user?.email || ""
+                },
+                theme: { color: "#3B82F6" },
+                handler: async function (response: any) {
+                    const verifyToast = toast.loading("Verifying payment...");
+                    try {
+                        const verifyRes = await fetch("/api/verify-payment", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature,
+                                projectId: project.id,
+                                amount: totalWithGst, 
+                                accountingAmount: baseAmount,
+                                taxRate: 18,
+                                paymentType: "final"
+                            })
+                        });
+
+                        if (!verifyRes.ok) throw new Error("Verification failed. Please contact support if your amount was debited.");
+                        
+                        toast.dismiss(verifyToast);
+                        toast.success("Payment successful! Your dashboard will update shortly.");
+                        setIsProjectModalOpen(false);
+                    } catch (err: any) {
+                        toast.dismiss(verifyToast);
+                        toast.error(err.message);
+                    }
+                },
+                modal: { ondismiss: () => setIsProcessingPayment(false) }
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on("payment.failed", function (resp: any) {
+                toast.error(`Payment failed: ${resp.error.description}`);
+                setIsProcessingPayment(false);
+            });
+            rzp.open();
+            toast.dismiss(loadingToast);
+        } catch (err: any) {
+            toast.dismiss(loadingToast);
+            toast.error(err.message);
+            setIsProcessingPayment(false);
+        }
+    };
 
     // Fetch projects
     useEffect(() => {
@@ -176,7 +280,7 @@ export function ClientDashboard() {
             const chunk = ids.slice(i, i + 10);
             const unsub = onSnapshot(query(collection(db, "revisions"), where("projectId", "in", chunk)), (snap) => {
                 chunk.forEach((id) => draftSet.delete(id));
-                snap.docs.forEach((d) => { const pid = d.data()?.projectId; if (pid) draftSet.add(pid); });
+                snap.docs.forEach((dDoc) => { const pid = dDoc.data()?.projectId; if (pid) draftSet.add(pid); });
                 setDraftProjectIds(Array.from(draftSet));
             });
             unsubs.push(unsub);
@@ -195,10 +299,19 @@ export function ClientDashboard() {
         preloadVideosIntoMemory(urls, 30);
     }, [projects]);
 
+    // Fetch current user data for reactivity (PM assigned to client)
+    useEffect(() => {
+        if (!user?.uid) return;
+        const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+            if (snap.exists()) setUserData(snap.data() as User);
+        });
+        return () => unsub();
+    }, [user]);
+
     // Fetch users
     useEffect(() => {
         const unsub = onSnapshot(collection(db, "users"), (snap) => {
-            setAllUsers(snap.docs.map((d) => ({ uid: d.id, ...d.data() } as User)));
+            setAllUsers(snap.docs.map((uDoc) => ({ uid: uDoc.id, ...uDoc.data() } as User)));
         });
         return () => unsub();
     }, []);
@@ -214,8 +327,12 @@ export function ClientDashboard() {
     }, [user]);
 
     // Derived data
-    const assignedPMId = user?.managedByPM || projects.find((p) => p.assignedPMId)?.assignedPMId;
+    const assignedPMId = userData?.managedByPM || user?.managedByPM || projects.find((p) => p.assignedPMId)?.assignedPMId;
     const assignedPM = assignedPMId ? allUsers.find((u) => u.uid === assignedPMId) : null;
+
+    const selectedProjectPM = displayedProject?.assignedPMId 
+        ? allUsers.find(u => u.uid === displayedProject.assignedPMId) 
+        : assignedPM;
 
     const filteredProjects = projects.filter((p) => {
         if (statusFilter !== "all" && p.status !== statusFilter) return false;
@@ -223,13 +340,14 @@ export function ClientDashboard() {
         return true;
     });
 
-    // Stats
+    // Stats with GST
     const totalCostBase = projects.reduce((acc, p) => acc + (p.totalCost || 0), 0);
+    const totalWithGst = withGst(totalCostBase);
     const totalPaid = projects.reduce((acc, p) => acc + (p.amountPaid || 0), 0);
-    const pendingBase = projects.reduce((acc, p) => acc + Math.max(0, (p.totalCost || 0) - (p.amountPaid || 0)), 0);
+    const pendingBase = projects.reduce((acc, p) => acc + Math.max(0, (p.totalCost || 0) * (1 + GST_RATE) - (p.amountPaid || 0)), 0);
     const activeCount = projects.filter((p) => !["completed", "approved", "archived", "delivered", "completed_pending_payment"].includes(p.status)).length;
     const completedCount = projects.filter((p) => ["completed", "approved", "completed_pending_payment"].includes(p.status)).length;
-    const pendingPaymentCount = projects.filter((p) => p.paymentStatus !== "full_paid" && ["completed", "completed_pending_payment", "approved"].includes(p.status)).length;
+    const pendingPaymentCount = projects.filter((p) => (p.amountPaid || 0) < (p.totalCost || 0) * (1 + GST_RATE) && ["completed", "completed_pending_payment", "approved"].includes(p.status)).length;
 
     const creditLimit = user?.creditLimit || 5000;
     const isOverLimit = pendingBase > 0 && withGst(pendingBase) >= creditLimit && (user?.payLater || false);
@@ -252,8 +370,6 @@ export function ClientDashboard() {
         }
     };
 
-    const selectedProjectPM = selectedProject?.assignedPMId
-        ? allUsers.find((u) => u.uid === selectedProject.assignedPMId) : null;
     const selectedProjectPMWhatsapp = buildWhatsAppLink(selectedProjectPM?.whatsappNumber || selectedProjectPM?.phoneNumber);
     const selectedProjectPmFiles = selectedProject
         ? (((selectedProject as any).pmFiles || []) as any[]).length > 0
@@ -435,9 +551,13 @@ export function ClientDashboard() {
                                                         <div className="flex flex-col gap-1">
                                                             <PaymentBadge paid={isPaid} partial={!isPaid && isPartial} />
                                                             {!isPaid && (["completed", "completed_pending_payment", "approved"].includes(project.status)) && (
-                                                                <button onClick={() => { setSelectedProject(project); setActiveTab("finance"); }}
-                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 transition-colors whitespace-nowrap">
-                                                                    <CreditCard className="h-2.5 w-2.5" /> Pay Now
+                                                                <button 
+                                                                    disabled={isProcessingPayment}
+                                                                    onClick={(e) => { e.stopPropagation(); handleInitiatePayment(project); }}
+                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 transition-colors whitespace-nowrap disabled:opacity-50"
+                                                                >
+                                                                    {isProcessingPayment ? <RefreshCw className="h-2.5 w-2.5 animate-spin" /> : <CreditCard className="h-2.5 w-2.5" />} 
+                                                                    Pay Now
                                                                 </button>
                                                             )}
                                                         </div>
@@ -567,9 +687,12 @@ export function ClientDashboard() {
                                                     <div className="flex items-center gap-2">
                                                         {!isPaid && isCompleted && (
                                                             <button
-                                                                onClick={() => toast.info("Please contact your Project Manager or Admin to process payment.")}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold border border-red-500/20 hover:bg-red-500/20 transition-colors whitespace-nowrap">
-                                                                <CreditCard className="h-3.5 w-3.5" /> Pay Now
+                                                                disabled={isProcessingPayment}
+                                                                onClick={() => handleInitiatePayment(project)}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold border border-red-500/20 hover:bg-red-500/20 transition-colors whitespace-nowrap disabled:opacity-50"
+                                                            >
+                                                                {isProcessingPayment ? <RefreshCw className="h-3 w-3 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />} 
+                                                                Pay Now
                                                             </button>
                                                         )}
                                                         {projectInvoices.length > 0 && (

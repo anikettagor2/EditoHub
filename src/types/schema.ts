@@ -128,6 +128,7 @@ export interface Project {
     editorDeclineReason?: string;      // Reason for editor declining project
     editorRating?: number;             // Client rating for editor (1-5)
     editorReview?: string;             // Client review for editor
+    pmRemarks?: string;                // Remarks from the Project Manager to the editor
     autoPay?: boolean;                 // If true, PM has authorized automatic flow for this project
     scripts?: { name: string; url: string; size?: number; type?: string; uploadedAt?: number }[];
 

@@ -75,9 +75,12 @@ export function EditorDashboardV2() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [selectedUploadProject, setSelectedUploadProject] = useState<Project | null>(null);
     const [projectRevisions, setProjectRevisions] = useState<Record<string, any>>({});
-    const [projectTimers, setProjectTimers] = useState<Record<string, number>>({});
     const [isReviewSystemOpen, setIsReviewSystemOpen] = useState(false);
     const [reviewProject, setReviewProject] = useState<Project | null>(null);
+    const [activeTab, setActiveTab] = useState<'projects' | 'finance'>('projects');
+    const [projectTimers, setProjectTimers] = useState<Record<string, number>>({});
+    const [totalPaid, setTotalPaid] = useState(0);
+    const [pendingEarnings, setPendingEarnings] = useState(0);
 
     useEffect(() => {
         if (!user) return;
@@ -95,8 +98,8 @@ export function EditorDashboardV2() {
             const revisionsMap: Record<string, any> = {};
             const now = Date.now();
             
-            snapshot.forEach((doc) => {
-                const project = { id: doc.id, ...doc.data() } as Project;
+            snapshot.forEach((pDoc) => {
+                const project = { id: pDoc.id, ...pDoc.data() } as Project;
                 
                 // Filter out expired assignments - don't show if assignment has expired and not yet accepted
                 if (project.assignmentStatus === 'pending' && (project as any).assignmentExpiresAt) {
@@ -145,6 +148,20 @@ export function EditorDashboardV2() {
             
             setProjects(fetchedProjects);
             setProjectRevisions(revisionsMap);
+            
+            // Recalculate finance totals based on new data
+            const comp = fetchedProjects.filter(p => ['completed', 'approved', 'completed_pending_payment'].includes(p.status));
+            const totalE = comp.reduce((acc, curr) => acc + (curr.editorPrice || 0), 0);
+            const paid = fetchedProjects
+                .filter(p => ['completed', 'approved', 'completed_pending_payment'].includes(p.status) && p.editorPaid)
+                .reduce((acc, p) => acc + (p.editorPrice || 0), 0);
+            const pending = fetchedProjects
+                .filter(p => ['completed', 'approved', 'completed_pending_payment'].includes(p.status) && !p.editorPaid)
+                .reduce((acc, p) => acc + (p.editorPrice || 0), 0);
+            
+            setTotalPaid(paid);
+            setPendingEarnings(pending);
+            
             setLoading(false);
         }, (error) => {
             console.error("[EditorDashboardV2] Failed to subscribe assigned projects", {
@@ -185,30 +202,33 @@ export function EditorDashboardV2() {
     // Timer countdown for pending assignments - calculates from assignmentExpiresAt
     useEffect(() => {
         const interval = setInterval(() => {
-            setProjectTimers(prev => {
-                const updated = { ...prev };
-                let hasActive = false;
-                
-                // Recalculate time remaining for each pending project based on assignmentExpiresAt
-                for (const projectId in updated) {
-                    const project = projects.find(p => p.id === projectId);
-                    if (project && project.assignmentStatus === 'pending') {
-                        const expiresAt = (project as any).assignmentExpiresAt || 0;
-                        const now = Date.now();
-                        const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
-                        
-                        if (remaining > 0) {
-                            updated[projectId] = remaining;
-                            hasActive = true;
-                        } else if (remaining === 0 && updated[projectId] > 0) {
-                            // Timer just expired
-                            handleAssignmentTimeout(projectId);
+            // Check if setProjectTimers exists and is a function to avoid race condition
+            if (typeof setProjectTimers === 'function') {
+                setProjectTimers(prev => {
+                    const updated = { ...prev };
+                    let hasActive = false;
+                    
+                    // Recalculate time remaining for each pending project based on assignmentExpiresAt
+                    for (const projectId in updated) {
+                        const project = projects.find(p => p.id === projectId);
+                        if (project && project.assignmentStatus === 'pending') {
+                            const expiresAt = (project as any).assignmentExpiresAt || 0;
+                            const now = Date.now();
+                            const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+                            
+                            if (remaining > 0) {
+                                updated[projectId] = remaining;
+                                hasActive = true;
+                            } else if (remaining === 0 && updated[projectId] > 0) {
+                                // Timer just expired
+                                handleAssignmentTimeout(projectId);
+                            }
                         }
                     }
-                }
-                
-                return hasActive ? updated : {};
-            });
+                    
+                    return hasActive ? updated : {};
+                });
+            }
         }, 1000);
         
         return () => clearInterval(interval);
@@ -405,7 +425,8 @@ export function EditorDashboardV2() {
         if (!user?.uid) return;
         try {
             await updateDoc(doc(db, "projects", projectId), {
-                assignmentStatus: "accepted"
+                assignmentStatus: "accepted",
+                status: "active"
             });
             toast.success("Project accepted! You can now upload draft files.");
             setSelectedProjectDetails(null);
@@ -478,11 +499,8 @@ export function EditorDashboardV2() {
 
     // Count statistics
     const activeProjects = projects.filter(p => p.status === 'active');
-    const completedProjects = projects.filter(p => ['completed', 'approved'].includes(p.status));
+    const completedProjects = projects.filter(p => ['completed', 'approved', 'completed_pending_payment'].includes(p.status));
     const totalEarnings = completedProjects.reduce((acc, curr) => acc + (curr.editorPrice || 0), 0);
-    const pendingEarnings = projects
-        .filter(p => ['completed', 'approved'].includes(p.status) && !p.editorPaid)
-        .reduce((acc, p) => acc + (p.editorPrice || 0), 0);
     const selectedProjectPmFiles = selectedProjectDetails
         ? ((((selectedProjectDetails as any).pmFiles || []) as any[]).length > 0
             ? (((selectedProjectDetails as any).pmFiles || []) as any[])
@@ -497,7 +515,8 @@ export function EditorDashboardV2() {
         switch(status) {
             case 'active': return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
             case 'in_review': return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
-            case 'completed': return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+            case 'completed': 
+            case 'completed_pending_payment': return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
             case 'approved': return 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300';
             default: return 'bg-muted text-muted-foreground';
         }
@@ -508,17 +527,19 @@ export function EditorDashboardV2() {
             case 'active': return <Clock className="h-4 w-4" />;
             case 'in_review': return <AlertCircle className="h-4 w-4" />;
             case 'completed':
+            case 'completed_pending_payment':
             case 'approved': return <CheckCircle2 className="h-4 w-4" />;
             default: return null;
         }
     };
 
     const getStatusLabel = (status: string) => {
+        if (status === 'completed_pending_payment') return 'Completed';
         return status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     };
 
     const getPaymentStatus = (project: Project) => {
-        if (!['completed', 'approved'].includes(project.status)) {
+        if (!['completed', 'approved', 'completed_pending_payment'].includes(project.status)) {
             return { label: 'Pending', color: 'text-muted-foreground' };
         }
         return project.editorPaid 
@@ -1290,256 +1311,501 @@ export function EditorDashboardV2() {
 
             <div className="space-y-6 max-w-[1600px] mx-auto pb-16">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-foreground">My Projects</h1>
-                        <p className="text-muted-foreground mt-1">All projects assigned to you with payment and status information.</p>
-                    </div>
-                    <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-2 w-fit">
-                        <div className={cn(
-                            "h-2.5 w-2.5 rounded-full",
-                            editorStatus === "online"
-                                ? "bg-emerald-500"
-                                : editorStatus === "sleep"
-                                    ? "bg-amber-500"
-                                    : "bg-red-500"
-                        )} />
-                        <select
-                            value={editorStatus}
-                            onChange={(e) => handleStatusUpdate(e.target.value as "online" | "offline" | "sleep")}
-                            className="bg-transparent border-none text-sm font-medium text-foreground focus:ring-0 cursor-pointer appearance-none pr-2"
-                            style={{ colorScheme: "dark" }}
-                        >
-                            <option value="online" className="bg-card text-foreground">Online</option>
-                            <option value="sleep" className="bg-card text-foreground">Away</option>
-                            <option value="offline" className="bg-card text-foreground">Offline</option>
-                        </select>
-                    </div>
-                </div>
-
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                    <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Total Projects</div>
-                            <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
-                                <FileStack className="h-4 w-4" />
-                            </div>
-                        </div>
-                        <div className="text-3xl font-black text-primary tabular-nums">{projects.length}</div>
-                        <div className="h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-primary w-full"></div>
-                        </div>
+                        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+                            {activeTab === 'projects' ? 'My Projects' : 'Finance Center'}
+                        </h1>
+                        <p className="text-muted-foreground mt-1">
+                            {activeTab === 'projects' 
+                                ? 'All projects assigned to you with payment and status information.'
+                                : 'Track your earnings, pending payouts, and financial history.'}
+                        </p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20 rounded-xl p-5 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Active</div>
-                            <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500">
-                                <Zap className="h-4 w-4" />
-                            </div>
-                        </div>
-                        <div className="text-3xl font-black text-blue-500 tabular-nums">{activeProjects.length}</div>
-                        <div className="h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 w-full" style={{width: `${activeProjects.length > 0 ? Math.min((activeProjects.length / projects.length) * 100, 100) : 0}%`}}></div>
-                        </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-xl p-5 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Completed</div>
-                            <div className="h-8 w-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500">
-                                <CheckCircle className="h-4 w-4" />
-                            </div>
-                        </div>
-                        <div className="text-3xl font-black text-emerald-500 tabular-nums">{completedProjects.length}</div>
-                        <div className="h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-500" style={{width: `${completedProjects.length > 0 ? Math.min((completedProjects.length / projects.length) * 100, 100) : 0}%`}}></div>
-                        </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-xl p-5 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Pending</div>
-                            <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-500">
-                                <IndianRupee className="h-4 w-4" />
-                            </div>
-                        </div>
-                        <div className="text-3xl font-black text-amber-600 tabular-nums">₹{pendingEarnings.toLocaleString()}</div>
-                        <div className="h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-amber-500 w-full"></div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Search Bar */}
-                <div className="relative">
-                    <input
-                        type="text"
-                        placeholder="Search projects by name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                </div>
-
-                {/* Projects Table */}
-                <div className="bg-card border border-border rounded-xl overflow-hidden">
-                    <div className="p-4 md:p-5 border-b border-border flex items-center justify-between">
-                        <h2 className="text-lg font-semibold text-foreground">Assigned Projects</h2>
-                        <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">{filteredProjects.length} projects</span>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-muted/30 border-b border-border">
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">#</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Project Name</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Assigned PM</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Editor Share</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Payment</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">PM Remarks</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {filteredProjects.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={8} className="px-4 py-14 text-center text-sm text-muted-foreground">
-                                            {projects.length === 0 ? 'No projects assigned yet.' : 'No projects match your search.'}
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredProjects.map((project, index) => {
-                                        const paymentStatus = getPaymentStatus(project);
-                                        const pmWhatsApp = getPMWhatsAppNumber(project);
-                                        const isAccepted = project.assignmentStatus === "accepted";
-
-                                        return (
-                                            <tr key={project.id} className={cn("hover:bg-muted/20 transition-colors", ['completed', 'approved'].includes(project.status) && "bg-emerald-500/5")}>
-                                                <td className="px-4 py-4">
-                                                    <span className="text-sm font-bold text-muted-foreground">{index + 1}</span>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="font-semibold text-foreground">{project.name}</div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="text-sm font-medium text-foreground">
-                                                        {project.assignedPMId && allUsers[project.assignedPMId]
-                                                            ? allUsers[project.assignedPMId].displayName || 'Project Manager'
-                                                            : 'Not Assigned'}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="text-sm font-bold text-emerald-500 tabular-nums">
-                                                        ₹{(project.editorPrice || 0).toLocaleString()}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className={cn(
-                                                        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold",
-                                                        getStatusColor(project.status)
-                                                    )}>
-                                                        {getStatusIcon(project.status)}
-                                                        {getStatusLabel(project.status)}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className={cn("text-sm", paymentStatus.color)}>
-                                                        {['completed', 'approved'].includes(project.status) 
-                                                            ? paymentStatus.label 
-                                                            : 'N/A'
-                                                        }
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="max-w-xs">
-                                                        <p className="text-sm text-muted-foreground truncate hover:text-foreground transition-colors" title={(project as any).pmRemarks || 'No remarks'}>
-                                                            {(project as any).pmRemarks || '—'}
-                                                        </p>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    {['completed', 'approved'].includes(project.status) ? (
-                                                        <button
-                                                            onClick={() => setSelectedProjectDetails(project)}
-                                                            className="h-9 px-4 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/30 text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
-                                                            title="View completed project details"
-                                                        >
-                                                            <CheckCircle2 className="h-4 w-4" />
-                                                            Project Details
-                                                        </button>
-                                                    ) : projectRevisions[project.id] ? (
-                                                        <button
-                                                            onClick={() => {
-                                                                setReviewProject(project);
-                                                                setIsReviewSystemOpen(true);
-                                                            }}
-                                                            className="h-9 px-4 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-500 hover:bg-blue-500/30 text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
-                                                            title="Review uploaded draft"
-                                                        >
-                                                            <Eye className="h-4 w-4" />
-                                                            Review
-                                                        </button>
-                                                    ) : (
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <button
-                                                                onClick={() => setSelectedProjectDetails(project)}
-                                                                className="h-8 px-3 inline-flex items-center justify-center gap-1 rounded-lg bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
-                                                                title="View complete project details"
-                                                            >
-                                                                <Eye className="h-3.5 w-3.5" />
-                                                                Details
-                                                            </button>
-
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (pmWhatsApp) {
-                                                                        const link = buildWhatsAppLink(pmWhatsApp);
-                                                                        if (link) window.open(link, '_blank');
-                                                                    }
-                                                                }}
-                                                                disabled={!pmWhatsApp}
-                                                                className="h-8 px-3 inline-flex items-center justify-center gap-1 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
-                                                                title="Chat with PM on WhatsApp"
-                                                            >
-                                                                <MessageCircle className="h-3.5 w-3.5" />
-                                                                Chat PM
-                                                            </button>
-
-                                                            <a
-                                                                onClick={(e) => {
-                                                                    e.preventDefault();
-                                                                    e.stopPropagation();
-                                                                    if (isAccepted) {
-                                                                        setSelectedUploadProject(project);
-                                                                        setIsUploadModalOpen(true);
-                                                                    }
-                                                                }}
-                                                                className={cn(
-                                                                    "h-8 px-3 inline-flex items-center justify-center gap-1 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap cursor-pointer",
-                                                                    isAccepted
-                                                                        ? "bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20"
-                                                                        : "bg-muted/20 border-border text-muted-foreground cursor-not-allowed"
-                                                                )}
-                                                                title={isAccepted ? "Upload draft files for this project" : "Accept assignment to upload draft"}
-                                                            >
-                                                                <Upload className="h-3.5 w-3.5" />
-                                                                Upload
-                                                            </a>
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
+                    <div className="flex flex-wrap items-center gap-4">
+                        {/* Tab Switcher */}
+                        <div className="inline-flex p-1 bg-muted/30 border border-border rounded-xl">
+                            <button
+                                onClick={() => setActiveTab('projects')}
+                                className={cn(
+                                    "px-4 py-2 text-sm font-bold transition-all rounded-lg flex items-center gap-2",
+                                    activeTab === 'projects' 
+                                        ? "bg-card text-foreground shadow-sm border border-border" 
+                                        : "text-muted-foreground hover:text-foreground"
                                 )}
-                            </tbody>
-                        </table>
+                            >
+                                <Briefcase className="h-4 w-4" />
+                                Projects
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('finance')}
+                                className={cn(
+                                    "px-4 py-2 text-sm font-bold transition-all rounded-lg flex items-center gap-2",
+                                    activeTab === 'finance' 
+                                        ? "bg-card text-foreground shadow-sm border border-border" 
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                <Banknote className="h-4 w-4" />
+                                Finance
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-2 w-fit">
+                            <div className={cn(
+                                "h-2.5 w-2.5 rounded-full",
+                                editorStatus === "online"
+                                    ? "bg-emerald-500"
+                                    : editorStatus === "sleep"
+                                        ? "bg-amber-500"
+                                        : "bg-red-500"
+                            )} />
+                            <select
+                                value={editorStatus}
+                                onChange={(e) => handleStatusUpdate(e.target.value as "online" | "offline" | "sleep")}
+                                className="bg-transparent border-none text-sm font-medium text-foreground focus:ring-0 cursor-pointer appearance-none pr-2"
+                                style={{ colorScheme: "dark" }}
+                            >
+                                <option value="online" className="bg-card text-foreground">Online</option>
+                                <option value="sleep" className="bg-card text-foreground">Away</option>
+                                <option value="offline" className="bg-card text-foreground">Offline</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
+
+                <AnimatePresence mode="wait">
+                    {activeTab === 'projects' ? (
+                        <motion.div
+                            key="projects-tab"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="space-y-6"
+                        >
+                            {/* Stats Cards */}
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                <div className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Total Projects</div>
+                                        <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                                            <FileStack className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                    <div className="text-3xl font-black text-primary tabular-nums">{projects.length}</div>
+                                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary w-full"></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20 rounded-xl p-5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Active</div>
+                                        <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500">
+                                            <Zap className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                    <div className="text-3xl font-black text-blue-500 tabular-nums">{activeProjects.length}</div>
+                                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 w-full" style={{width: `${activeProjects.length > 0 ? Math.min((activeProjects.length / projects.length) * 100, 100) : 0}%`}}></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-xl p-5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Completed</div>
+                                        <div className="h-8 w-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500">
+                                            <CheckCircle className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                    <div className="text-3xl font-black text-emerald-500 tabular-nums">{completedProjects.length}</div>
+                                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                        <div className="h-full bg-emerald-500" style={{width: `${completedProjects.length > 0 ? Math.min((completedProjects.length / projects.length) * 100, 100) : 0}%`}}></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-xl p-5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Pending</div>
+                                        <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-500">
+                                            <IndianRupee className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                    <div className="text-3xl font-black text-amber-600 tabular-nums">₹{pendingEarnings.toLocaleString()}</div>
+                                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                        <div className="h-full bg-amber-500 w-full"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Search Bar */}
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search projects by name..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm"
+                                />
+                            </div>
+
+                            {/* Projects Table */}
+                            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                                <div className="p-4 md:p-5 border-b border-border flex items-center justify-between">
+                                    <h2 className="text-lg font-semibold text-foreground">Assigned Projects</h2>
+                                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">{filteredProjects.length} projects</span>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="bg-muted/30 border-b border-border">
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">#</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">Project Name</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">Assigned PM</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">Editor Share</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">Status</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">Payment</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">PM Remarks</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-widest">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {filteredProjects.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={8} className="px-4 py-14 text-center text-sm text-muted-foreground">
+                                                        {projects.length === 0 ? 'No projects assigned yet.' : 'No projects match your search.'}
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                filteredProjects.map((project, index) => {
+                                                    const paymentStatus = getPaymentStatus(project);
+                                                    const pmWhatsApp = getPMWhatsAppNumber(project);
+                                                    const isAccepted = project.assignmentStatus === "accepted";
+
+                                                    return (
+                                                        <tr key={project.id} className={cn("hover:bg-muted/20 transition-colors", ['completed', 'approved', 'completed_pending_payment'].includes(project.status) && "bg-emerald-500/5")}>
+                                                            <td className="px-4 py-4">
+                                                                <span className="text-sm font-bold text-muted-foreground">{index + 1}</span>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className="font-semibold text-foreground">{project.name}</div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className="text-sm font-medium text-foreground">
+                                                                    {project.assignedPMId && allUsers[project.assignedPMId]
+                                                                        ? allUsers[project.assignedPMId].displayName || 'Project Manager'
+                                                                        : 'Not Assigned'}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className="text-sm font-bold text-emerald-500 tabular-nums">
+                                                                    ₹{(project.editorPrice || 0).toLocaleString()}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className={cn(
+                                                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold",
+                                                                    getStatusColor(project.status)
+                                                                )}>
+                                                                    {getStatusIcon(project.status)}
+                                                                    {getStatusLabel(project.status)}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className={cn("text-xs font-bold uppercase tracking-widest", paymentStatus.color)}>
+                                                                    {['completed', 'approved', 'completed_pending_payment'].includes(project.status) 
+                                                                        ? paymentStatus.label 
+                                                                        : 'N/A'
+                                                                    }
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className="max-w-xs">
+                                                                    <p className="text-sm text-muted-foreground truncate hover:text-foreground transition-colors" title={(project as any).pmRemarks || 'No remarks'}>
+                                                                        {(project as any).pmRemarks || '—'}
+                                                                    </p>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                {['completed', 'approved', 'completed_pending_payment'].includes(project.status) ? (
+                                                                    <button
+                                                                        onClick={() => setSelectedProjectDetails(project)}
+                                                                        className="h-9 px-4 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/30 text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
+                                                                        title="View completed project details"
+                                                                    >
+                                                                        <CheckCircle2 className="h-4 w-4" />
+                                                                        Project Details
+                                                                    </button>
+                                                                ) : projectRevisions[project.id] ? (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setReviewProject(project);
+                                                                            setIsReviewSystemOpen(true);
+                                                                        }}
+                                                                        className="h-9 px-4 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-500 hover:bg-blue-500/30 text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
+                                                                        title="Review uploaded draft"
+                                                                    >
+                                                                        <Eye className="h-4 w-4" />
+                                                                        Review
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <button
+                                                                            onClick={() => setSelectedProjectDetails(project)}
+                                                                            className="h-8 px-3 inline-flex items-center justify-center gap-1 rounded-lg bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
+                                                                            title="View complete project details"
+                                                                        >
+                                                                            <Eye className="h-3.5 w-3.5" />
+                                                                            Details
+                                                                        </button>
+
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (pmWhatsApp) {
+                                                                                    const link = buildWhatsAppLink(pmWhatsApp);
+                                                                                    if (link) window.open(link, '_blank');
+                                                                                }
+                                                                            }}
+                                                                            disabled={!pmWhatsApp}
+                                                                            className="h-8 px-3 inline-flex items-center justify-center gap-1 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap"
+                                                                            title="Chat with PM on WhatsApp"
+                                                                        >
+                                                                            <MessageCircle className="h-3.5 w-3.5" />
+                                                                            Chat PM
+                                                                        </button>
+
+                                                                        <a
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                if (isAccepted) {
+                                                                                    setSelectedUploadProject(project);
+                                                                                    setIsUploadModalOpen(true);
+                                                                                }
+                                                                            }}
+                                                                            className={cn(
+                                                                                "h-8 px-3 inline-flex items-center justify-center gap-1 rounded-lg border text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap cursor-pointer",
+                                                                                isAccepted
+                                                                                    ? "bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20"
+                                                                                    : "bg-muted/20 border-border text-muted-foreground cursor-not-allowed"
+                                                                            )}
+                                                                            title={isAccepted ? "Upload draft files for this project" : "Accept assignment to upload draft"}
+                                                                        >
+                                                                            <Upload className="h-3.5 w-3.5" />
+                                                                            Upload
+                                                                        </a>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="finance-tab"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="space-y-6"
+                        >
+                            {/* Finance Specific Stats */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl p-6 shadow-sm">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="h-12 w-12 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600">
+                                            <Banknote className="h-6 w-6" />
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60">Lifetime Earned</span>
+                                    </div>
+                                    <p className="text-4xl font-black text-foreground tabular-nums">₹{totalEarnings.toLocaleString()}</p>
+                                    <p className="text-xs text-muted-foreground mt-2 font-medium">Total value of all projects delivered</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-blue-500/15 via-blue-500/5 to-transparent border border-blue-500/20 rounded-2xl p-6 shadow-sm">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="h-12 w-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-600">
+                                            <CheckCircle2 className="h-6 w-6" />
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-600/60">Total Paid</span>
+                                    </div>
+                                    <p className="text-4xl font-black text-foreground tabular-nums">₹{totalPaid.toLocaleString()}</p>
+                                    <p className="text-xs text-muted-foreground mt-2 font-medium">Successfully settled payments</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-transparent border border-amber-500/20 rounded-2xl p-6 shadow-sm relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                                        <History className="h-20 w-20" />
+                                    </div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="h-12 w-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600">
+                                            <Clock className="h-6 w-6" />
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-600/60">Pending Payout</span>
+                                    </div>
+                                    <p className="text-4xl font-black text-amber-600 tabular-nums">₹{pendingEarnings.toLocaleString()}</p>
+                                    <p className="text-xs text-muted-foreground mt-2 font-medium">Awaiting settlement from admin</p>
+                                </div>
+                            </div>
+
+                            {/* Pending Payouts Breakdown */}
+                            {pendingEarnings > 0 && (
+                                <div className="mb-0">
+                                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 mb-4 flex items-center gap-3">
+                                                <AlertCircle className="h-5 w-5 text-amber-500" />
+                                                <p className="text-sm text-amber-700 font-medium">You have ₹{pendingEarnings.toLocaleString()} awaiting settlement across {completedProjects.filter(p => !p.editorPaid).length} projects.</p>
+                                            </div>
+                                            <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+                                                <div className="p-4 border-b border-border bg-amber-500/5 flex items-center justify-between">
+                                                    <h3 className="text-sm font-bold text-amber-700 uppercase tracking-widest">Pending Payouts Breakdown</h3>
+                                                </div>
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left">
+                                                        <thead>
+                                                            <tr className="bg-muted/30 border-b border-border">
+                                                                <th className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Project</th>
+                                                                <th className="px-6 py-3 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground">Amount</th>
+                                                                <th className="px-6 py-3 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-border">
+                                                            {completedProjects
+                                                                .filter(p => !p.editorPaid)
+                                                                .map(project => (
+                                                                    <tr key={project.id} className="hover:bg-amber-500/5 transition-colors">
+                                                                        <td className="px-6 py-4">
+                                                                            <p className="font-bold text-foreground">{project.name}</p>
+                                                                            <p className="text-[10px] text-muted-foreground uppercase">{project.videoFormat}</p>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-right">
+                                                                            <span className="text-base font-black text-foreground">₹{project.editorPrice?.toLocaleString() || 0}</span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-center">
+                                                                            <span className="px-2 py-0.5 rounded text-[9px] font-bold border bg-amber-500/10 text-amber-500 border-amber-500/20 uppercase tracking-widest">
+                                                                                Awaiting Payout
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+                                <div className="p-6 border-b border-border flex items-center justify-between bg-muted/20">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                            <History className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg font-bold text-foreground">Project Earnings Breakdown</h2>
+                                            <p className="text-xs text-muted-foreground">Detailed history of your project payments</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="bg-muted/40 border-b border-border">
+                                                <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground">Project Details</th>
+                                                <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground">Amount</th>
+                                                <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</th>
+                                                <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground">Delivered At</th>
+                                                <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground">Paid At</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {completedProjects.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={5} className="px-6 py-20 text-center">
+                                                        <div className="flex flex-col items-center justify-center space-y-3">
+                                                            <div className="h-16 w-16 rounded-full bg-muted/30 flex items-center justify-center text-muted-foreground/30">
+                                                                <IndianRupee className="h-8 w-8" />
+                                                            </div>
+                                                            <p className="text-sm text-muted-foreground font-medium">No earnings history yet.</p>
+                                                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Complete your first project to see financial data</p>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                [...completedProjects]
+                                                    .sort((a, b) => (b.completedAt || b.updatedAt) - (a.completedAt || a.updatedAt))
+                                                    .map((project) => (
+                                                    <tr key={project.id} className="hover:bg-muted/10 transition-colors group">
+                                                        <td className="px-6 py-5">
+                                                            <div>
+                                                                <p className="font-bold text-foreground group-hover:text-primary transition-colors">{project.name}</p>
+                                                                <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5 uppercase tracking-tighter">
+                                                                    <User className="h-3 w-3" /> {project.clientName}
+                                                                </p>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-5">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-base font-black text-foreground">₹{(project.editorPrice || 0).toLocaleString()}</span>
+                                                                <span className="text-[9px] text-muted-foreground uppercase tracking-widest mt-1">Net Share</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-5">
+                                                            {project.editorPaid ? (
+                                                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                                    <span className="text-xs font-black uppercase tracking-widest">Paid</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                                    <span className="text-xs font-black uppercase tracking-widest">Pending Payment</span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-5">
+                                                            <div className="flex items-center gap-2 text-sm text-foreground/80 font-medium">
+                                                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                {project.completedAt 
+                                                                    ? new Date(project.completedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+                                                                    : new Date(project.updatedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+                                                                }
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-5">
+                                                            <div className="flex items-center gap-2 text-sm text-foreground/80 font-medium">
+                                                                {project.editorPaid && project.editorPaidAt ? (
+                                                                    <>
+                                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                                        {new Date(project.editorPaidAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                    </>
+                                                                ) : project.editorPaid ? (
+                                                                     <>
+                                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                                        Cleared
+                                                                    </>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground/40 italic">Not settled yet</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 {completedProjects.length > 0 && (
                     <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
                         <div className="flex items-start justify-between gap-4">
