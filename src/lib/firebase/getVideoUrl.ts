@@ -303,7 +303,7 @@ export async function invalidateVideoUrlCache(videoPaths: string[]): Promise<voi
 export async function getVideoSize(storagePath: string): Promise<number> {
   try {
     const response = await fetch(
-      `https://firebasestorage.googleapis.com/v0/b/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/o/${encodeURIComponent(storagePath)}?alt=media`,
+      `https://firebasestorage.googleapis.com/v0/b/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'studio-4633365007-23d80.firebasestorage.app'}/o/${encodeURIComponent(storagePath)}?alt=media`,
       { method: 'HEAD' }
     );
     const contentLength = response.headers.get('content-length');
