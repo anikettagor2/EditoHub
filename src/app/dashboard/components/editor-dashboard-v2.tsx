@@ -51,7 +51,7 @@ import { preloadVideosIntoMemory, warmVideoInMemory } from "@/lib/video-preload"
 import { FilePreview } from "@/components/file-preview";
 import { useVideoTranscodeStatus } from "@/hooks/use-video-transcode-status";
 import { IndicatorCard } from "@/components/ui/indicator-card";
-import MuxPlayer from "@mux/mux-player-react";
+import { VideoPlayer } from "@/components/video-player";
 
 
 function isVideoResource(resource?: string) {
@@ -368,12 +368,12 @@ export function EditorDashboardV2() {
                         </div>
                     )}
 
-                    <MuxPlayer
-                        src={effectiveUrl}
-                        style={{ width: "100%", height: "100%", aspectRatio: "16/9" }}
-                        autoPlay
-                        playsInline
-                        streamType="on-demand"
+                    <VideoPlayer
+                        videoPath={effectiveUrl}
+                        className="w-full h-full"
+                        title={file.name}
+                        primaryColor="#6366f1"
+                        playbackRates={[0.5, 0.75, 1, 1.25, 1.5, 2]}
                     />
                 </motion.div>
             </motion.div>

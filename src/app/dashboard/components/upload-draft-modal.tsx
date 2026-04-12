@@ -24,6 +24,7 @@ import { handleRevisionUploaded } from "@/app/actions/notification-actions";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
+import { VideoPlayer } from "@/components/video-player";
 
 
 interface UploadDraftModalProps {
@@ -71,11 +72,8 @@ export function UploadDraftModal({
         if (abortRef.current) {
             if (abortRef.current instanceof AbortController) {
                 abortRef.current.abort();
-            } else {
+            } else if (typeof abortRef.current === 'function') {
                 abortRef.current();
-            }
-            } else if ('abort' in abortRef.current) {
-                (abortRef.current as AbortController).abort();
             }
         }
         setIsUploading(false);
@@ -243,12 +241,9 @@ export function UploadDraftModal({
                                             exit={{ opacity: 0, scale: 0.97 }}
                                             className="relative rounded-xl overflow-hidden border border-primary/40 shadow-lg bg-black"
                                         >
-                                            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                                            <video
-                                                src={previewUrl}
-                                                controls
-                                                playsInline
-                                                className="w-full max-h-[240px] object-contain"
+                                            <VideoPlayer
+                                                videoPath={previewUrl || ""}
+                                                className="w-full h-[240px]"
                                             />
                                             {!isUploading && (
                                                 <label className="absolute inset-0 flex items-end justify-center pb-4 bg-gradient-to-t from-black/60 to-transparent cursor-pointer opacity-0 hover:opacity-100 transition-opacity">

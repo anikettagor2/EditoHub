@@ -69,6 +69,16 @@ export default function UploadRevisionPage() {
         setUploadProg(null);
     };
 
+    const handleUpload = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!file || !user) {
+            toast.error("Please select a file first.");
+            return;
+        }
+
+        setIsUploading(true);
+        setUploadProg(null);
+
         try {
             // 1. Versioning Logic
             const q = query(
@@ -137,8 +147,7 @@ export default function UploadRevisionPage() {
         }
         setIsUploading(false);
         setUploadProg(null);
-    }
-};
+    };
 
    
     // const handleUpload = async (e: React.FormEvent) => {

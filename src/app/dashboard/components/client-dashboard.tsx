@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/context/auth-context";
 import { db } from "@/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
 import { Project, User, Invoice } from "@/types/schema";
-import { cn } from "@/lib/utils";
+import { cn, safeJsonParse } from "@/lib/utils";
 import {
     Plus, Search, Eye, ChevronDown, CheckCircle2, AlertCircle, Clock,
     Video, Wallet, MessageCircle, FileVideo, X, IndianRupee, Download,
@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { ReviewSystemModal } from "./review-system-modal";
 import { preloadVideosIntoMemory } from "@/lib/video-preload";
 import { IndicatorCard } from "@/components/ui/indicator-card";
-import MuxPlayer from "@mux/mux-player-react";
+import { VideoPlayer } from "@/components/video-player";
 
 
 const CLIENT_VIDEO_TYPE_ALIASES: Record<string, string[]> = {
@@ -162,12 +162,8 @@ export function ClientDashboard() {
                 })
             });
 
-            if (!orderRes.ok) {
-                const errData = await orderRes.json();
-                throw new Error(errData.error || "Failed to create payment order.");
-            }
-
-            const order = await orderRes.json();
+            const order = await safeJsonParse(orderRes);
+            if (!orderRes.ok) throw new Error(order?.error || "Failed to create payment order.");
 
             // 3. Open Checkout
             const options = {
@@ -200,7 +196,8 @@ export function ClientDashboard() {
                             })
                         });
 
-                        if (!verifyRes.ok) throw new Error("Verification failed. Please contact support if your amount was debited.");
+                        const verifyData = await safeJsonParse(verifyRes);
+                        if (!verifyRes.ok) throw new Error(verifyData?.error || "Verification failed.");
                         
                         toast.dismiss(verifyToast);
                         toast.success("Payment successful! Your dashboard will update shortly.");
@@ -903,12 +900,10 @@ export function ClientDashboard() {
                                     {previewFile.type.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewFile.name) ? (
                                         <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain" />
                                     ) : previewFile.type.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(previewFile.name) ? (
-                                        <MuxPlayer
-                                            src={previewFile.url}
-                                            style={{ width: "100%", aspectRatio: "16/9" }}
-                                            autoPlay
-                                            playsInline
-                                            streamType="on-demand"
+                                        <VideoPlayer
+                                            videoPath={previewFile.url}
+                                            className="w-full h-full"
+                                            title={previewFile.name}
                                         />
                                     ) : (
                                         <div className="text-center text-white">

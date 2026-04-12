@@ -34,7 +34,7 @@ import {
     ArrowRight
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, safeJsonParse } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB } from "@/lib/constants";
@@ -746,12 +746,10 @@ export default function NewProjectPage() {
                 headers: { "Content-Type": "application/json" }
             });
             
+            const orderData = await safeJsonParse(orderRes);
             if (!orderRes.ok) {
-                const errorData = await orderRes.json();
-                throw new Error(errorData.error || "Failed to create payment order");
+                throw new Error(orderData.error || "Failed to create payment order");
             }
-            
-            const orderData = await orderRes.json();
 
             // 4. Open Razorpay Checkout
             const options = {

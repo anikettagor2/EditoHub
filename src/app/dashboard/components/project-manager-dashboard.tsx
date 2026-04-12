@@ -72,10 +72,9 @@ import { Modal } from "@/components/ui/modal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { FilePreview } from "@/components/file-preview";
-import MuxPlayer from "@mux/mux-player-react";
+import { VideoPlayer } from "@/components/video-player";
 import { ReviewSystemModal } from "./review-system-modal";
 import { preloadVideosIntoMemory } from "@/lib/video-preload";
-import { VideoPlayer } from "@/components/video-player";
 import { IndicatorCard } from "@/components/ui/indicator-card";
 
 
@@ -2026,7 +2025,13 @@ export function ProjectManagerDashboard() {
                                     {previewFile.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(previewFile.name) ? (
                                         <img src={previewFile.url} alt={previewFile.name} className="w-full h-full object-contain" />
                                     ) : previewFile.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(previewFile.name) ? (
-                                        <MuxPlayer src={previewFile.url} style={{ aspectRatio: "16/9" }} autoPlay="muted" className="w-full h-full object-contain" />
+                                        <VideoPlayer 
+                                            videoPath={previewFile.url} 
+                                            className="w-full h-full object-contain" 
+                                            title={previewFile.name}
+                                            playbackRates={[0.5, 0.75, 1, 1.25, 1.5, 2]}
+                                            primaryColor="#6366f1"
+                                        />
                                     ) : (
                                         <div className="text-center text-white">
                                             <FileVideo className="h-12 w-12 mx-auto mb-4 opacity-50" />

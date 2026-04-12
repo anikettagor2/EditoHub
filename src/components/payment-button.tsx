@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CURRENCY } from "@/lib/razorpay";
 import { updateDoc, doc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import { safeJsonParse } from "@/lib/utils";
 
 // Function to load script dynamically
 const loadRazorpayScript = () => {
@@ -62,9 +63,9 @@ export function PaymentButton({ projectId, user, amount, accountingAmount, taxRa
                 body: JSON.stringify({ amount, projectId }),
                 headers: { "Content-Type": "application/json" }
             });
-            const orderData = await orderRes.json();
 
-            if (!orderRes.ok) throw new Error(orderData.error);
+            const orderData = await safeJsonParse(orderRes);
+            if (!orderRes.ok) throw new Error(orderData?.error || "Failed to create order");
 
             // 3. Open Razorpay
             const options = {
@@ -92,8 +93,8 @@ export function PaymentButton({ projectId, user, amount, accountingAmount, taxRa
                             headers: { "Content-Type": "application/json" }
                         });
                         
-                        const verifyData = await verifyRes.json();
-                        if (!verifyRes.ok) throw new Error(verifyData.error || "Verification failed");
+                        const verifyData = await safeJsonParse(verifyRes);
+                        if (!verifyRes.ok) throw new Error(verifyData?.error || "Verification failed");
 
                         toast.success("Payment Verified & Successful!");
                         if (onSuccess) onSuccess();

@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { db } from "@/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, getDocs } from "firebase/firestore";
 import { User } from "@/types/schema";
-import { cn } from "@/lib/utils";
+import { cn, safeJsonParse } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { assignClientPM } from "@/app/actions/admin-actions";
@@ -239,7 +239,7 @@ export function SalesDashboard() {
                 })
             });
 
-            const data = await res.json();
+            const data = await safeJsonParse(res);
             if (!res.ok) throw new Error(data.error || "Creation failed");
             
             if (finalPMId && finalPMId !== "automatic") {
@@ -306,7 +306,7 @@ export function SalesDashboard() {
                         allowedFormats: editingAllowedFormats
                     })
                 });
-                const data = await res.json();
+                const data = await safeJsonParse(res);
                 if (!res.ok) throw new Error(data.error || "Update failed");
                 toast.success("Pricing updated successfully");
                 setEditingClientId(null);

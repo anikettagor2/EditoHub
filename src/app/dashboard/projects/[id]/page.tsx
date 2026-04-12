@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, safeJsonParse } from "@/lib/utils";
 import { toast } from "sonner";
 import { assignEditor, getAllUsers, respondToAssignment } from "@/app/actions/admin-actions";
 import { unlockProjectDownloads, requestDownloadUnlock, registerDownload, submitEditorRating, getSignedDownloadUrl } from "@/app/actions/project-actions";
@@ -175,7 +175,7 @@ export default function ProjectDetailsPage() {
                     return;
                 } else {
                     // Show error if API fails
-                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    const errorData = await safeJsonParse(response).catch(() => ({ error: 'Unknown error' }));
                     throw new Error(errorData.error || `HTTP ${response.status}`);
                 }
             } else {

@@ -4,6 +4,7 @@ const AISENSY_URL = "https://backend.aisensy.com/campaign/t1/api/v2";
 const AISENSY_CLIENT_FALLBACK_CAMPAIGN = process.env.AISENSY_CLIENT_FALLBACK_CAMPAIGN || "CLIENT_UTILITY";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { safeJsonParse } from "@/lib/utils";
 import { Project, User } from "@/types/schema";
 
 // ============================================================================
@@ -283,7 +284,7 @@ export async function sendWhatsAppNotification(
         });
 
         clearTimeout(timeoutId);
-        const responseData = await response.json();
+        const responseData = await safeJsonParse(response);
         const semanticFailure = isSemanticFailure(responseData);
         const semanticError = toErrorText(responseData) || `AiSensy semantic failure for campaign ${campaignName}`;
         

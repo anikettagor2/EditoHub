@@ -13,7 +13,8 @@ import { PaymentButton } from "@/components/payment-button";
 import { uploadCommentImage } from "@/lib/firebase/storage-utils";
 import { DashboardVideo } from "@/components/dashboard-video-optimizer";
 import { warmVideoInMemory } from "@/lib/video-preload";
-import MuxPlayer from "@mux/mux-player-react";
+import { VideoPlayer } from "@/components/video-player";
+import { safeJsonParse } from "@/lib/utils";
 
 
 type ReviewProject = {
@@ -106,7 +107,6 @@ function formatDate(timestamp: number): string {
 
 
 import { VideoManagerProvider } from "@/components/video-manager";
-import { OptimizedHLSPlayerView } from "@/components/optimized-hls-player-view";
 
 export function ReviewSystemModal({ isOpen, onClose, project, allowUploadDraft = false, guestPreview = false, guestName, defaultRevisionId }: ReviewSystemModalProps) {
     const { user } = useAuth();
@@ -592,7 +592,7 @@ const startDownload = async () => {
                 body: JSON.stringify({ commentId }),
             });
 
-            const payload = await res.json();
+            const payload = await safeJsonParse(res);
             if (!res.ok || !payload?.success) {
                 const errorMessage = payload?.message || "Failed to delete comment.";
                 throw new Error(errorMessage);
@@ -698,7 +698,7 @@ const startDownload = async () => {
                     body: JSON.stringify({ uploadId, revisionId: selectedRevisionId })
                 });
                 
-                const data = await res.json();
+                const data = await safeJsonParse(res);
                 if (data.success && data.playbackId) {
                     // Update successfully handled by the backend, onSnapshot will pick it up
                     isPolling = false;
@@ -851,31 +851,25 @@ const startDownload = async () => {
                                             <span className="text-sm">No uploaded draft available for this project.</span>
                                         </div>
                                     ) : selectedRevision?.playbackId || selectedRevision?.hlsUrl || selectedRevision?.videoUrl ? (
-                                        selectedRevision.playbackId ? (
-                                            <MuxPlayer
-                                                playbackId={selectedRevision.playbackId}
-                                                streamType="on-demand"
-                                                style={{ width: "100%", height: "100%", aspectRatio: "16/9" }}
-                                                autoPlay={false}
-                                                playsInline
-                                                accentColor="#6366f1"
-                                                onTimeUpdate={(e: Event) => {
-                                                    const v = (e.target as HTMLVideoElement);
-                                                    if (v) { setCurrentTime(v.currentTime); setDuration(v.duration); }
-                                                }}
-                                            />
-                                        ) : (
-                                            <OptimizedHLSPlayerView
-                                                hlsUrl={selectedRevision.hlsUrl}
-                                                videoUrl={selectedRevision.videoUrl}
-                                                projectName={project?.name || "Review"}
-                                                fileSize={selectedRevision.fileSize}
-                                                onTimeUpdate={(currentTime, duration) => {
-                                                    setCurrentTime(currentTime);
-                                                    setDuration(duration);
-                                                }}
-                                            />
-                                        )
+                                        <VideoPlayer
+                                            playbackId={selectedRevision.playbackId}
+                                            videoPath={selectedRevision.hlsUrl || selectedRevision.videoUrl || ""}
+                                            title={project?.name + " - V" + selectedRevision.version}
+                                            metadata={{
+                                                video_id: selectedRevision.id,
+                                                video_title: project?.name + " - V" + selectedRevision.version,
+                                                viewer_id: user?.uid || "guest",
+                                            }}
+                                            onTimeUpdate={(currentTime, duration) => {
+                                                setCurrentTime(currentTime);
+                                                if (duration && !isNaN(duration)) setDuration(duration);
+                                            }}
+                                            onLoadedMetadata={(duration) => {
+                                                if (duration && !isNaN(duration)) setDuration(duration);
+                                            }}
+                                            primaryColor="#6366f1"
+                                            className="w-full h-full"
+                                        />
                                     ) : (
                                         <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground gap-3 bg-muted/10">
                                             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1396,31 +1390,18 @@ const startDownload = async () => {
                                     <span className="text-xs">No uploaded draft available for this project.</span>
                                 </div>
                             ) : selectedRevision?.playbackId || selectedRevision?.hlsUrl || selectedRevision?.videoUrl ? (
-                                selectedRevision.playbackId ? (
-                                    <MuxPlayer
-                                        playbackId={selectedRevision.playbackId}
-                                        streamType="on-demand"
-                                        style={{ width: "100%", height: "100%", aspectRatio: "16/9" }}
-                                        autoPlay={false}
-                                        playsInline
-                                        accentColor="#6366f1"
-                                        onTimeUpdate={(e: Event) => {
-                                            const v = (e.target as HTMLVideoElement);
-                                            if (v) { setCurrentTime(v.currentTime); setDuration(v.duration); }
-                                        }}
-                                    />
-                                ) : (
-                                    <OptimizedHLSPlayerView
-                                        hlsUrl={selectedRevision.hlsUrl}
-                                        videoUrl={selectedRevision.videoUrl}
-                                        projectName={project?.name || "Review"}
-                                        fileSize={selectedRevision.fileSize}
-                                        onTimeUpdate={(currentTime, duration) => {
-                                            setCurrentTime(currentTime);
-                                            setDuration(duration);
-                                        }}
-                                    />
-                                )
+                                <VideoPlayer
+                                    playbackId={selectedRevision.playbackId}
+                                    videoPath={selectedRevision.hlsUrl || selectedRevision.videoUrl || ""}
+                                    title={project?.name + " - V" + (selectedRevision.version || "Draft")}
+                                    metadata={{
+                                        viewer_user_id: user?.uid || "guest"
+                                    }}
+                                    onTimeUpdate={(currentTime, duration) => {
+                                        setCurrentTime(currentTime);
+                                        setDuration(duration);
+                                    }}
+                                />
                             ) : (
                                 <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground gap-3 bg-muted/10">
                                     <Loader2 className="h-5 w-5 animate-spin text-primary" />

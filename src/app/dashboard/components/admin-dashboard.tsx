@@ -65,7 +65,7 @@ import {
     Download
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, safeJsonParse } from "@/lib/utils";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -455,8 +455,8 @@ export function AdminDashboard() {
                })
           });
           
+          const data = await safeJsonParse(res);
           if (!res.ok) {
-              const data = await res.json();
               throw new Error(data.error || "Failed");
           }
 
@@ -486,7 +486,7 @@ export function AdminDashboard() {
               })
           });
           
-          const responseData = await res.json();
+          const responseData = await safeJsonParse(res);
           if (!res.ok) {
               throw new Error(responseData.error || "Failed");
           }
