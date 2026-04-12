@@ -1,6 +1,6 @@
 import { storage, db } from "@/lib/firebase/config";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { doc, setDoc, collection } from "firebase/firestore";
+import { doc, setDoc, collection, getDoc } from "firebase/firestore";
 import { VideoJob } from "@/types/schema";
 import * as tus from "tus-js-client";
 import { safeJsonParse } from "@/lib/utils";
@@ -34,8 +34,9 @@ export class UploadService {
     onProgressLegacy?: (progress: number) => void,
     maybeOptions?: Partial<UploadOptions>
   ): Promise<string> {
+    const videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', '3gp', 'qt', 'flv', 'wmv'];
     const isVideo = file.type.startsWith('video/') ||
-      ['mp4', 'mov', 'avi', 'mkv', 'webm'].some(ext => file.name.toLowerCase().endsWith(ext));
+      videoExtensions.some(ext => file.name.toLowerCase().endsWith('.' + ext));
 
     let options: UploadOptions;
 
@@ -55,15 +56,81 @@ export class UploadService {
 
     // ROUTING LOGIC:
     // 1. Raw videos and other assets (uploaded by client/pm) -> Firebase Storage
-    // 2. Drafts/Revisions (uploaded by editor) -> Mux Storage (for high-speed playback/review)
+    // 2. Drafts/Revisions (uploaded by editor) -> 
+    //    - Mux Storage for projects created on or after 12/04/2026
+    //    - Firebase Storage for older projects
     console.log(`[UploadService] Unified Upload Start: ${file.name} (${file.size} bytes), Type: ${options.type}, isVideo: ${isVideo}`);
 
     if (options.type === 'revision' && isVideo) {
-      console.log(`[UploadService] Routing to Mux (Draft/Revision Video)`);
-      return this.uploadToMux(file, options);
+      const useMux = await this.shouldProjectUseMux(options.projectId);
+      if (useMux) {
+        console.log(`[UploadService] Routing to Mux (Draft/Revision Video)`);
+        return this.uploadToMux(file, options);
+      } else {
+        console.log(`[UploadService] Routing to Firebase (Legacy Project Revision)`);
+        return this.uploadToFirebase(file, options);
+      }
     } else {
       console.log(`[UploadService] Routing to Firebase (${options.type}${isVideo ? ' Video' : ''})`);
       return this.uploadToFirebase(file, options);
+    }
+  }
+
+  /**
+   * Internal helper to determine if a project should use Mux based on its creation date.
+   * Cutoff: 12/04/2026 (April 12, 2026)
+   */
+  private static async shouldProjectUseMux(projectId: string): Promise<boolean> {
+    // 1. If it's a temporary ID from NewProjectPage (starts with req_), it's a new project.
+    if (!projectId) return true;
+    if (projectId.startsWith('req_')) return true;
+
+    try {
+      // 2. Fetch project metadata
+      const projectDoc = await getDoc(doc(db, "projects", projectId));
+      if (!projectDoc.exists()) {
+        console.warn(`[UploadService] Project ${projectId} not found in Firestore. Defaulting to Mux.`);
+        return true;
+      }
+
+      const projectData = projectDoc.data();
+      const rawCreatedAt = projectData.createdAt;
+      
+      // Robust normalization of createdAt
+      let createdAt = 0;
+      if (typeof rawCreatedAt === 'number') {
+        createdAt = rawCreatedAt;
+      } else if (rawCreatedAt && typeof rawCreatedAt.toMillis === 'function') {
+        createdAt = rawCreatedAt.toMillis();
+      } else if (rawCreatedAt instanceof Date) {
+        createdAt = rawCreatedAt.getTime();
+      } else if (typeof rawCreatedAt === 'string') {
+        createdAt = new Date(rawCreatedAt).getTime();
+      }
+
+      // Cutoff: April 12, 2026 00:00:00 UTC (1744416000000)
+      const MUX_CUTOFF = 1744416000000; 
+      
+      // If no date found, it's safer to treat it as a new project (Mux)
+      if (!createdAt) {
+          console.warn(`[UploadService] Project ${projectId} has no valid createdAt. Defaulting to Mux.`);
+          return true;
+      }
+
+      const isLegacy = createdAt < MUX_CUTOFF;
+      console.log(`[UploadService] Routing Decision:`, {
+          projectId,
+          createdAt,
+          cutoff: MUX_CUTOFF,
+          isLegacy,
+          dateStr: new Date(createdAt).toISOString()
+      });
+      
+      return !isLegacy;
+    } catch (error) {
+      console.error("[UploadService] Error checking project date:", error);
+      // Fail safe: use Mux for new uploads if we can't determine the date
+      return true;
     }
   }
 
@@ -219,16 +286,41 @@ export class UploadService {
         },
         (error) => reject(error),
         async () => {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          if (onProgress) {
-            onProgress({
-              percent: 100,
-              transferred: file.size,
-              total: file.size,
-              status: 'complete'
-            });
+          try {
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            
+            // If this is a revision upload to Firebase, we must update the document
+            // because there's no backend webhook for direct Firebase uploads.
+            if (options.type === 'revision' && options.revisionId) {
+                console.log(`[UploadService] Finalizing Firebase Revision: ${options.revisionId}`);
+                
+                // Update Revision document with the direct URL
+                await setDoc(doc(db, "revisions", options.revisionId), {
+                    videoUrl: downloadUrl,
+                    status: 'active',
+                    updatedAt: Date.now()
+                }, { merge: true });
+
+                // Update VideoJob to complete
+                await setDoc(doc(db, "video_jobs", options.revisionId), {
+                    status: 'complete',
+                    updatedAt: Date.now(),
+                    completedAt: Date.now()
+                }, { merge: true });
+            }
+
+            if (onProgress) {
+              onProgress({
+                percent: 100,
+                transferred: file.size,
+                total: file.size,
+                status: 'complete'
+              });
+            }
+            resolve(downloadUrl);
+          } catch (err) {
+            reject(err);
           }
-          resolve(downloadUrl);
         }
       );
 
