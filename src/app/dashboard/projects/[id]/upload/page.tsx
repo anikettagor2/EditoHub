@@ -292,7 +292,6 @@ export default function UploadRevisionPage() {
                                     {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                                     <video 
                                         src={previewUrl} 
-                                        type={file?.type}
                                         controls 
                                         playsInline 
                                         className="w-full max-h-[320px] object-contain" 
