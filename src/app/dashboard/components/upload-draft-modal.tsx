@@ -243,7 +243,6 @@ export function UploadDraftModal({
                                         >
                                             <video
                                                 src={previewUrl || ""}
-                                                type={file?.type}
                                                 controls
                                                 playsInline
                                                 className="w-full h-[240px] object-contain"
