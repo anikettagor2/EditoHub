@@ -53,6 +53,12 @@ function formatTime(seconds: number): string {
     return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function getMuxPlaybackSource(revision: RevisionData | null | undefined): string {
+    if (!revision) return "";
+    if (revision.playbackId) return `https://stream.mux.com/${revision.playbackId}.m3u8`;
+    return revision.hlsUrl || "";
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface GuestReviewPageClientProps {
     revisionId: string;
@@ -275,12 +281,10 @@ export default function GuestReviewPageClient({ revisionId }: GuestReviewPageCli
 
     // ── Main review view ──────────────────────────────────────────────────────
     const videoTitle = `${project?.name || "Project"} · V${revision.version || "Draft"}`;
-    // Only use Mux sources for streaming — ignore raw Firebase Storage videoUrl
-    const isFirebaseUrl = !!(revision.videoUrl && revision.videoUrl.includes('firebasestorage'));
-    const hasMuxSource = !!(revision.playbackId || revision.hlsUrl);
-    const hasVideo = hasMuxSource || (!!revision.videoUrl && !isFirebaseUrl);
-    // Show processing state if: video is a mux:// placeholder OR it's a Firebase URL with no playbackId (migration needed)
-    const isProcessing = (revision.videoUrl?.startsWith("mux://") && !revision.playbackId) || (isFirebaseUrl && !hasMuxSource);
+    const muxSource = getMuxPlaybackSource(revision);
+    const hasMuxSource = !!muxSource;
+    // Show processing state when the revision is not yet mapped to a playable Mux stream.
+    const isProcessing = !!revision.videoUrl?.startsWith("mux://") || !hasMuxSource;
 
     return (
         <div className="min-h-screen bg-[#0a0a0a] text-foreground">
@@ -321,10 +325,10 @@ export default function GuestReviewPageClient({ revisionId }: GuestReviewPageCli
                                     <div className="text-sm font-bold uppercase tracking-widest text-primary">Processing Video</div>
                                     <div className="text-[10px] uppercase tracking-widest opacity-70">Securing high-quality playback format…</div>
                                 </div>
-                            ) : hasVideo ? (
+                            ) : hasMuxSource ? (
                                 <VideoPlayer
                                     playbackId={revision.playbackId}
-                                    videoPath={revision.hlsUrl || ""}
+                                    videoPath={muxSource}
                                     title={videoTitle}
                                     metadata={{
                                         video_id: revision.id,
