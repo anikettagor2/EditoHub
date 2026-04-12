@@ -24,6 +24,12 @@ interface VideoPlayerProps {
   onLoadedMetadata?: (duration: number) => void;
 }
 
+function extractMuxPlaybackId(videoPath?: string): string | undefined {
+  if (!videoPath) return undefined;
+  const match = videoPath.match(/https?:\/\/stream\.mux\.com\/([^./?]+)(?:\.[^/?]+)?/i);
+  return match?.[1];
+}
+
 export function VideoPlayer({
   videoPath,
   thumbnailUrl,
@@ -42,12 +48,13 @@ export function VideoPlayer({
   onLoadedMetadata,
 }: VideoPlayerProps) {
   const [error, setError] = useState<string | null>(null);
+  const resolvedPlaybackId = playbackId || extractMuxPlaybackId(videoPath);
   
   // Determine if we're in a processing state
   const isProcessing = videoPath?.startsWith('mux://');
   
   // Handle regular source if no playbackId
-  const effectiveSrc = !playbackId && videoPath && !isProcessing ? videoPath : undefined;
+  const effectiveSrc = !resolvedPlaybackId && videoPath && !isProcessing ? videoPath : undefined;
 
   return (
     <div className={cn("group relative w-full aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center", className)}>
@@ -94,7 +101,7 @@ export function VideoPlayer({
         />
       ) : !isProcessing && (
         <MuxPlayer
-          playbackId={playbackId}
+          playbackId={resolvedPlaybackId}
           src={effectiveSrc}
           metadata={{ 
             video_title: title, 
