@@ -23,7 +23,7 @@ import {
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { handleNewComment } from "@/app/actions/notification-actions";
-import { VideoPlayer } from "@/components/video-player";
+import { ReviewMuxPlayer } from "@/components/review-mux-player";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type RevisionData = {
@@ -326,7 +326,7 @@ export default function GuestReviewPageClient({ revisionId }: GuestReviewPageCli
                                     <div className="text-[10px] uppercase tracking-widest opacity-70">Securing high-quality playback format…</div>
                                 </div>
                             ) : hasMuxSource ? (
-                                <VideoPlayer
+                                <ReviewMuxPlayer
                                     playbackId={revision.playbackId}
                                     videoPath={muxSource}
                                     title={videoTitle}

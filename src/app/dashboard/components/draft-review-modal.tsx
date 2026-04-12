@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/context/auth-context";
 import { Modal } from "@/components/ui/modal";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
-import { VideoPlayer } from "@/components/video-player";
+import { ReviewMuxPlayer } from "@/components/review-mux-player";
 import { VideoManagerProvider } from "../../../components/video-manager";
 
 interface DraftReviewModalProps {
@@ -76,8 +76,9 @@ export function DraftReviewModal({
                                 Version {revision.version}
                             </p>
                             <div className="relative rounded-xl overflow-hidden bg-black border border-border shadow-lg">
-                                <VideoPlayer
-                                    videoPath={revision.videoUrl}
+                                <ReviewMuxPlayer
+                                    playbackId={revision.playbackId}
+                                    videoPath={revision.hlsUrl || revision.videoUrl}
                                     title={project?.clientName || project?.name || "Draft Video"}
                                 />
                             </div>

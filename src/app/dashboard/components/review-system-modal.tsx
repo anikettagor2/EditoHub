@@ -12,7 +12,7 @@ import { handleNewComment } from "@/app/actions/notification-actions";
 import { PaymentButton } from "@/components/payment-button";
 import { uploadCommentImage } from "@/lib/firebase/storage-utils";
 import { warmVideoInMemory } from "@/lib/video-preload";
-import { VideoPlayer } from "@/components/video-player";
+import { ReviewMuxPlayer } from "@/components/review-mux-player";
 import { safeJsonParse } from "@/lib/utils";
 
 
@@ -863,7 +863,7 @@ const startDownload = async () => {
                                             <span className="text-sm">No uploaded draft available for this project.</span>
                                         </div>
                                     ) : (selectedRevision && selectedMuxSource) ? (
-                                        <VideoPlayer
+                                        <ReviewMuxPlayer
                                             playbackId={selectedRevision.playbackId}
                                             videoPath={selectedMuxSource}
                                             title={project?.name + " - V" + (selectedRevision.version || "Draft")}
@@ -1394,7 +1394,7 @@ const startDownload = async () => {
                                     <span className="text-xs">No uploaded draft available for this project.</span>
                                 </div>
                             ) : (selectedRevision && selectedMuxSource) ? (
-                                <VideoPlayer
+                                <ReviewMuxPlayer
                                     playbackId={selectedRevision.playbackId}
                                     videoPath={selectedMuxSource}
                                     title={project?.name + " - V" + (selectedRevision.version || "Draft")}
