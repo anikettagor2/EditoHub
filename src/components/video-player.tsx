@@ -87,6 +87,8 @@ export function VideoPlayer({
           style={{ width: '100%', height: '100%', aspectRatio: "16/9" }}
           autoPlay={false}
           playsInline
+          minResolution="480p"
+          maxResolution="auto"
           onPlay={onPlaying}
           onPause={onPause}
           onTimeUpdate={(e) => {
