@@ -2030,7 +2030,7 @@ export function ProjectManagerDashboard() {
                                             className="w-full h-full object-contain" 
                                             title={previewFile.name}
                                             playbackRates={[0.5, 0.75, 1, 1.25, 1.5, 2]}
-                                            primaryColor="#6366f1"
+                                            primaryColor="#ffffff"
                                         />
                                     ) : (
                                         <div className="text-center text-white">
@@ -2054,7 +2054,8 @@ export function ProjectManagerDashboard() {
                     name: reviewProject.name,
                     clientName: reviewProject.clientName || reviewProject.name,
                     paymentStatus: reviewProject.paymentStatus,
-                    editorRating: reviewProject.editorRating
+                    editorRating: reviewProject.editorRating,
+                    createdAt: reviewProject.createdAt
                 } : null}
             />
 

@@ -930,7 +930,8 @@ export function ClientDashboard() {
                     amountPaid: selectedProject.amountPaid,
                     paymentStatus: selectedProject.paymentStatus,
                     editorRating: selectedProject.editorRating,
-                    editorReview: selectedProject.editorReview
+                    editorReview: selectedProject.editorReview,
+                    createdAt: selectedProject.createdAt
                 } : null}
             />
         </div>
