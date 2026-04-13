@@ -179,23 +179,14 @@ export async function registerDownload(projectId: string, revisionId: string) {
         }
 
         // Return download URL to be streamed by /api/download endpoint
-        // The frontend will POST this URL to /api/download which handles both Firebase and MUX
-        let downloadUrl = "";
-
-        // Prefer videoUrl (Firebase Storage - high quality original)
-        if (data.videoUrl) {
-            downloadUrl = data.videoUrl;
-            console.log(`[registerDownload] Using Firebase Storage URL for download`);
-        }
-        // Fallback to Mux playback URL (for streaming/download)
-        else if (data.playbackId) {
-            downloadUrl = `https://stream.mux.com/${data.playbackId}`;
-            console.log(`[registerDownload] Using MUX playback URL for download`);
-        }
+        // CRITICAL: Only Firebase Storage URLs are supported for downloads
+        // MUX is for streaming only via MUX Player
+        let downloadUrl = data.videoUrl || "";
 
         if (!downloadUrl) {
-            console.error(`[registerDownload] No download URL available for revision: ${revisionId}`);
-            return { success: false, error: "No video file found for this revision." };
+            console.error(`[registerDownload] No Firebase videoUrl available for revision: ${revisionId}`);
+            console.warn(`[registerDownload] PlaybackId available: ${!!data.playbackId} (MUX streaming only, not for downloads)`);
+            return { success: false, error: "Video file not available for download. Please contact support." };
         }
 
         // On final allowed download, purge all revision videos to keep only metadata/history.
