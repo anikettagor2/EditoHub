@@ -249,49 +249,52 @@ export function ReviewSystemModal({ isOpen, onClose, project, guestPreview = fal
 
     const startDownload = async () => {
         if (!project?.id || !selectedRevisionId || !selectedRevision) return;
+        
+        // Check if we have a direct download URL (Firebase Storage)
+        if (!selectedRevision.videoUrl) {
+            toast.error("Video file not available for download. Please contact support.");
+            return;
+        }
+
         setIsDownloading(true);
         try {
-            // First, register the download and get the URL
+            // Register the download for analytics/limits
             const res = await registerDownload(project.id, selectedRevisionId);
-            if (!res.success || !res.downloadUrl) {
+            if (!res.success) {
                 toast.error(res.error || "Failed to start download.");
                 setIsDownloading(false);
                 return;
             }
 
-            // Now stream the file through /api/download endpoint
-            const downloadResponse = await fetch('/api/download', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url: res.downloadUrl,
-                    fileName: `${project.name || 'video'}_v${selectedRevision.version || 1}.mp4`
-                })
-            });
+            // Download directly from Firebase Storage URL (client-side)
+            // Firebase Storage URLs are publicly readable for authorized users
+            const firebaseUrl = selectedRevision.videoUrl;
+            const fileName = `${project.name || 'video'}_v${selectedRevision.version || 1}.mp4`;
+            
+            console.log(`[Download] Starting direct Firebase download: ${fileName}`);
 
-            if (!downloadResponse.ok) {
-                const errorData = await downloadResponse.json().catch(() => ({}));
-                toast.error(errorData.error || "Failed to download video.");
-                setIsDownloading(false);
-                return;
+            // Fetch the file directly
+            const response = await fetch(firebaseUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            // Get the blob and create download link
-            const blob = await downloadResponse.blob();
+            // Convert blob to downloadable file
+            const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `${project.name || 'video'}_v${selectedRevision.version || 1}.mp4`);
+            link.setAttribute('download', fileName);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
             
             toast.success("Download started in your browser.");
-        } catch (error) {
-            console.error("Download error:", error);
-            toast.error("An error occurred while downloading.");
-        } finally {
+            setIsDownloading(false);
+        } catch (error: any) {
+            console.error("[Download] Error:", error);
+            toast.error("Download failed. Please try again.");
             setIsDownloading(false);
         }
     };
