@@ -314,13 +314,22 @@ export class UploadService {
             throw new Error('MUX upload failed');
           }
 
-          // Update revision with both URLs for complete functionality
+          // CRITICAL: Update revision with Firebase backup URL for downloads
+          // This ensures videoUrl is always available, even if initial save missed it
           if (firebaseUrl) {
-            console.log(`[UploadService] Updating revision with Firebase backup URL for downloads`);
-            await setDoc(doc(db, "revisions", finalRevisionId), {
-              videoUrl: firebaseUrl,
-              updatedAt: Date.now()
-            }, { merge: true });
+            console.log(`[UploadService] Saving Firebase backup URL to revision ${finalRevisionId}`);
+            try {
+              await setDoc(doc(db, "revisions", finalRevisionId), {
+                videoUrl: firebaseUrl,
+                updatedAt: Date.now()
+              }, { merge: true });
+              console.log(`[UploadService] Firebase backup URL saved successfully for downloads`);
+            } catch (updateErr) {
+              console.error(`[UploadService] Failed to save Firebase URL to revision:`, updateErr);
+              // Log but don't fail - MUX upload already succeeded
+            }
+          } else {
+            console.warn(`[UploadService] Firebase backup returned no URL - downloads may not work for this revision`);
           }
 
           return muxResult;
