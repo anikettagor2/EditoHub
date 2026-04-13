@@ -21,6 +21,7 @@ interface VideoPlayerProps {
   forwardSeekOffset?: number;
   backwardSeekOffset?: number;
   onLoadedMetadata?: (duration: number) => void;
+  watermark?: string; // Client/project name to display as watermark
 }
 
 function extractMuxPlaybackId(videoPath?: string): string | undefined {
@@ -45,6 +46,7 @@ export function VideoPlayer({
   forwardSeekOffset = 10,
   backwardSeekOffset = 10,
   onLoadedMetadata,
+  watermark,
 }: VideoPlayerProps) {
   const [error, setError] = useState<string | null>(null);
   const resolvedPlaybackId = playbackId || extractMuxPlaybackId(videoPath);
@@ -124,6 +126,21 @@ export function VideoPlayer({
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {/* Watermark Overlay - Top Left */}
+      {watermark && !isProcessing && (
+        <div className="absolute top-0 left-0 right-0 z-30 bg-gradient-to-b from-black/60 to-transparent px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-primary" />
+            <span className="text-sm font-bold text-white uppercase tracking-widest">
+              {watermark}
+            </span>
+          </div>
+          <span className="text-xs text-white/60 font-medium uppercase tracking-wider">
+            Client Preview
+          </span>
         </div>
       )}
     </div>

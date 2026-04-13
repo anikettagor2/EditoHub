@@ -22,6 +22,13 @@ const firebaseConfig = {
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
+// Configure Auth persistence to be persistent across browser restarts (Standard for web apps)
+import { setPersistence, browserLocalPersistence } from "firebase/auth";
+setPersistence(auth, browserLocalPersistence).catch(err => {
+    console.error("Critical: Failed to set Auth persistence:", err);
+});
+
+
 // Initialize Firestore with specialized settings for better connectivity and offline support
 let dbInstance;
 try {

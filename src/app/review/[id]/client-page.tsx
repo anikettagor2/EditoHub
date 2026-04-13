@@ -313,6 +313,7 @@ export default function GuestReviewPageClient({ revisionId }: GuestReviewPageCli
                                 playbackId={revision.playbackId}
                                 videoPath={revision.videoUrl || revision.hlsUrl}
                                 title={videoTitle}
+                                watermark={project?.clientName || project?.name}
                                 metadata={{
                                     video_id: revision.id,
                                     video_title: videoTitle,
