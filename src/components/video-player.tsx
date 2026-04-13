@@ -129,18 +129,21 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* Watermark Overlay - Top Left */}
+      {/* Watermark Overlay - Center */}
       {watermark && !isProcessing && (
-        <div className="absolute top-0 left-0 right-0 z-30 bg-gradient-to-b from-black/60 to-transparent px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-primary" />
-            <span className="text-sm font-bold text-white uppercase tracking-widest">
-              {watermark}
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <div className="text-center space-y-2">
+            <div className="flex items-center justify-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-primary" />
+              <span className="text-2xl font-bold text-white uppercase tracking-widest drop-shadow-lg">
+                {watermark}
+              </span>
+              <div className="h-3 w-3 rounded-full bg-primary" />
+            </div>
+            <span className="text-sm text-white/70 font-medium uppercase tracking-wider drop-shadow-lg">
+              Client Preview
             </span>
           </div>
-          <span className="text-xs text-white/60 font-medium uppercase tracking-wider">
-            Client Preview
-          </span>
         </div>
       )}
     </div>
