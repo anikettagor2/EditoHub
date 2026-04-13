@@ -52,7 +52,16 @@ export async function POST(request: NextRequest) {
                     }
                     
                     console.log(`[MuxWebhook] Updated revision ${revisionId} with playbackId ${playbackId}`);
-                } else if ((uploadType === "raw_footage" || uploadType === "brole_footage" || uploadType === "delivered_files") && projectId) {
+                } else if (
+                    (
+                        uploadType === "raw_footage" ||
+                        uploadType === "raw" ||
+                        uploadType === "brole_footage" ||
+                        uploadType === "pm_file" ||
+                        uploadType === "delivered_files"
+                    ) &&
+                    projectId
+                ) {
                     // Try finding by projectId first, then by uploadToken
                     let projectRef = adminDb.collection("projects").doc(projectId);
                     let projectSnap = await projectRef.get();
