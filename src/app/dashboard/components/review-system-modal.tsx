@@ -254,8 +254,10 @@ export function ReviewSystemModal({ isOpen, onClose, project, guestPreview = fal
             const res = await registerDownload(project.id, selectedRevisionId);
             if (res.success && res.downloadUrl) {
                 let finalUrl = res.downloadUrl;
-                // MUX videos - use direct download
-                if (!finalUrl.includes('alt=media')) finalUrl += (finalUrl.includes('?') ? '&' : '?') + 'alt=media';
+                // Firebase URLs need alt=media for direct download
+                if (finalUrl.includes('firebasestorage.googleapis.com') && !finalUrl.includes('alt=media')) {
+                    finalUrl += (finalUrl.includes('?') ? '&' : '?') + 'alt=media';
+                }
                 const link = document.createElement("a");
                 link.href = finalUrl;
                 link.setAttribute("download", `${project.name || 'video'}_v${selectedRevision.version || 1}.mp4`);
