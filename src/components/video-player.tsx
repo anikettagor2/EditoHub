@@ -129,9 +129,9 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* Watermark Overlay - Center */}
+      {/* Watermark Overlay - Center (Visible in fullscreen) */}
       {watermark && !isProcessing && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none" style={{position: 'fixed'}}>
           <div className="text-center space-y-2">
             <span className="text-3xl font-bold text-white/60 uppercase tracking-widest drop-shadow-lg">
               Client Preview
