@@ -32,19 +32,19 @@ export async function POST(request: NextRequest) {
             if (asset.status === "ready") {
                 const playbackId = asset.playback_ids?.[0]?.id;
                 if (playbackId) {
-                    // 3. Update Firestore revision with both playbackId and hlsUrl for maximum compatibility
-                    await adminDb.collection("revisions").doc(revisionId).update({
+                    await adminDb.collection("revisions").doc(revisionId).set({
                         playbackId,
                         hlsUrl: `https://stream.mux.com/${playbackId}.m3u8`,
                         status: "ready",
                         updatedAt: Date.now(),
-                    });
+                    }, { merge: true });
 
-                    await adminDb.collection("video_jobs").doc(uploadId).update({
+                    await adminDb.collection("video_jobs").doc(uploadId).set({
                         status: "ready",
+                        playbackId,
                         hlsUrl: `https://stream.mux.com/${playbackId}.m3u8`,
                         updatedAt: Date.now(),
-                    });
+                    }, { merge: true });
                     
                     console.log(`[SyncMuxVideo] Manually synced revision ${revisionId} with playbackId ${playbackId}`);
                     return NextResponse.json({ success: true, playbackId });
@@ -53,8 +53,9 @@ export async function POST(request: NextRequest) {
         }
 
         return NextResponse.json({ success: false, status: upload.status });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[SyncMuxVideo] Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : "Mux sync failed";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

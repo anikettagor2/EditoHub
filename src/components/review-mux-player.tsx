@@ -1,9 +1,13 @@
 "use client";
 
-import MuxPlayer from "@mux/mux-player-react";
+import dynamic from "next/dynamic";
 import { AlertCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+
+const MuxPlayer = dynamic(() => import("@mux/mux-player-react"), {
+  ssr: false,
+});
 
 interface ReviewMuxPlayerProps {
   playbackId?: string;
@@ -47,13 +51,31 @@ export function ReviewMuxPlayer({
     () => playbackId || extractMuxPlaybackId(videoPath),
     [playbackId, videoPath]
   );
-  const effectiveSrc = !resolvedPlaybackId ? videoPath : undefined;
+
+  useEffect(() => {
+    if (resolvedPlaybackId) {
+      console.info("[ReviewMuxPlayer] playbackId resolved:", resolvedPlaybackId);
+    } else {
+      console.warn("[ReviewMuxPlayer] Missing playbackId. Waiting for Mux asset readiness.", {
+        hasVideoPath: Boolean(videoPath),
+      });
+    }
+  }, [resolvedPlaybackId, videoPath]);
+
+  if (!resolvedPlaybackId) {
+    return (
+      <div className={cn("relative w-full aspect-video bg-black rounded-lg overflow-hidden", className)}>
+        <div className="absolute inset-0 flex items-center justify-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          Loading video...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative w-full aspect-video bg-black rounded-lg overflow-hidden", className)}>
       <MuxPlayer
         playbackId={resolvedPlaybackId}
-        src={effectiveSrc}
         metadata={{
           video_title: title,
           ...metadata,
@@ -61,6 +83,7 @@ export function ReviewMuxPlayer({
         streamType="on-demand"
         style={{ width: "100%", height: "100%", aspectRatio: "16/9" }}
         autoPlay={false}
+        controls
         playsInline
         muted={false}
         preload="auto"
@@ -94,4 +117,3 @@ export function ReviewMuxPlayer({
     </div>
   );
 }
-

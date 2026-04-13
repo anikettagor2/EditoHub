@@ -11,26 +11,45 @@ export async function POST(request: NextRequest) {
         if (type === "video.asset.ready") {
             const asset = data;
             const playbackId = asset.playback_ids?.[0]?.id;
-            const metadata = asset.passthrough ? JSON.parse(asset.passthrough) : (asset.metadata || {});
+            let metadata: Record<string, unknown> = asset.metadata || {};
+            if (asset.passthrough) {
+                try {
+                    metadata = JSON.parse(asset.passthrough);
+                } catch {
+                    console.warn("[MuxWebhook] Failed to parse passthrough JSON");
+                }
+            }
             
-            const { projectId, revisionId, type: uploadType } = metadata;
+            const { projectId, revisionId, type: uploadType } = metadata as {
+                projectId?: string;
+                revisionId?: string;
+                type?: string;
+            };
 
             if (playbackId) {
                 if (uploadType === "revision" && revisionId) {
-                    // Update revision document with both playbackId and hlsUrl for maximum compatibility
-                    await adminDb.collection("revisions").doc(revisionId).update({
+                    await adminDb.collection("revisions").doc(revisionId).set({
                         playbackId,
                         hlsUrl: `https://stream.mux.com/${playbackId}.m3u8`,
                         status: "ready",
                         updatedAt: Date.now(),
-                    });
+                    }, { merge: true });
 
-                    // Update project's video job if it exists
-                    await adminDb.collection("video_jobs").doc(revisionId).update({
+                    // Persist on both revisionId and upload_id keyed job docs to avoid missing-doc failures.
+                    await adminDb.collection("video_jobs").doc(revisionId).set({
                         status: "ready",
-                        hlsUrl: `https://stream.mux.com/${playbackId}.m3u8`, // Fallback/compatibility
+                        playbackId,
+                        hlsUrl: `https://stream.mux.com/${playbackId}.m3u8`,
                         updatedAt: Date.now(),
-                    });
+                    }, { merge: true });
+                    if (asset.upload_id) {
+                        await adminDb.collection("video_jobs").doc(asset.upload_id).set({
+                            status: "ready",
+                            playbackId,
+                            hlsUrl: `https://stream.mux.com/${playbackId}.m3u8`,
+                            updatedAt: Date.now(),
+                        }, { merge: true });
+                    }
                     
                     console.log(`[MuxWebhook] Updated revision ${revisionId} with playbackId ${playbackId}`);
                 } else if ((uploadType === "raw_footage" || uploadType === "brole_footage" || uploadType === "delivered_files") && projectId) {
@@ -71,12 +90,18 @@ export async function POST(request: NextRequest) {
                         }
                     }
                 }
+            } else {
+                console.warn("[MuxWebhook] video.asset.ready without playbackId", {
+                    assetId: asset?.id,
+                    uploadId: asset?.upload_id,
+                });
             }
         }
 
         return NextResponse.json({ received: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[MuxWebhook] Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : "Webhook processing failed";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
