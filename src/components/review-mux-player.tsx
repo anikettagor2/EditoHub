@@ -83,7 +83,6 @@ export function ReviewMuxPlayer({
         streamType="on-demand"
         style={{ width: "100%", height: "100%", aspectRatio: "16/9" }}
         autoPlay={false}
-        controls
         playsInline
         muted={false}
         preload="auto"
