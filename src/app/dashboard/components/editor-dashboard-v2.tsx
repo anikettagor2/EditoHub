@@ -1226,7 +1226,7 @@ export function EditorDashboardV2() {
                                                         borderColor = 'border-blue-500/20';
                                                         iconBg = 'bg-blue-500/20 text-blue-500';
                                                         dotColor = 'bg-blue-500';
-                                                        icon = <Upload className="h-3.5 w-3.5" />;
+                                                        icon = <UploadCloud className="h-3.5 w-3.5" />;
                                                     } else if (isStatusChange) {
                                                         bgColor = 'bg-amber-500/10';
                                                         borderColor = 'border-amber-500/20';
