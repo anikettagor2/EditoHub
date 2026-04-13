@@ -23,7 +23,7 @@ import {
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { handleNewComment } from "@/app/actions/notification-actions";
-import { ReviewMuxPlayer } from "@/components/review-mux-player";
+import { VideoPlayer } from "@/components/video-player";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type RevisionData = {
@@ -51,12 +51,6 @@ function formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function getMuxPlaybackSource(revision: RevisionData | null | undefined): string {
-    if (!revision) return "";
-    if (revision.playbackId) return `https://stream.mux.com/${revision.playbackId}.m3u8`;
-    return revision.hlsUrl || "";
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -281,10 +275,6 @@ export default function GuestReviewPageClient({ revisionId }: GuestReviewPageCli
 
     // ── Main review view ──────────────────────────────────────────────────────
     const videoTitle = `${project?.name || "Project"} · V${revision.version || "Draft"}`;
-    const muxSource = getMuxPlaybackSource(revision);
-    const hasMuxSource = !!muxSource;
-    // Show processing state when the revision is not yet mapped to a playable Mux stream.
-    const isProcessing = !!revision.videoUrl?.startsWith("mux://") || !hasMuxSource;
 
     return (
         <div className="min-h-screen bg-[#0a0a0a] text-foreground">
@@ -319,39 +309,25 @@ export default function GuestReviewPageClient({ revisionId }: GuestReviewPageCli
                             className="rounded-xl border border-border bg-black overflow-hidden aspect-video relative"
                             data-watermark-name={project?.clientName || project?.name || "Guest"}
                         >
-                            {isProcessing ? (
-                                <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground gap-3 bg-muted/10">
-                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                    <div className="text-sm font-bold uppercase tracking-widest text-primary">Processing Video</div>
-                                    <div className="text-[10px] uppercase tracking-widest opacity-70">Securing high-quality playback format…</div>
-                                </div>
-                            ) : hasMuxSource ? (
-                                <ReviewMuxPlayer
-                                    playbackId={revision.playbackId}
-                                    videoPath={muxSource}
-                                    title={videoTitle}
-                                    metadata={{
-                                        video_id: revision.id,
-                                        video_title: videoTitle,
-                                        viewer_user_id: guestName || "guest",
-                                    }}
-                                    onTimeUpdate={(time, dur) => {
-                                        setCurrentTime(time);
-                                        if (dur && !isNaN(dur)) setDuration(dur);
-                                    }}
-                                    onLoadedMetadata={(dur) => {
-                                        if (dur && !isNaN(dur)) setDuration(dur);
-                                    }}
-                                    primaryColor="#ffffff"
-                                    className="w-full h-full"
-                                />
-                            ) : (
-                                <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground gap-3 bg-muted/10">
-                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                    <div className="text-sm font-bold uppercase tracking-widest text-primary">Preparing Video…</div>
-                                    <div className="text-[10px] uppercase tracking-widest opacity-70">This may take a moment</div>
-                                </div>
-                            )}
+                            <VideoPlayer
+                                playbackId={revision.playbackId}
+                                videoPath={revision.videoUrl || revision.hlsUrl}
+                                title={videoTitle}
+                                metadata={{
+                                    video_id: revision.id,
+                                    video_title: videoTitle,
+                                    viewer_user_id: guestName || "guest",
+                                }}
+                                onTimeUpdate={(time, dur) => {
+                                    setCurrentTime(time);
+                                    if (dur && !isNaN(dur)) setDuration(dur);
+                                }}
+                                onLoadedMetadata={(dur) => {
+                                    if (dur && !isNaN(dur)) setDuration(dur);
+                                }}
+                                primaryColor="#ffffff"
+                                className="w-full h-full"
+                            />
                         </div>
 
                         {/* Timeline scrubber (shown after video loads) */}
