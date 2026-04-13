@@ -235,9 +235,99 @@ export class UploadService {
         };
         await setDoc(doc(db, "video_jobs", uploadId), videoJob);
 
-        // 3. Upload directly to the signed Mux URL with optimizations
-        const uploadSuccess = await this.performMuxUpload(file, uploadUrl, uploadId, onProgress, onCancelRef, MUX_UPLOAD_TIMEOUT);
-        return uploadSuccess;
+        // 3. Upload to MUX (for streaming) AND Firebase (for downloads) in parallel for faster processing
+        // Split progress: 50% to MUX, 50% to Firebase download copy
+        const splitProgress = (stage: 'mux' | 'firebase', stagePercent: number) => {
+          if (!onProgress) return;
+          
+          const muxWeight = 0.5;
+          const firebaseWeight = 0.5;
+          
+          const muxContribution = stage === 'mux' ? (stagePercent * muxWeight) : 100 * muxWeight;
+          const firebaseContribution = stage === 'firebase' ? (stagePercent * firebaseWeight) : 0;
+          
+          const totalPercent = muxContribution + firebaseContribution;
+          
+          onProgress({
+            percent: totalPercent,
+            transferred: Math.round((totalPercent / 100) * file.size),
+            total: file.size,
+            status: stage === 'mux' ? 'uploading' : 'uploading',
+          });
+        };
+
+        // Upload to MUX
+        const muxUploadPromise = this.performMuxUpload(
+          file, 
+          uploadUrl, 
+          uploadId, 
+          (progress) => splitProgress('mux', progress.percent),
+          onCancelRef, 
+          MUX_UPLOAD_TIMEOUT
+        );
+
+        // Also upload to Firebase for downloads (backup/download version)
+        const firebaseBackupPromise = (async () => {
+          try {
+            const firebasePath = `projects/${projectId}/revisions/${finalRevisionId}_backup_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+            const storageRef = ref(storage, firebasePath);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            return new Promise<string>((resolve, reject) => {
+              uploadTask.on(
+                "state_changed",
+                (snapshot) => {
+                  const percent = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                  splitProgress('firebase', percent);
+                },
+                (error) => {
+                  console.error(`[UploadService] Firebase backup upload failed:`, error);
+                  reject(error);
+                },
+                async () => {
+                  try {
+                    const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                    console.log(`[UploadService] Firebase backup created for revision ${finalRevisionId}`);
+                    resolve(downloadUrl);
+                  } catch (err) {
+                    console.error(`[UploadService] Error getting Firebase download URL:`, err);
+                    reject(err);
+                  }
+                }
+              );
+            });
+          } catch (err) {
+            console.error(`[UploadService] Firebase backup setup failed:`, err);
+            // Don't fail the whole upload if Firebase backup fails - MUX is primary
+            return null;
+          }
+        })();
+
+        try {
+          // Wait for both uploads to complete
+          const [muxResult, firebaseUrl] = await Promise.allSettled([muxUploadPromise, firebaseBackupPromise]).then(results => [
+            results[0].status === 'fulfilled' ? results[0].value : null,
+            results[1].status === 'fulfilled' ? results[1].value : null,
+          ]);
+
+          if (!muxResult) {
+            throw new Error('MUX upload failed');
+          }
+
+          // Update revision with both URLs for complete functionality
+          if (firebaseUrl) {
+            console.log(`[UploadService] Updating revision with Firebase backup URL for downloads`);
+            await setDoc(doc(db, "revisions", finalRevisionId), {
+              videoUrl: firebaseUrl,
+              updatedAt: Date.now()
+            }, { merge: true });
+          }
+
+          return muxResult;
+        } catch (err) {
+          console.error(`[UploadService] Dual upload error:`, err);
+          throw err;
+        }
 
       } catch (err: any) {
         lastAttemptError = err;
