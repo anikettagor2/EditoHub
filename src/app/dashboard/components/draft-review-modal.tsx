@@ -6,7 +6,6 @@ import { Modal } from "@/components/ui/modal";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { VideoPlayer } from "@/components/video-player";
-import { VideoManagerProvider } from "../../../components/video-manager";
 
 interface DraftReviewModalProps {
     isOpen: boolean;
@@ -54,7 +53,6 @@ export function DraftReviewModal({
     };
 
     return (
-        <VideoManagerProvider>
             <Modal
                 isOpen={isOpen}
                 onClose={onClose}
@@ -71,14 +69,24 @@ export function DraftReviewModal({
                 ) : (
                     <div className="mt-4 space-y-5">
                         {/* Video Player */}
-                        <div className="space-y-3">
-                            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
-                                Version {revision.version}
-                            </p>
-                            <div className="relative rounded-xl overflow-hidden bg-black border border-border shadow-lg">
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
+                                    Version {revision.version}
+                                </p>
+                                {revision.fileSize && (
+                                    <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                                        {(revision.fileSize / (1024 * 1024)).toFixed(1)} MB
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="rounded-xl overflow-hidden border border-border bg-black shadow-2xl">
                                 <VideoPlayer
                                     videoPath={revision.videoUrl}
-                                    title={project?.clientName || project?.name || "Draft Video"}
+                                    playbackId={revision.playbackId}
+                                    title={`Draft v${revision.version}`}
+                                    className="w-full"
                                 />
                             </div>
                             
@@ -113,6 +121,5 @@ export function DraftReviewModal({
                     </div>
                 )}
             </Modal>
-        </VideoManagerProvider>
     );
 }

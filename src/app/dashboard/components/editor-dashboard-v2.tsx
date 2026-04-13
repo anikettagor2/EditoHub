@@ -501,13 +501,10 @@ export function EditorDashboardV2() {
                         </div>
                     )}
 
-                    <VideoPlayer
-                        videoPath={effectiveUrl}
-                        className="w-full h-full"
-                        title={file.name}
-                        primaryColor="#ffffff"
-                        playbackRates={[0.5, 0.75, 1, 1.25, 1.5, 2]}
-                    />
+                    <div className="flex flex-col items-center justify-center h-full w-full text-white/50 gap-3">
+                        <FileVideo className="h-10 w-10 opacity-20" />
+                        <span className="text-sm">Video Preview Removed</span>
+                    </div>
                 </motion.div>
             </motion.div>
         );
